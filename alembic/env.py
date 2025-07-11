@@ -8,6 +8,11 @@ from alembic import context
 from nova_manager.core.config import DATABASE_URL
 from nova_manager.core.models import Base
 
+# Import all models here
+from nova_manager.components.feature_flags.models import *
+from nova_manager.components.users.models import *
+from nova_manager.components.user_feature_variant.models import *
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config

@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nova Manager - Feature Flags</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f8fafc;
+            color: #334155;
+            line-height: 1.6;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .app-layout {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 320px;
+            background: white;
+            border-right: 1px solid #e5e7eb;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .sidebar-header h1 {
+            color: #1e293b;
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .org-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .org-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        .load-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .create-btn {
+            width: 100%;
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            margin-top: 8px;
+        }
+
+        .create-btn:hover,
+        .load-btn:hover {
+            opacity: 0.9;
+        }
+
+        .flags-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .flag-item {
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: white;
+        }
+
+        .flag-item:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .flag-item.active {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+
+        .flag-item.status-active {
+            border-left: 4px solid #10b981;
+        }
+
+        .flag-item.status-inactive {
+            border-left: 4px solid #ef4444;
+        }
+
+        .flag-name {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+
+        .flag-description {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+
+        .flag-meta {
+            font-size: 11px;
+            color: #9ca3af;
+        }
+
+        .flag-status-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 500;
+            margin-top: 4px;
+        }
+
+        .flag-status-badge.active {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .flag-status-badge.inactive {
+            background: #fef2f2;
+            color: #991b1b;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .main-header {
+            background: white;
+            padding: 20px 24px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .main-title {
+            color: #1e293b;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .main-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: #2563eb;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .main-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6b7280;
+        }
+
+        .empty-state h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        .empty-state p {
+            font-size: 14px;
+        }
+
+        /* Content Sections */
+        .section {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .section-title {
+            color: #1e293b;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .section-content {
+            display: grid;
+            gap: 16px;
+        }
+
+        /* Overview Grid */
+        .overview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .overview-item {
+            padding: 16px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .overview-label {
+            font-size: 12px;
+            color: #6b7280;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .overview-value {
+            font-size: 16px;
+            color: #1e293b;
+            font-weight: 600;
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: #374151;
+            font-size: 14px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-row {
+            display: flex;
+            gap: 16px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        .collapsible-form {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            background: #f9fafb;
+        }
+
+        .collapsible-form.open {
+            background: white;
+        }
+
+        .collapsible-form .form-content {
+            display: none;
+            padding: 16px;
+        }
+
+        .collapsible-form.open .form-content {
+            display: block;
+        }
+
+        /* Rule Builder */
+        .condition-item {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            background: #f9fafb;
+        }
+
+        .condition-field {
+            flex: 1;
+        }
+
+        .condition-operator {
+            flex: 1;
+        }
+
+        .condition-value {
+            flex: 1;
+        }
+
+        .remove-condition {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 6px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .add-condition {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-bottom: 16px;
+        }
+
+        /* Lists */
+        .item-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: white;
+        }
+
+        .list-item.default {
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .list-item-content {
+            flex: 1;
+        }
+
+        .list-item-title {
+            font-weight: 500;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+
+        .list-item-meta {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .list-item-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Modals */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
+            color: #1e293b;
+            font-size: 18px;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #6b7280;
+        }
+
+        /* Utilities */
+        .hidden {
+            display: none !important;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+
+        .error {
+            background: #fef2f2;
+            color: #991b1b;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            border: 1px solid #fecaca;
+            font-size: 14px;
+        }
+
+        .success {
+            background: #f0fdf4;
+            color: #166534;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            border: 1px solid #bbf7d0;
+            font-size: 14px;
+        }
+
+        .flex {
+            display: flex;
+        }
+
+        .justify-between {
+            justify-content: space-between;
+        }
+
+        .items-center {
+            align-items: center;
+        }
+
+        .gap-2 {
+            gap: 8px;
+        }
+
+        .text-sm {
+            font-size: 12px;
+        }
+
+        .font-mono {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1>Nova Manager</h1>
+
+                <!-- Org/App Selector -->
+                <div class="org-selector">
+                    <input type="text" id="orgId" class="org-input" value="org-123" placeholder="Org ID">
+                    <input type="text" id="appId" class="org-input" value="app-456" placeholder="App ID">
+                    <button class="load-btn" onclick="loadFeatureFlags()">Load</button>
+                </div>
+
+                <button class="create-btn" onclick="openCreateFlagModal()">+ Create Feature Flag</button>
+            </div>
+
+            <div class="flags-list" id="flagsList">
+                <div class="loading">Loading feature flags...</div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="main-header">
+                <div class="main-title" id="mainTitle">Select a feature flag</div>
+                <div class="main-actions" id="mainActions" style="display: none;">
+                    <button class="btn btn-small" onclick="toggleCurrentFlag()" id="toggleBtn">Toggle Status</button>
+                    <button class="btn-secondary btn btn-small" onclick="editCurrentFlag()">Edit</button>
+                </div>
+            </div>
+
+            <div class="main-body">
+                <div id="emptyState" class="empty-state">
+                    <h3>Welcome to Nova Manager</h3>
+                    <p>Select a feature flag from the sidebar to view its configuration, or create a new one to get
+                        started.</p>
+                </div>
+
+                <div id="flagDetails" class="hidden">
+                    <!-- Overview Section -->
+                    <div class="section">
+                        <div class="section-title">Overview</div>
+                        <div id="flagOverview" class="overview-grid"></div>
+                    </div>
+
+                    <!-- Variants Section -->
+                    <div class="section">
+                        <div class="section-title">
+                            <span>Variants</span>
+                            <button class="btn btn-small" onclick="toggleForm('addVariantForm')">+ Add Variant</button>
+                        </div>
+
+                        <div id="variantError" class="error hidden"></div>
+                        <div id="variantSuccess" class="success hidden"></div>
+
+                        <div id="addVariantForm" class="collapsible-form">
+                            <div class="form-content">
+                                <div class="form-group">
+                                    <label>Variant Name</label>
+                                    <input type="text" id="variantName" class="form-control" placeholder="variant-name">
+                                </div>
+                                <div class="form-group">
+                                    <label>Configuration (JSON)</label>
+                                    <textarea id="variantConfig" class="form-control" rows="4"
+                                        placeholder='{"enabled": true, "color": "blue"}'></textarea>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button class="btn-secondary btn btn-small"
+                                        onclick="closeForm('addVariantForm')">Cancel</button>
+                                    <button class="btn btn-small" onclick="addVariant()">Add Variant</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="variantsList" class="item-list">
+                            <div class="loading">Loading variants...</div>
+                        </div>
+                    </div>
+
+                    <!-- Targeting Rules Section -->
+                    <div class="section">
+                        <div class="section-title">
+                            <span>Targeting Rules</span>
+                            <button class="btn btn-small" onclick="toggleForm('addRuleForm')">+ Add Rule</button>
+                        </div>
+
+                        <div id="targetingError" class="error hidden"></div>
+                        <div id="targetingSuccess" class="success hidden"></div>
+
+                        <div id="addRuleForm" class="collapsible-form">
+                            <div class="form-content">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Priority</label>
+                                        <input type="number" id="rulePriority" class="form-control" placeholder="1"
+                                            min="1">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Target Variant</label>
+                                        <select id="ruleVariant" class="form-control">
+                                            <option value="">Select variant...</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <label>Conditions</label>
+                                <div id="conditionsList"></div>
+
+                                <button type="button" class="add-condition" onclick="addCondition()">+ Add
+                                    Condition</button>
+
+                                <div class="flex gap-2">
+                                    <button class="btn-secondary btn btn-small"
+                                        onclick="closeForm('addRuleForm')">Cancel</button>
+                                    <button class="btn btn-small" onclick="addTargetingRule()">Add Rule</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="targetingRulesList" class="item-list">
+                            <div class="loading">Loading targeting rules...</div>
+                        </div>
+                    </div>
+
+                    <!-- Individual Targeting Section -->
+                    <div class="section">
+                        <div class="section-title">
+                            <span>Individual Targeting</span>
+                            <button class="btn btn-small" onclick="toggleForm('addIndividualForm')">+ Add Individual
+                                Rule</button>
+                        </div>
+
+                        <div id="individualError" class="error hidden"></div>
+                        <div id="individualSuccess" class="success hidden"></div>
+
+                        <div id="addIndividualForm" class="collapsible-form">
+                            <div class="form-content">
+                                <div class="form-group">
+                                    <label>Target Variant</label>
+                                    <select id="individualVariant" class="form-control">
+                                        <option value="">Select variant...</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>User IDs (one per line)</label>
+                                    <textarea id="individualUserIds" class="form-control" rows="4"
+                                        placeholder="user123&#10;user456&#10;user789"></textarea>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>User Attributes (optional)</label>
+                                    <div id="attributesList"></div>
+                                    <button type="button" class="add-condition" onclick="addAttribute()">+ Add
+                                        Attribute</button>
+                                </div>
+
+                                <div class="flex gap-2">
+                                    <button class="btn-secondary btn btn-small"
+                                        onclick="closeForm('addIndividualForm')">Cancel</button>
+                                    <button class="btn btn-small" onclick="addIndividualTargeting()">Add Rule</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="individualTargetingList" class="item-list">
+                            <div class="loading">Loading individual targeting...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Feature Flag Modal -->
+    <div id="createFlagModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create Feature Flag</h3>
+                <button class="close-btn" onclick="closeCreateFlagModal()">&times;</button>
+            </div>
+            <div id="createFlagError" class="error hidden"></div>
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="flagName" class="form-control" placeholder="feature-flag-name">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" id="flagDescription" class="form-control" placeholder="What does this flag do?">
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="flagActive"> Start as active
+                </label>
+            </div>
+            <div class="flex gap-2">
+                <button class="btn-secondary btn" onclick="closeCreateFlagModal()">Cancel</button>
+                <button class="btn" onclick="createFeatureFlag()">Create Flag</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentFlagPid = null;
+        let currentFlag = null;
+        let availableVariants = [];
+        let conditionCount = 0;
+        let attributeCount = 0;
+        const API_BASE = '/api/v1/feature-flags';
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function () {
+            loadFeatureFlags();
+        });
+
+        // Utility functions
+        function showError(elementId, message) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.classList.remove('hidden');
+            setTimeout(() => element.classList.add('hidden'), 5000);
+        }
+
+        function showSuccess(elementId, message) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.classList.remove('hidden');
+            setTimeout(() => element.classList.add('hidden'), 3000);
+        }
+
+        function getOrgAndApp() {
+            return {
+                organisation_id: document.getElementById('orgId').value,
+                app_id: document.getElementById('appId').value
+            };
+        }
+
+        function toggleForm(formId) {
+            const form = document.getElementById(formId);
+            form.classList.toggle('open');
+            if (form.classList.contains('open')) {
+                const firstInput = form.querySelector('input, select, textarea');
+                if (firstInput) firstInput.focus();
+            }
+        }
+
+        function closeForm(formId) {
+            document.getElementById(formId).classList.remove('open');
+            // Clear form fields
+            const form = document.getElementById(formId);
+            form.querySelectorAll('input, textarea, select').forEach(field => {
+                if (field.type === 'checkbox') {
+                    field.checked = false;
+                } else {
+                    field.value = '';
+                }
+            });
+        }
+
+        // Feature Flags Management
+        async function loadFeatureFlags() {
+            const { organisation_id, app_id } = getOrgAndApp();
+            if (!organisation_id || !app_id) {
+                document.getElementById('flagsList').innerHTML = '<div class="error">Please enter organization ID and app ID</div>';
+                return;
+            }
+
+            document.getElementById('flagsList').innerHTML = '<div class="loading">Loading feature flags...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/?organisation_id=${organisation_id}&app_id=${app_id}`);
+                const flags = await response.json();
+
+                if (flags.length === 0) {
+                    document.getElementById('flagsList').innerHTML = '<div style="padding: 20px; text-align: center; color: #6b7280;">No feature flags found.</div>';
+                } else {
+                    displayFeatureFlags(flags);
+                }
+            } catch (error) {
+                document.getElementById('flagsList').innerHTML = '<div class="error">Failed to load feature flags</div>';
+                console.error('Error loading flags:', error);
+            }
+        }
+
+        function displayFeatureFlags(flags) {
+            const html = flags.map(flag => `
+                <div class="flag-item ${flag.is_active ? 'status-active' : 'status-inactive'}" onclick="selectFlag('${flag.pid}')">
+                    <div class="flag-name">${flag.name}</div>
+                    <div class="flag-description">${flag.description || 'No description'}</div>
+                    <div class="flag-meta">${flag.variant_count} variants</div>
+                    <span class="flag-status-badge ${flag.is_active ? 'active' : 'inactive'}">
+                        ${flag.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                </div>
+            `).join('');
+
+            document.getElementById('flagsList').innerHTML = html;
+        }
+
+        async function selectFlag(flagPid) {
+            // Remove active class from all flags
+            document.querySelectorAll('.flag-item').forEach(item => item.classList.remove('active'));
+
+            // Add active class to selected flag
+            event.currentTarget.classList.add('active');
+
+            currentFlagPid = flagPid;
+
+            // Show flag details
+            document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('flagDetails').classList.remove('hidden');
+            document.getElementById('mainActions').style.display = 'flex';
+
+            // Load flag details
+            try {
+                const response = await fetch(`${API_BASE}/${flagPid}`);
+                currentFlag = await response.json();
+
+                document.getElementById('mainTitle').textContent = currentFlag.name;
+                document.getElementById('toggleBtn').textContent = currentFlag.is_active ? 'Deactivate' : 'Activate';
+
+                // Load all sections
+                loadOverview();
+                loadVariants();
+                loadTargetingRules();
+                loadIndividualTargeting();
+
+            } catch (error) {
+                console.error('Error loading flag details:', error);
+            }
+        }
+
+        async function toggleCurrentFlag() {
+            if (!currentFlagPid) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/${currentFlagPid}/toggle`, { method: 'POST' });
+                const result = await response.json();
+
+                // Update current flag status
+                currentFlag.is_active = result.is_active;
+                document.getElementById('toggleBtn').textContent = result.is_active ? 'Deactivate' : 'Activate';
+
+                // Refresh flags list and overview
+                loadFeatureFlags();
+                loadOverview();
+
+            } catch (error) {
+                console.error('Error toggling flag:', error);
+            }
+        }
+
+        // Overview
+        function loadOverview() {
+            if (!currentFlag) return;
+
+            const html = `
+                <div class="overview-item">
+                    <div class="overview-label">Status</div>
+                    <div class="overview-value">
+                        <span class="flag-status-badge ${currentFlag.is_active ? 'active' : 'inactive'}">
+                            ${currentFlag.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                    </div>
+                </div>
+                <div class="overview-item">
+                    <div class="overview-label">Organization</div>
+                    <div class="overview-value">${currentFlag.organisation_id}</div>
+                </div>
+                <div class="overview-item">
+                    <div class="overview-label">App</div>
+                    <div class="overview-value">${currentFlag.app_id}</div>
+                </div>
+                <div class="overview-item">
+                    <div class="overview-label">Variants</div>
+                    <div class="overview-value">${currentFlag.variants ? currentFlag.variants.length : 0}</div>
+                </div>
+                <div class="overview-item">
+                    <div class="overview-label">Default Variant</div>
+                    <div class="overview-value">${currentFlag.default_variant ? currentFlag.default_variant.name : 'None'}</div>
+                </div>
+                <div class="overview-item">
+                    <div class="overview-label">Created</div>
+                    <div class="overview-value">${new Date(currentFlag.created_at).toLocaleDateString()}</div>
+                </div>
+            `;
+
+            document.getElementById('flagOverview').innerHTML = html;
+        }
+
+        // Variants Management
+        async function loadVariants() {
+            if (!currentFlagPid) return;
+
+            document.getElementById('variantsList').innerHTML = '<div class="loading">Loading variants...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/${currentFlagPid}/variants`);
+                const variants = await response.json();
+                availableVariants = variants;
+
+                // Get flag details to identify default variant
+                const flagResponse = await fetch(`${API_BASE}/${currentFlagPid}`);
+                const flag = await flagResponse.json();
+
+                displayVariants(variants, flag.default_variant?.pid);
+                updateVariantSelectors();
+            } catch (error) {
+                document.getElementById('variantsList').innerHTML = '<div class="error">Failed to load variants</div>';
+                console.error('Error loading variants:', error);
+            }
+        }
+
+        function displayVariants(variants, defaultVariantPid) {
+            if (variants.length === 0) {
+                document.getElementById('variantsList').innerHTML = '<div style="text-align: center; color: #6b7280; padding: 20px;">No variants found</div>';
+                return;
+            }
+
+            const html = variants.map(variant => `
+                <div class="list-item ${variant.pid === defaultVariantPid ? 'default' : ''}">
+                    <div class="list-item-content">
+                        <div class="list-item-title">
+                            ${variant.name}
+                            ${variant.pid === defaultVariantPid ? '<span style="color: #059669; font-size: 12px; margin-left: 8px;">(Default)</span>' : ''}
+                        </div>
+                        <div class="list-item-meta font-mono">${JSON.stringify(variant.config)}</div>
+                    </div>
+                    <div class="list-item-actions">
+                        ${variant.pid !== defaultVariantPid ? `<button class="btn btn-small" onclick="setDefaultVariant('${variant.pid}')">Set Default</button>` : ''}
+                        <button class="btn-danger btn btn-small" onclick="deleteVariant('${variant.pid}')" ${variant.pid === defaultVariantPid ? 'disabled' : ''}>Delete</button>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('variantsList').innerHTML = html;
+        }
+
+        function updateVariantSelectors() {
+            const options = availableVariants.map(v => `<option value="${v.name}">${v.name}</option>`).join('');
+            document.getElementById('ruleVariant').innerHTML = '<option value="">Select variant...</option>' + options;
+            document.getElementById('individualVariant').innerHTML = '<option value="">Select variant...</option>' + options;
+        }
+
+        async function addVariant() {
+            const name = document.getElementById('variantName').value.trim();
+            const configText = document.getElementById('variantConfig').value.trim();
+
+            if (!name) {
+                showError('variantError', 'Please enter a variant name');
+                return;
+            }
+
+            let config = {};
+            if (configText) {
+                try {
+                    config = JSON.parse(configText);
+                } catch (error) {
+                    showError('variantError', 'Invalid JSON configuration');
+                    return;
+                }
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/${currentFlagPid}/variants`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, config })
+                });
+
+                if (response.ok) {
+                    closeForm('addVariantForm');
+                    loadVariants();
+                    showSuccess('variantSuccess', 'Variant added successfully');
+                } else {
+                    const error = await response.json();
+                    showError('variantError', error.detail || 'Failed to add variant');
+                }
+            } catch (error) {
+                showError('variantError', 'Failed to add variant');
+                console.error('Error adding variant:', error);
+            }
+        }
+
+        async function setDefaultVariant(variantPid) {
+            try {
+                const response = await fetch(`${API_BASE}/${currentFlagPid}/variants/${variantPid}/set-default`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    loadVariants();
+                    loadOverview(); // Refresh overview to show new default
+                    showSuccess('variantSuccess', 'Default variant updated');
+                } else {
+                    showError('variantError', 'Failed to set default variant');
+                }
+            } catch (error) {
+                showError('variantError', 'Failed to set default variant');
+                console.error('Error setting default variant:', error);
+            }
+        }
+
+        async function deleteVariant(variantPid) {
+            if (!confirm('Are you sure you want to delete this variant?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/variants/${variantPid}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadVariants();
+                    showSuccess('variantSuccess', 'Variant deleted successfully');
+                } else {
+                    const error = await response.json();
+                    showError('variantError', error.detail || 'Failed to delete variant');
+                }
+            } catch (error) {
+                showError('variantError', 'Failed to delete variant');
+                console.error('Error deleting variant:', error);
+            }
+        }
+
+        // Targeting Rules Management
+        async function loadTargetingRules() {
+            if (!currentFlagPid) return;
+
+            document.getElementById('targetingRulesList').innerHTML = '<div class="loading">Loading targeting rules...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/${currentFlagPid}/targeting-rules`);
+                const rules = await response.json();
+                displayTargetingRules(rules);
+            } catch (error) {
+                document.getElementById('targetingRulesList').innerHTML = '<div class="error">Failed to load targeting rules</div>';
+                console.error('Error loading targeting rules:', error);
+            }
+        }
+
+        function displayTargetingRules(rules) {
+            if (rules.length === 0) {
+                document.getElementById('targetingRulesList').innerHTML = '<div style="text-align: center; color: #6b7280; padding: 20px;">No targeting rules found</div>';
+                return;
+            }
+
+            const html = rules.map(rule => {
+                const conditions = rule.rule_config.conditions || [];
+                const variant = rule.rule_config.variant || 'Unknown';
+                const conditionsText = conditions.map(c => `${c.field} ${c.operator} ${c.value}`).join(', ');
+
+                return `
+                    <div class="list-item">
+                        <div class="list-item-content">
+                            <div class="list-item-title">
+                                Priority ${rule.priority} → ${variant}
+                            </div>
+                            <div class="list-item-meta">
+                                ${conditionsText || 'No conditions'}
+                            </div>
+                        </div>
+                        <div class="list-item-actions">
+                            <button class="btn-danger btn btn-small" onclick="deleteTargetingRule('${rule.pid}')">Delete</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('targetingRulesList').innerHTML = html;
+        }
+
+        function addCondition() {
+            conditionCount++;
+            const conditionHtml = `
+                <div class="condition-item" id="condition${conditionCount}">
+                    <div class="condition-field">
+                        <input type="text" class="form-control" placeholder="Field (e.g., country)" data-field="field">
+                    </div>
+                    <div class="condition-operator">
+                        <select class="form-control" data-field="operator">
+                            <option value="equals">equals</option>
+                            <option value="not_equals">not equals</option>
+                            <option value="greater_than">greater than</option>
+                            <option value="less_than">less than</option>
+                            <option value="greater_than_or_equal">≥</option>
+                            <option value="less_than_or_equal">≤</option>
+                            <option value="in">in</option>
+                            <option value="not_in">not in</option>
+                            <option value="contains">contains</option>
+                            <option value="starts_with">starts with</option>
+                            <option value="ends_with">ends with</option>
+                        </select>
+                    </div>
+                    <div class="condition-value">
+                        <input type="text" class="form-control" placeholder="Value" data-field="value">
+                    </div>
+                    <button type="button" class="remove-condition" onclick="removeCondition(${conditionCount})">×</button>
+                </div>
+            `;
+
+            document.getElementById('conditionsList').insertAdjacentHTML('beforeend', conditionHtml);
+        }
+
+        function removeCondition(id) {
+            const element = document.getElementById(`condition${id}`);
+            if (element) {
+                element.remove();
+            }
+        }
+
+        async function addTargetingRule() {
+            const priority = parseInt(document.getElementById('rulePriority').value);
+            const variant = document.getElementById('ruleVariant').value;
+
+            if (!priority || priority < 1) {
+                showError('targetingError', 'Please enter a valid priority (1 or higher)');
+                return;
+            }
+
+            if (!variant) {
+                showError('targetingError', 'Please select a target variant');
+                return;
+            }
+
+            // Collect conditions
+            const conditions = [];
+            document.querySelectorAll('#conditionsList .condition-item').forEach(item => {
+                const field = item.querySelector('[data-field="field"]').value.trim();
+                const operator = item.querySelector('[data-field="operator"]').value;
+                const value = item.querySelector('[data-field="value"]').value.trim();
+
+                if (field && operator && value) {
+                    // Handle array values for 'in' and 'not_in' operators
+                    let processedValue = value;
+                    if (operator === 'in' || operator === 'not_in') {
+                        try {
+                            processedValue = value.split(',').map(v => v.trim());
+                        } catch (e) {
+                            processedValue = [value];
+                        }
+                    }
+
+                    conditions.push({
+                        field: field,
+                        operator: operator,
+                        value: processedValue
+                    });
+                }
+            });
+
+            if (conditions.length === 0) {
+                showError('targetingError', 'Please add at least one condition');
+                return;
+            }
+
+            const ruleConfig = {
+                conditions: conditions,
+                variant: variant
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/${currentFlagPid}/targeting-rules`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ priority, rule_config: ruleConfig })
+                });
+
+                if (response.ok) {
+                    closeForm('addRuleForm');
+                    document.getElementById('conditionsList').innerHTML = '';
+                    conditionCount = 0;
+                    loadTargetingRules();
+                    showSuccess('targetingSuccess', 'Targeting rule added successfully');
+                } else {
+                    const error = await response.json();
+                    showError('targetingError', error.detail || 'Failed to add targeting rule');
+                }
+            } catch (error) {
+                showError('targetingError', 'Failed to add targeting rule');
+                console.error('Error adding targeting rule:', error);
+            }
+        }
+
+        async function deleteTargetingRule(rulePid) {
+            if (!confirm('Are you sure you want to delete this targeting rule?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/targeting-rules/${rulePid}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadTargetingRules();
+                    showSuccess('targetingSuccess', 'Targeting rule deleted successfully');
+                } else {
+                    showError('targetingError', 'Failed to delete targeting rule');
+                }
+            } catch (error) {
+                showError('targetingError', 'Failed to delete targeting rule');
+                console.error('Error deleting targeting rule:', error);
+            }
+        }
+
+        // Individual Targeting Management
+        async function loadIndividualTargeting() {
+            if (!currentFlagPid) return;
+
+            document.getElementById('individualTargetingList').innerHTML = '<div class="loading">Loading individual targeting...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/${currentFlagPid}/individual-targeting`);
+                const rules = await response.json();
+                displayIndividualTargeting(rules);
+            } catch (error) {
+                document.getElementById('individualTargetingList').innerHTML = '<div class="error">Failed to load individual targeting</div>';
+                console.error('Error loading individual targeting:', error);
+            }
+        }
+
+        function displayIndividualTargeting(rules) {
+            if (rules.length === 0) {
+                document.getElementById('individualTargetingList').innerHTML = '<div style="text-align: center; color: #6b7280; padding: 20px;">No individual targeting rules found</div>';
+                return;
+            }
+
+            const html = rules.map(rule => {
+                const userIds = rule.rule_config.user_ids || [];
+                const variant = rule.rule_config.variant || 'Unknown';
+                const userCount = userIds.length;
+                const userText = userCount > 3 ? `${userIds.slice(0, 3).join(', ')} and ${userCount - 3} more` : userIds.join(', ');
+
+                return `
+                    <div class="list-item">
+                        <div class="list-item-content">
+                            <div class="list-item-title">
+                                ${userCount} users → ${variant}
+                            </div>
+                            <div class="list-item-meta">
+                                ${userText || 'No users specified'}
+                            </div>
+                        </div>
+                        <div class="list-item-actions">
+                            <button class="btn-danger btn btn-small" onclick="deleteIndividualTargeting('${rule.pid}')">Delete</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('individualTargetingList').innerHTML = html;
+        }
+
+        function addAttribute() {
+            attributeCount++;
+            const attributeHtml = `
+                <div class="condition-item" id="attribute${attributeCount}">
+                    <div class="condition-field">
+                        <input type="text" class="form-control" placeholder="Attribute (e.g., plan)" data-field="key">
+                    </div>
+                    <div class="condition-value" style="flex: 2;">
+                        <input type="text" class="form-control" placeholder="Value (e.g., premium)" data-field="value">
+                    </div>
+                    <button type="button" class="remove-condition" onclick="removeAttribute(${attributeCount})">×</button>
+                </div>
+            `;
+
+            document.getElementById('attributesList').insertAdjacentHTML('beforeend', attributeHtml);
+        }
+
+        function removeAttribute(id) {
+            const element = document.getElementById(`attribute${id}`);
+            if (element) {
+                element.remove();
+            }
+        }
+
+        async function addIndividualTargeting() {
+            const variant = document.getElementById('individualVariant').value;
+            const userIdsText = document.getElementById('individualUserIds').value.trim();
+
+            if (!variant) {
+                showError('individualError', 'Please select a target variant');
+                return;
+            }
+
+            // Process user IDs
+            const userIds = userIdsText ? userIdsText.split('\n').map(id => id.trim()).filter(id => id) : [];
+
+            // Collect attributes
+            const attributes = {};
+            document.querySelectorAll('#attributesList .condition-item').forEach(item => {
+                const key = item.querySelector('[data-field="key"]').value.trim();
+                const value = item.querySelector('[data-field="value"]').value.trim();
+
+                if (key && value) {
+                    attributes[key] = value;
+                }
+            });
+
+            if (userIds.length === 0 && Object.keys(attributes).length === 0) {
+                showError('individualError', 'Please specify either user IDs or user attributes');
+                return;
+            }
+
+            const ruleConfig = {
+                variant: variant
+            };
+
+            if (userIds.length > 0) {
+                ruleConfig.user_ids = userIds;
+            }
+
+            if (Object.keys(attributes).length > 0) {
+                ruleConfig.user_attributes = attributes;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/${currentFlagPid}/individual-targeting`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rule_config: ruleConfig })
+                });
+
+                if (response.ok) {
+                    closeForm('addIndividualForm');
+                    document.getElementById('attributesList').innerHTML = '';
+                    attributeCount = 0;
+                    loadIndividualTargeting();
+                    showSuccess('individualSuccess', 'Individual targeting rule added successfully');
+                } else {
+                    const error = await response.json();
+                    showError('individualError', error.detail || 'Failed to add individual targeting rule');
+                }
+            } catch (error) {
+                showError('individualError', 'Failed to add individual targeting rule');
+                console.error('Error adding individual targeting:', error);
+            }
+        }
+
+        async function deleteIndividualTargeting(targetingPid) {
+            if (!confirm('Are you sure you want to delete this individual targeting rule?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/individual-targeting/${targetingPid}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadIndividualTargeting();
+                    showSuccess('individualSuccess', 'Individual targeting rule deleted successfully');
+                } else {
+                    showError('individualError', 'Failed to delete individual targeting rule');
+                }
+            } catch (error) {
+                showError('individualError', 'Failed to delete individual targeting rule');
+                console.error('Error deleting individual targeting rule:', error);
+            }
+        }
+
+        // Create Feature Flag Modal
+        function openCreateFlagModal() {
+            document.getElementById('createFlagModal').classList.add('active');
+            document.getElementById('createFlagError').classList.add('hidden');
+        }
+
+        function closeCreateFlagModal() {
+            document.getElementById('createFlagModal').classList.remove('active');
+            document.getElementById('flagName').value = '';
+            document.getElementById('flagDescription').value = '';
+            document.getElementById('flagActive').checked = false;
+        }
+
+        async function createFeatureFlag() {
+            const { organisation_id, app_id } = getOrgAndApp();
+            const name = document.getElementById('flagName').value.trim();
+            const description = document.getElementById('flagDescription').value.trim();
+            const isActive = document.getElementById('flagActive').checked;
+
+            if (!name) {
+                showError('createFlagError', 'Please enter a flag name');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name,
+                        description,
+                        organisation_id,
+                        app_id,
+                        is_active: isActive
+                    })
+                });
+
+                if (response.ok) {
+                    closeCreateFlagModal();
+                    loadFeatureFlags();
+                } else {
+                    const error = await response.json();
+                    showError('createFlagError', error.detail || 'Failed to create feature flag');
+                }
+            } catch (error) {
+                showError('createFlagError', 'Failed to create feature flag');
+                console.error('Error creating flag:', error);
+            }
+        }
+    </script>
+</body>
+
+</html>
