@@ -670,7 +670,45 @@
                         </div>
                     </div>
 
-                    <!-- Individual Targeting Section -->
+                    <!-- Evaluation Section -->
+                    <div class="section">
+                        <div class="section-title">
+                            <span>Test Evaluation</span>
+                            <button class="btn btn-small" onclick="toggleForm('evaluateForm')">🧪 Test Flag</button>
+                        </div>
+
+                        <div id="evaluateError" class="error hidden"></div>
+                        <div id="evaluateSuccess" class="success hidden"></div>
+
+                        <div id="evaluateForm" class="collapsible-form">
+                            <div class="form-content">
+                                <div class="form-group">
+                                    <label>User ID</label>
+                                    <input type="text" id="testUserId" class="form-control" placeholder="user123">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>User Payload (JSON)</label>
+                                    <textarea id="testPayload" class="form-control" rows="6"></textarea>
+                                </div>
+
+                                <div class="flex gap-2">
+                                    <button class="btn-secondary btn btn-small"
+                                        onclick="closeForm('evaluateForm')">Cancel</button>
+                                    <button class="btn btn-small" onclick="evaluateFeatureFlag()">🚀 Evaluate</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="evaluationResult" class="hidden" style="margin-top: 16px;">
+                            <div
+                                style="background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px;">
+                                <div style="font-weight: 600; color: #1e293b; margin-bottom: 12px;">Evaluation Result
+                                </div>
+                                <div id="resultContent"></div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="section">
                         <div class="section-title">
                             <span>Individual Targeting</span>
@@ -1403,6 +1441,101 @@
                 showError('individualError', 'Failed to delete individual targeting rule');
                 console.error('Error deleting individual targeting rule:', error);
             }
+        }
+
+        // Feature Flag Evaluation
+        async function evaluateFeatureFlag() {
+            const userId = document.getElementById('testUserId').value.trim();
+            const payloadText = document.getElementById('testPayload').value.trim();
+
+            if (!userId) {
+                showError('evaluateError', 'Please enter a user ID');
+                return;
+            }
+
+            let payload = {};
+            if (payloadText) {
+                try {
+                    payload = JSON.parse(payloadText);
+                } catch (error) {
+                    showError('evaluateError', 'Invalid JSON payload');
+                    return;
+                }
+            }
+
+            const { organisation_id, app_id } = getOrgAndApp();
+
+            try {
+                const response = await fetch('/api/v1/user-feature-variant/get-user-feature-variant/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        feature_name: currentFlag.name,
+                        organisation_id: organisation_id,
+                        app_id: app_id,
+                        payload: payload
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    displayEvaluationResult(result);
+                    showSuccess('evaluateSuccess', 'Feature flag evaluated successfully');
+                } else {
+                    const error = await response.json();
+                    showError('evaluateError', error.detail || 'Failed to evaluate feature flag');
+                }
+            } catch (error) {
+                showError('evaluateError', 'Failed to evaluate feature flag');
+                console.error('Error evaluating flag:', error);
+            }
+        }
+
+        function displayEvaluationResult(result) {
+            const reasonColors = {
+                'explicit_assignment': '#3b82f6',
+                'targeting_rule': '#10b981',
+                'individual_targeting': '#f59e0b',
+                'default': '#6b7280',
+                'inactive_feature': '#ef4444'
+            };
+
+            const reasonLabels = {
+                'explicit_assignment': 'Explicit Assignment',
+                'targeting_rule': 'Targeting Rule',
+                'individual_targeting': 'Individual Targeting',
+                'default': 'Default Variant',
+                'inactive_feature': 'Feature Inactive'
+            };
+
+            const html = `
+                <div style="display: grid; gap: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: 500;">User:</span>
+                        <span style="font-family: monospace; background: #f3f4f6; padding: 4px 8px; border-radius: 4px;">${result.user_id}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: 500;">Feature:</span>
+                        <span style="font-family: monospace; background: #f3f4f6; padding: 4px 8px; border-radius: 4px;">${result.feature_name}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: 500;">Variant:</span>
+                        <span style="font-family: monospace; background: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 4px; font-weight: 600;">${result.variant_name}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: 500;">Reason:</span>
+                        <span style="background: ${reasonColors[result.evaluation_reason] || '#6b7280'}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">${reasonLabels[result.evaluation_reason] || result.evaluation_reason}</span>
+                    </div>
+                    <div style="border-top: 1px solid #e5e7eb; padding-top: 12px;">
+                        <div style="font-weight: 500; margin-bottom: 8px;">Variant Configuration:</div>
+                        <pre style="background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 4px; padding: 12px; font-size: 12px; overflow-x: auto; margin: 0;">${JSON.stringify(result.variant_config, null, 2)}</pre>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('resultContent').innerHTML = html;
+            document.getElementById('evaluationResult').classList.remove('hidden');
         }
 
         // Create Feature Flag Modal
