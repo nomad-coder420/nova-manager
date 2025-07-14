@@ -80,6 +80,7 @@ class FeatureFlagResponse(BaseModel):
     created_at: datetime
     variants: List[VariantResponse] = []
     keys_config: Dict[str, Any]
+    default_variant: Dict[str, Any]
 
     class Config:
         from_attributes = True
@@ -90,7 +91,8 @@ class FeatureFlagListItem(BaseModel):
     name: str
     description: str
     is_active: bool
-    keys_config: Dict[str, Any]
+    keys_config: Dict[str, NovaObjectKeyDefinition]
+    default_variant: Dict[str, Any]
     created_at: datetime
 
     class Config:

@@ -213,6 +213,7 @@ async def list_feature_flags(
                 "is_active": flag.is_active,
                 "created_at": flag.created_at.isoformat(),
                 "keys_config": flag.keys_config,
+                "default_variant": flag.default_variant,
             }
         )
 
