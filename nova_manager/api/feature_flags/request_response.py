@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from typing_extensions import TypedDict
 from uuid import UUID
 from pydantic import BaseModel
 
@@ -9,7 +10,7 @@ class VariantCreate(BaseModel):
     config: Dict[str, Any] = {}
 
 
-class NovaObjectKeyDefinition(BaseModel):
+class NovaObjectKeyDefinition(TypedDict):
     type: str
     description: str
     default: Any

@@ -67,7 +67,7 @@ async def sync_nova_objects(
                 app_id=sync_request.app_id,
             )
 
-            keys_config = object_props.get("keys")
+            keys_config = object_props.keys
 
             # TODO: Add keys_config validation here
 
