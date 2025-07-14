@@ -9,6 +9,23 @@ class VariantCreate(BaseModel):
     config: Dict[str, Any] = {}
 
 
+class NovaObjectSyncRequest(BaseModel):
+    organisation_id: str
+    app_id: str
+    objects: Dict[str, Dict[str, Any]]
+
+
+class NovaObjectSyncResponse(BaseModel):
+    success: bool
+    objects_processed: int
+    objects_created: int
+    objects_updated: int
+    objects_skipped: int
+    dashboard_url: Optional[str] = None
+    message: str
+    details: List[Dict[str, Any]] = []
+
+
 class FeatureFlagCreate(BaseModel):
     name: str
     organisation_id: str
@@ -44,7 +61,7 @@ class VariantResponse(BaseModel):
 class FeatureFlagResponse(BaseModel):
     pid: UUID
     name: str
-    description: Optional[str]
+    description: str
     is_active: bool
     organisation_id: str
     app_id: str
@@ -59,10 +76,9 @@ class FeatureFlagResponse(BaseModel):
 class FeatureFlagListItem(BaseModel):
     pid: UUID
     name: str
-    description: Optional[str]
+    description: str
     is_active: bool
     created_at: datetime
-    variant_count: int
 
     class Config:
         from_attributes = True

@@ -1,4 +1,4 @@
-from typing import List
+from typing import Dict, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -11,6 +11,8 @@ from nova_manager.api.feature_flags.request_response import (
     FeatureFlagResponse,
     FeatureFlagUpdate,
     IndividualTargetingCreate,
+    NovaObjectSyncRequest,
+    NovaObjectSyncResponse,
     TargetingRuleCreate,
     VariantCreate,
     VariantResponse,
@@ -25,6 +27,159 @@ from nova_manager.database.session import get_db
 
 
 router = APIRouter()
+
+
+@router.post("/sync-nova-objects/")
+async def sync_nova_objects(
+    sync_request: NovaObjectSyncRequest, db: Session = Depends(get_db)
+):
+    """
+    Sync Nova objects from client application to create/update feature flags
+
+    This endpoint:
+    1. Takes nova-objects.json structure from client
+    2. Creates/updates feature flags for each object
+    3. Creates default variants with the provided properties
+    4. Returns summary of operations performed
+    """
+
+    # Initialize CRUD instances
+    flags_crud = FeatureFlagsCRUD(db)
+    variants_crud = FeatureVariantsCRUD(db)
+
+    # Track statistics
+    stats = {
+        "objects_processed": 0,
+        "objects_created": 0,
+        "objects_updated": 0,
+        "objects_skipped": 0,
+        "details": [],
+    }
+
+    # Process each object from the sync request
+    for object_name, object_props in sync_request.objects.items():
+        try:
+            stats["objects_processed"] += 1
+
+            # Check if feature flag already exists
+            existing_flag = flags_crud.get_by_name(
+                name=object_name,
+                organisation_id=sync_request.organisation_id,
+                app_id=sync_request.app_id,
+            )
+
+            if existing_flag:
+                updated_flag = None
+
+                # Update existing flag
+
+                # Get the default variant
+                if not existing_flag.default_variant_id:
+                    # No default variant exists, create one
+                    default_variant = variants_crud.create_variant(
+                        feature_pid=existing_flag.pid,
+                        variant_data={"name": "default", "config": object_props},
+                    )
+
+                    # Set as default variant
+                    existing_flag.default_variant_id = default_variant.pid
+                    db.flush()
+                    db.refresh(existing_flag)
+
+                    stats["objects_updated"] += 1
+                    stats["details"].append(
+                        {
+                            "object_name": object_name,
+                            "action": "updated",
+                            "flag_id": str(existing_flag.pid),
+                            "message": "Updated default variant properties",
+                        }
+                    )
+                else:
+                    # Update existing default variant
+                    default_variant = variants_crud.get_by_pid(
+                        existing_flag.default_variant_id
+                    )
+                    if default_variant:
+                        # Check if config has actually changed
+                        if default_variant.config != object_props:
+                            updated_variant = variants_crud.update_config(
+                                pid=default_variant.pid, config=object_props
+                            )
+
+                            stats["objects_updated"] += 1
+                            stats["details"].append(
+                                {
+                                    "object_name": object_name,
+                                    "action": "updated",
+                                    "flag_id": str(existing_flag.pid),
+                                    "message": "Updated default variant properties",
+                                }
+                            )
+                        else:
+                            # No changes needed
+                            stats["objects_skipped"] += 1
+                            stats["details"].append(
+                                {
+                                    "object_name": object_name,
+                                    "action": "skipped",
+                                    "message": "No changes detected",
+                                }
+                            )
+
+            else:
+                # Create new feature flag with default variant
+                flag_data = {
+                    "name": object_name,
+                    "description": f"Auto-generated from nova-objects.json for {object_name}",
+                    "organisation_id": sync_request.organisation_id,
+                    "app_id": sync_request.app_id,
+                    "is_active": True,
+                }
+
+                default_variant_data = {
+                    "name": "default",
+                    "config": object_props,
+                }
+
+                new_flag = flags_crud.create_with_default_variant(
+                    flag_data=flag_data, default_variant_data=default_variant_data
+                )
+
+                stats["objects_created"] += 1
+                stats["details"].append(
+                    {
+                        "object_name": object_name,
+                        "action": "created",
+                        "flag_id": str(new_flag.pid),
+                        "message": "Created feature flag with default variant",
+                    }
+                )
+
+        except Exception as obj_error:
+            # Log error but continue with other objects
+            stats["objects_skipped"] += 1
+            stats["details"].append(
+                {
+                    "object_name": object_name,
+                    "action": "error",
+                    "message": f"Failed to process: {str(obj_error)}",
+                }
+            )
+            continue
+
+    dashboard_url = f"https://dashboard.nova.com/apps/{sync_request.app_id}/objects"
+
+    return NovaObjectSyncResponse(
+        success=True,
+        objects_processed=stats["objects_processed"],
+        objects_created=stats["objects_created"],
+        objects_updated=stats["objects_updated"],
+        objects_skipped=stats["objects_skipped"],
+        dashboard_url=dashboard_url,
+        message=f"Processed {stats['objects_processed']} objects successfully",
+        details=stats["details"],
+    )
 
 
 @router.post("/", response_model=FeatureFlagResponse)
@@ -73,7 +228,6 @@ async def list_feature_flags(
 ):
     """List feature flags with pagination"""
     feature_flags_crud = FeatureFlagsCRUD(db)
-    feature_variants_crud = FeatureVariantsCRUD(db)
 
     if active_only:
         flags = feature_flags_crud.get_active_flags(
@@ -87,7 +241,6 @@ async def list_feature_flags(
     # Add variant count to each flag
     result = []
     for flag in flags:
-        variants = feature_variants_crud.get_feature_variants(feature_pid=flag.pid)
         result.append(
             {
                 "pid": flag.pid,
@@ -95,14 +248,13 @@ async def list_feature_flags(
                 "description": flag.description,
                 "is_active": flag.is_active,
                 "created_at": flag.created_at.isoformat(),
-                "variant_count": len(variants),
             }
         )
 
     return result
 
 
-@router.get("/{flag_pid}", response_model=FeatureFlagResponse)
+@router.get("/{flag_pid}/", response_model=FeatureFlagResponse)
 async def get_feature_flag(flag_pid: UUID, db: Session = Depends(get_db)):
     """Get feature flag by ID with all variants"""
     feature_flags_crud = FeatureFlagsCRUD(db)
@@ -114,7 +266,7 @@ async def get_feature_flag(flag_pid: UUID, db: Session = Depends(get_db)):
     return feature_flag
 
 
-@router.put("/{flag_pid}", response_model=FeatureFlagResponse)
+@router.put("/{flag_pid}/", response_model=FeatureFlagResponse)
 async def update_feature_flag(
     flag_pid: UUID, flag_update: FeatureFlagUpdate, db: Session = Depends(get_db)
 ):
@@ -141,7 +293,7 @@ async def update_feature_flag(
     return feature_flags_crud.get_with_variants(pid=flag_pid)
 
 
-@router.delete("/{flag_pid}")
+@router.delete("/{flag_pid}/")
 async def delete_feature_flag(flag_pid: UUID, db: Session = Depends(get_db)):
     """Delete feature flag"""
     feature_flags_crud = FeatureFlagsCRUD(db)
@@ -154,7 +306,7 @@ async def delete_feature_flag(flag_pid: UUID, db: Session = Depends(get_db)):
     return {"message": "Feature flag deleted successfully"}
 
 
-@router.post("/{flag_pid}/toggle")
+@router.post("/{flag_pid}/toggle/")
 async def toggle_feature_flag(flag_pid: UUID, db: Session = Depends(get_db)):
     """Toggle feature flag active status"""
     feature_flags_crud = FeatureFlagsCRUD(db)
@@ -169,7 +321,7 @@ async def toggle_feature_flag(flag_pid: UUID, db: Session = Depends(get_db)):
     }
 
 
-@router.post("/{flag_pid}/variants", response_model=VariantResponse)
+@router.post("/{flag_pid}/variants/", response_model=VariantResponse)
 async def create_variant(
     flag_pid: UUID, variant_data: VariantCreate, db: Session = Depends(get_db)
 ):
@@ -198,7 +350,7 @@ async def create_variant(
     return variant
 
 
-@router.get("/{flag_pid}/variants", response_model=List[VariantResponse])
+@router.get("/{flag_pid}/variants/", response_model=List[VariantResponse])
 async def get_feature_variants(flag_pid: UUID, db: Session = Depends(get_db)):
     """Get all variants for a feature flag"""
     feature_flags_crud = FeatureFlagsCRUD(db)
@@ -213,7 +365,7 @@ async def get_feature_variants(flag_pid: UUID, db: Session = Depends(get_db)):
     return variants
 
 
-@router.put("/variants/{variant_pid}", response_model=VariantResponse)
+@router.put("/variants/{variant_pid}/", response_model=VariantResponse)
 async def update_variant(
     variant_pid: UUID, variant_data: VariantCreate, db: Session = Depends(get_db)
 ):
@@ -241,7 +393,7 @@ async def update_variant(
     return updated_variant
 
 
-@router.delete("/variants/{variant_pid}")
+@router.delete("/variants/{variant_pid}/")
 async def delete_variant(variant_pid: UUID, db: Session = Depends(get_db)):
     """Delete a variant"""
     feature_flags_crud = FeatureFlagsCRUD(db)
@@ -263,7 +415,7 @@ async def delete_variant(variant_pid: UUID, db: Session = Depends(get_db)):
     return {"message": "Variant deleted successfully"}
 
 
-@router.post("/{flag_pid}/variants/{variant_pid}/set-default")
+@router.post("/{flag_pid}/variants/{variant_pid}/set-default/")
 async def set_default_variant(
     flag_pid: UUID, variant_pid: UUID, db: Session = Depends(get_db)
 ):
@@ -279,7 +431,7 @@ async def set_default_variant(
     return {"message": "Default variant updated successfully"}
 
 
-@router.get("/{flag_pid}/targeting-rules")
+@router.get("/{flag_pid}/targeting-rules/")
 async def get_targeting_rules(flag_pid: UUID, db: Session = Depends(get_db)):
     """Get all targeting rules for a feature flag"""
     feature_flags_crud = FeatureFlagsCRUD(db)
@@ -302,7 +454,7 @@ async def get_targeting_rules(flag_pid: UUID, db: Session = Depends(get_db)):
     ]
 
 
-@router.post("/{flag_pid}/targeting-rules")
+@router.post("/{flag_pid}/targeting-rules/")
 async def create_targeting_rule(
     flag_pid: UUID, rule_data: TargetingRuleCreate, db: Session = Depends(get_db)
 ):
@@ -331,7 +483,7 @@ async def create_targeting_rule(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.put("/targeting-rules/{rule_pid}")
+@router.put("/targeting-rules/{rule_pid}/")
 async def update_targeting_rule(
     rule_pid: UUID, rule_data: TargetingRuleCreate, db: Session = Depends(get_db)
 ):
@@ -362,7 +514,7 @@ async def update_targeting_rule(
     }
 
 
-@router.delete("/targeting-rules/{rule_pid}")
+@router.delete("/targeting-rules/{rule_pid}/")
 async def delete_targeting_rule(rule_pid: UUID, db: Session = Depends(get_db)):
     """Delete a targeting rule"""
     targeting_rules_crud = TargetingRulesCRUD(db)
@@ -375,7 +527,7 @@ async def delete_targeting_rule(rule_pid: UUID, db: Session = Depends(get_db)):
     return {"message": "Targeting rule deleted successfully"}
 
 
-@router.get("/{flag_pid}/individual-targeting")
+@router.get("/{flag_pid}/individual-targeting/")
 async def get_individual_targeting(flag_pid: UUID, db: Session = Depends(get_db)):
     """Get all individual targeting rules for a feature flag"""
     feature_flags_crud = FeatureFlagsCRUD(db)
@@ -399,7 +551,7 @@ async def get_individual_targeting(flag_pid: UUID, db: Session = Depends(get_db)
     ]
 
 
-@router.post("/{flag_pid}/individual-targeting")
+@router.post("/{flag_pid}/individual-targeting/")
 async def create_individual_targeting(
     flag_pid: UUID,
     targeting_data: IndividualTargetingCreate,
@@ -425,7 +577,7 @@ async def create_individual_targeting(
     }
 
 
-@router.put("/individual-targeting/{targeting_pid}")
+@router.put("/individual-targeting/{targeting_pid}/")
 async def update_individual_targeting(
     targeting_pid: UUID,
     targeting_data: IndividualTargetingCreate,
@@ -452,7 +604,7 @@ async def update_individual_targeting(
     }
 
 
-@router.delete("/individual-targeting/{targeting_pid}")
+@router.delete("/individual-targeting/{targeting_pid}/")
 async def delete_individual_targeting(
     targeting_pid: UUID, db: Session = Depends(get_db)
 ):

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 
 from nova_manager.core.exceptions import (
@@ -42,4 +43,11 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
     return create_exception_response(ValidationException(exc.errors()))
 
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.add_middleware(ExceptionMiddleware)

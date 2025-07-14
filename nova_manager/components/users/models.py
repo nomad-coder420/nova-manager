@@ -8,9 +8,7 @@ from nova_manager.core.models import BaseOrganisationModel
 class Users(BaseOrganisationModel):
     __tablename__ = "users"
 
-    user_id: Mapped[str] = mapped_column(
-        String, nullable=False, unique=True, index=True
-    )
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     # TODO: Define this into proper tables / columns later
     user_profile: Mapped[dict] = mapped_column(
         JSON, server_default=func.json("{}"), nullable=False

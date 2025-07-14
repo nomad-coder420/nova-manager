@@ -15,7 +15,6 @@ from nova_manager.components.users.crud import UsersCRUD
 
 
 class UserFeatureVariantAssignment(BaseModel):
-    user_id: str
     feature_id: UUID
     feature_name: str
     variant_name: str
@@ -76,7 +75,6 @@ class GetUserFeatureVariantFlow:
             )
 
             return UserFeatureVariantAssignment(
-                user_id=user_id,
                 feature_id=feature_flag.pid,
                 feature_name=feature_flag.name,
                 variant_name=default_variant.name,

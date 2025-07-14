@@ -554,8 +554,8 @@
 
                 <!-- Org/App Selector -->
                 <div class="org-selector">
-                    <input type="text" id="orgId" class="org-input" value="org-123" placeholder="Org ID">
-                    <input type="text" id="appId" class="org-input" value="app-456" placeholder="App ID">
+                    <input type="text" id="orgId" class="org-input" value="org123" placeholder="Org ID">
+                    <input type="text" id="appId" class="org-input" value="app123" placeholder="App ID">
                     <button class="load-btn" onclick="loadFeatureFlags()">Load</button>
                 </div>
 
@@ -874,7 +874,6 @@
                 <div class="flag-item ${flag.is_active ? 'status-active' : 'status-inactive'}" onclick="selectFlag('${flag.pid}')">
                     <div class="flag-name">${flag.name}</div>
                     <div class="flag-description">${flag.description || 'No description'}</div>
-                    <div class="flag-meta">${flag.variant_count} variants</div>
                     <span class="flag-status-badge ${flag.is_active ? 'active' : 'inactive'}">
                         ${flag.is_active ? 'Active' : 'Inactive'}
                     </span>

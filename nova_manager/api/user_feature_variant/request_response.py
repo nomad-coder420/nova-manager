@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, List
 from uuid import UUID
 from pydantic import BaseModel
 
@@ -12,7 +12,6 @@ class EvaluateFeatureRequest(BaseModel):
 
 
 class EvaluateFeatureResponse(BaseModel):
-    user_id: str
     feature_id: UUID
     feature_name: str
     variant_name: str
@@ -26,3 +25,18 @@ class BatchEvaluateRequest(BaseModel):
     app_id: str
     payload: Dict[str, Any] = {}
     feature_names: list[str]
+
+
+class BatchEvaluateFeatureResponse(BaseModel):
+    features: List[EvaluateFeatureResponse]
+
+
+class EvaluateAllFeaturesRequest(BaseModel):
+    user_id: str
+    organisation_id: str
+    app_id: str
+    payload: Dict[str, Any] = {}
+
+
+class EvaluateAllFeaturesResponse(BaseModel):
+    features: List[EvaluateFeatureResponse]
