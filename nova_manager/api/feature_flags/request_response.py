@@ -9,10 +9,20 @@ class VariantCreate(BaseModel):
     config: Dict[str, Any] = {}
 
 
+class NovaObjectKeyDefinition(BaseModel):
+    type: str
+    description: str
+    default: Any
+
+
+class NovaObjectDefinition(BaseModel):
+    keys: Dict[str, NovaObjectKeyDefinition]
+
+
 class NovaObjectSyncRequest(BaseModel):
     organisation_id: str
     app_id: str
-    objects: Dict[str, Dict[str, Any]]
+    objects: Dict[str, NovaObjectDefinition]
 
 
 class NovaObjectSyncResponse(BaseModel):
@@ -31,6 +41,7 @@ class FeatureFlagCreate(BaseModel):
     organisation_id: str
     app_id: str
     description: Optional[str] = None
+    keys_config: Dict[str, Any]
     is_active: bool = False
 
 
@@ -67,7 +78,7 @@ class FeatureFlagResponse(BaseModel):
     app_id: str
     created_at: datetime
     variants: List[VariantResponse] = []
-    default_variant: Optional[VariantResponse] = None
+    keys_config: Dict[str, Any]
 
     class Config:
         from_attributes = True
@@ -78,6 +89,7 @@ class FeatureFlagListItem(BaseModel):
     name: str
     description: str
     is_active: bool
+    keys_config: Dict[str, Any]
     created_at: datetime
 
     class Config:

@@ -150,23 +150,3 @@ class UserFeatureVariantsCRUD(BaseCRUD):
             "variant_breakdown": variant_counts,
             "unique_users": len(set(a.user_id for a in assignments)),
         }
-
-    def get_user_feature_variant(
-        self, user_pid: UUIDType, feature_pid: UUIDType
-    ) -> Optional[FeatureVariants]:
-        """Get the variant assigned to a user for a specific feature (or default)"""
-        # Check for explicit assignment
-        assignment = self.get_user_assignment(
-            self.db, user_pid=user_pid, feature_pid=feature_pid
-        )
-
-        if assignment:
-            return assignment.variant
-        else:
-            # Return default variant
-            feature = (
-                self.db.query(FeatureFlags)
-                .filter(FeatureFlags.pid == feature_pid)
-                .first()
-            )
-            return feature.default_variant if feature else None

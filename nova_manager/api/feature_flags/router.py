@@ -45,7 +45,6 @@ async def sync_nova_objects(
 
     # Initialize CRUD instances
     flags_crud = FeatureFlagsCRUD(db)
-    variants_crud = FeatureVariantsCRUD(db)
 
     # Track statistics
     stats = {
@@ -68,23 +67,17 @@ async def sync_nova_objects(
                 app_id=sync_request.app_id,
             )
 
+            keys_config = object_props.get("keys")
+
+            # TODO: Add keys_config validation here
+
             if existing_flag:
-                updated_flag = None
-
                 # Update existing flag
-
-                # Get the default variant
-                if not existing_flag.default_variant_id:
-                    # No default variant exists, create one
-                    default_variant = variants_crud.create_variant(
-                        feature_pid=existing_flag.pid,
-                        variant_data={"name": "default", "config": object_props},
+                # Check if config has actually changed
+                if existing_flag.keys_config != keys_config:
+                    updated_variant = flags_crud.update(
+                        db_obj=existing_flag, obj_in={"keys_config": keys_config}
                     )
-
-                    # Set as default variant
-                    existing_flag.default_variant_id = default_variant.pid
-                    db.flush()
-                    db.refresh(existing_flag)
 
                     stats["objects_updated"] += 1
                     stats["details"].append(
@@ -96,55 +89,28 @@ async def sync_nova_objects(
                         }
                     )
                 else:
-                    # Update existing default variant
-                    default_variant = variants_crud.get_by_pid(
-                        existing_flag.default_variant_id
+                    # No changes needed
+                    stats["objects_skipped"] += 1
+                    stats["details"].append(
+                        {
+                            "object_name": object_name,
+                            "action": "skipped",
+                            "message": "No changes detected",
+                        }
                     )
-                    if default_variant:
-                        # Check if config has actually changed
-                        if default_variant.config != object_props:
-                            updated_variant = variants_crud.update_config(
-                                pid=default_variant.pid, config=object_props
-                            )
-
-                            stats["objects_updated"] += 1
-                            stats["details"].append(
-                                {
-                                    "object_name": object_name,
-                                    "action": "updated",
-                                    "flag_id": str(existing_flag.pid),
-                                    "message": "Updated default variant properties",
-                                }
-                            )
-                        else:
-                            # No changes needed
-                            stats["objects_skipped"] += 1
-                            stats["details"].append(
-                                {
-                                    "object_name": object_name,
-                                    "action": "skipped",
-                                    "message": "No changes detected",
-                                }
-                            )
 
             else:
                 # Create new feature flag with default variant
                 flag_data = {
                     "name": object_name,
                     "description": f"Auto-generated from nova-objects.json for {object_name}",
+                    "keys_config": keys_config,
                     "organisation_id": sync_request.organisation_id,
                     "app_id": sync_request.app_id,
                     "is_active": True,
                 }
 
-                default_variant_data = {
-                    "name": "default",
-                    "config": object_props,
-                }
-
-                new_flag = flags_crud.create_with_default_variant(
-                    flag_data=flag_data, default_variant_data=default_variant_data
-                )
+                new_flag = flags_crud.create(obj_in=flag_data)
 
                 stats["objects_created"] += 1
                 stats["details"].append(
@@ -203,9 +169,7 @@ async def create_feature_flag(
             )
 
         # Create feature flag with default variant
-        feature_flag = feature_flags_crud.create_with_default_variant(
-            flag_data=flag_data.model_dump()
-        )
+        feature_flag = feature_flags_crud.create(obj_in=flag_data.model_dump())
 
         # Load with variants for response
         feature_flag = feature_flags_crud.get_with_variants(pid=feature_flag.pid)
@@ -248,6 +212,7 @@ async def list_feature_flags(
                 "description": flag.description,
                 "is_active": flag.is_active,
                 "created_at": flag.created_at.isoformat(),
+                "keys_config": flag.keys_config,
             }
         )
 
@@ -334,6 +299,8 @@ async def create_variant(
     if not feature_flag:
         raise HTTPException(status_code=404, detail="Feature flag not found")
 
+    # TODO: Add validation for variant_data based on keys_config
+
     # Check if variant name already exists
     existing_variant = feature_variants_crud.get_by_name(
         name=variant_data.name, feature_pid=flag_pid
@@ -376,6 +343,8 @@ async def update_variant(
     if not variant:
         raise HTTPException(status_code=404, detail="Variant not found")
 
+    # TODO: Add validation for variant_data based on keys_config
+
     # Check if new name conflicts with existing variants in the same feature
     if variant_data.name != variant.name:
         existing = feature_variants_crud.get_by_name(
@@ -396,39 +365,14 @@ async def update_variant(
 @router.delete("/variants/{variant_pid}/")
 async def delete_variant(variant_pid: UUID, db: Session = Depends(get_db)):
     """Delete a variant"""
-    feature_flags_crud = FeatureFlagsCRUD(db)
     feature_variants_crud = FeatureVariantsCRUD(db)
 
     variant = feature_variants_crud.get_by_pid(variant_pid)
     if not variant:
         raise HTTPException(status_code=404, detail="Variant not found")
 
-    # Check if this is the default variant
-    feature_flag = feature_flags_crud.get_by_pid(variant.feature_id)
-    if feature_flag.default_variant_id == variant_pid:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot delete the default variant. Set another variant as default first.",
-        )
-
     feature_variants_crud.delete_by_pid(pid=variant_pid)
     return {"message": "Variant deleted successfully"}
-
-
-@router.post("/{flag_pid}/variants/{variant_pid}/set-default/")
-async def set_default_variant(
-    flag_pid: UUID, variant_pid: UUID, db: Session = Depends(get_db)
-):
-    """Set a variant as the default for a feature flag"""
-    feature_flags_crud = FeatureFlagsCRUD(db)
-
-    feature_flag = feature_flags_crud.set_default_variant(
-        flag_pid=flag_pid, variant_pid=variant_pid
-    )
-    if not feature_flag:
-        raise HTTPException(status_code=404, detail="Feature flag or variant not found")
-
-    return {"message": "Default variant updated successfully"}
 
 
 @router.get("/{flag_pid}/targeting-rules/")

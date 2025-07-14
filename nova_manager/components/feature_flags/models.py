@@ -21,11 +21,8 @@ class FeatureFlags(BaseOrganisationModel):
 
     name: Mapped[str] = mapped_column(String, nullable=False, index=True)
     description: Mapped[str] = mapped_column(String, nullable=False, server_default="")
-    default_variant_id: Mapped[UUIDType | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("feature_variants.pid"),
-        nullable=True,
-        index=True,
+    keys_config: Mapped[dict] = mapped_column(
+        JSON, server_default=func.json("{}"), nullable=False
     )
     # TODO: Add type field here
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -49,13 +46,6 @@ class FeatureFlags(BaseOrganisationModel):
         cascade="all, delete-orphan",
     )
 
-    default_variant = relationship(
-        "FeatureVariants",
-        foreign_keys=[default_variant_id],
-        post_update=True,
-        overlaps="variants",
-    )
-
     targeting_rules = relationship(
         "TargetingRules",
         foreign_keys="TargetingRules.feature_id",
@@ -77,6 +67,10 @@ class FeatureFlags(BaseOrganisationModel):
         back_populates="feature_flag",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def default_variant(self):
+        return {key: self.keys_config[key].get("default") for key in self.keys_config}
 
 
 class FeatureVariants(BaseModel):

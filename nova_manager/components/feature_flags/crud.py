@@ -55,7 +55,6 @@ class FeatureFlagsCRUD(BaseCRUD):
             self.db.query(FeatureFlags)
             .options(
                 selectinload(FeatureFlags.variants),
-                joinedload(FeatureFlags.default_variant),
             )
             .filter(FeatureFlags.pid == pid)
             .first()
@@ -67,7 +66,6 @@ class FeatureFlagsCRUD(BaseCRUD):
             self.db.query(FeatureFlags)
             .options(
                 selectinload(FeatureFlags.variants),
-                joinedload(FeatureFlags.default_variant),
                 selectinload(FeatureFlags.targeting_rules),
                 selectinload(FeatureFlags.individual_targeting),
                 selectinload(FeatureFlags.user_feature_variants),
@@ -75,55 +73,6 @@ class FeatureFlagsCRUD(BaseCRUD):
             .filter(FeatureFlags.pid == pid)
             .first()
         )
-
-    def create_with_default_variant(
-        self,
-        flag_data: Dict[str, Any],
-        default_variant_data: Optional[Dict[str, Any]] = None,
-    ) -> FeatureFlags:
-        """Create feature flag with a default variant"""
-        # Create feature flag first
-        flag = FeatureFlags(**flag_data)
-        self.db.add(flag)
-        self.db.flush()  # Get the PID without committing
-
-        # Create default variant
-        if not default_variant_data:
-            default_variant_data = {"name": "default"}
-
-        default_variant = FeatureVariants(feature_id=flag.pid, **default_variant_data)
-        self.db.add(default_variant)
-        self.db.flush()
-
-        # Set default variant reference
-        flag.default_variant_id = default_variant.pid
-        self.db.flush()
-        self.db.refresh(flag)
-        return flag
-
-    def set_default_variant(
-        self, flag_pid: UUIDType, variant_pid: UUIDType
-    ) -> Optional[FeatureFlags]:
-        """Set default variant for a feature flag"""
-        flag = self.get_by_pid(flag_pid)
-        if flag:
-            # Verify variant belongs to this flag
-            variant = (
-                self.db.query(FeatureVariants)
-                .filter(
-                    and_(
-                        FeatureVariants.pid == variant_pid,
-                        FeatureVariants.feature_id == flag_pid,
-                    )
-                )
-                .first()
-            )
-
-            if variant:
-                flag.default_variant_id = variant_pid
-                self.db.flush()
-                self.db.refresh(flag)
-        return flag
 
     def toggle_active(self, pid: UUIDType) -> Optional[FeatureFlags]:
         """Toggle active status of feature flag"""
@@ -198,25 +147,6 @@ class FeatureVariantsCRUD(BaseCRUD):
             self.db.flush()
             self.db.refresh(variant)
         return variant
-
-    def get_variant_usage_stats(self, pid: UUIDType) -> Dict[str, Any]:
-        """Get usage statistics for a variant"""
-        variant = self.get_with_assignments(pid=pid)
-        if not variant:
-            return {}
-
-        total_assignments = len(variant.user_feature_variants)
-
-        # Check if this is the default variant for its feature
-        is_default = variant.feature_flag.default_variant_id == pid
-
-        return {
-            "variant_name": variant.name,
-            "feature_name": variant.feature_flag.name,
-            "total_explicit_assignments": total_assignments,
-            "is_default_variant": is_default,
-            "config": variant.config,
-        }
 
     def clone_variant(
         self,

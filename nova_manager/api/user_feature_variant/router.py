@@ -21,7 +21,9 @@ router = APIRouter()
 async def get_user_feature_variant(
     request: EvaluateFeatureRequest, db: Session = Depends(get_db)
 ):
-    result = GetUserFeatureVariantFlow(db).get_user_feature_variant(
+    evaluator = GetUserFeatureVariantFlow(db)
+
+    result = evaluator.get_user_feature_variant(
         user_id=request.user_id,
         feature_name=request.feature_name,
         organisation_id=request.organisation_id,
