@@ -76,7 +76,7 @@ class UsersCRUD(BaseCRUD):
     def get_users_with_feature_variant(
         self,
         feature_pid: UUIDType,
-        variant_pid: UUIDType,
+        variant_name: str,
         organisation_id: str,
         app_id: str,
     ) -> List[Users]:
@@ -89,7 +89,7 @@ class UsersCRUD(BaseCRUD):
                     Users.organisation_id == organisation_id,
                     Users.app_id == app_id,
                     UserFeatureVariants.feature_id == feature_pid,
-                    UserFeatureVariants.variant_id == variant_pid,
+                    UserFeatureVariants.variant_name == variant_name,
                 )
             )
             .all()

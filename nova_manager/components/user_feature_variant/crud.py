@@ -55,9 +55,7 @@ class UserFeatureVariantsCRUD(BaseCRUD):
             .all()
         )
 
-    def get_variant_assignments(
-        self, variant_pid: UUIDType
-    ) -> List[UserFeatureVariants]:
+    def get_variant_assignments(self, variant_name: str) -> List[UserFeatureVariants]:
         """Get all user assignments for a specific variant"""
         return (
             self.db.query(UserFeatureVariants)
@@ -65,7 +63,7 @@ class UserFeatureVariantsCRUD(BaseCRUD):
                 joinedload(UserFeatureVariants.user),
                 joinedload(UserFeatureVariants.feature_flag),
             )
-            .filter(UserFeatureVariants.variant_id == variant_pid)
+            .filter(UserFeatureVariants.variant_name == variant_name)
             .all()
         )
 
@@ -73,7 +71,8 @@ class UserFeatureVariantsCRUD(BaseCRUD):
         self,
         user_pid: UUIDType,
         feature_pid: UUIDType,
-        variant_pid: UUIDType,
+        variant_name: str,
+        variant_config: dict,
         organisation_id: str,
         app_id: str,
     ) -> UserFeatureVariants:
@@ -83,7 +82,8 @@ class UserFeatureVariantsCRUD(BaseCRUD):
 
         if existing:
             # Update existing assignment
-            existing.variant_id = variant_pid
+            existing.variant_name = variant_name
+            existing.variant_config = variant_config
             self.db.flush()
             self.db.refresh(existing)
             return existing
@@ -92,7 +92,8 @@ class UserFeatureVariantsCRUD(BaseCRUD):
             assignment = UserFeatureVariants(
                 user_id=user_pid,
                 feature_id=feature_pid,
-                variant_id=variant_pid,
+                variant_name=variant_name,
+                variant_config=variant_config,
                 organisation_id=organisation_id,
                 app_id=app_id,
             )
@@ -116,7 +117,8 @@ class UserFeatureVariantsCRUD(BaseCRUD):
         self,
         user_pids: List[UUIDType],
         feature_pid: UUIDType,
-        variant_pid: UUIDType,
+        variant_name: str,
+        variant_config: str,
         organisation_id: str,
         app_id: str,
     ) -> List[UserFeatureVariants]:
@@ -128,7 +130,8 @@ class UserFeatureVariantsCRUD(BaseCRUD):
                 self.db,
                 user_pid=user_pid,
                 feature_pid=feature_pid,
-                variant_pid=variant_pid,
+                variant_name=variant_name,
+                variant_config=variant_config,
                 organisation_id=organisation_id,
                 app_id=app_id,
             )

@@ -61,13 +61,6 @@ class FeatureFlags(BaseOrganisationModel):
         cascade="all, delete-orphan",
     )
 
-    user_feature_variants = relationship(
-        "UserFeatureVariants",
-        foreign_keys="UserFeatureVariants.feature_id",
-        back_populates="feature_flag",
-        cascade="all, delete-orphan",
-    )
-
     @property
     def default_variant(self):
         return {key: self.keys_config[key].get("default") for key in self.keys_config}
@@ -90,20 +83,11 @@ class FeatureVariants(BaseModel):
     # Unique constraint: variant name must be unique within a feature flag
     __table_args__ = (
         UniqueConstraint("name", "feature_id", name="uq_feature_variants_name_feature"),
-        # Index for feature queries
-        Index("idx_feature_variants_feature_id", "feature_id"),
     )
 
     # Relationships
     feature_flag = relationship(
         "FeatureFlags", foreign_keys=[feature_id], back_populates="variants"
-    )
-
-    user_feature_variants = relationship(
-        "UserFeatureVariants",
-        foreign_keys="UserFeatureVariants.variant_id",
-        back_populates="variant",
-        cascade="all, delete-orphan",
     )
 
 
@@ -150,9 +134,6 @@ class IndividualTargeting(BaseModel):
     rule_config: Mapped[dict] = mapped_column(
         JSON, server_default=func.json("{}"), nullable=False
     )
-
-    # Index for feature queries (no unique constraint as multiple rules per feature are allowed)
-    __table_args__ = (Index("idx_individual_targeting_feature_id", "feature_id"),)
 
     # Relationships
     feature_flag = relationship(

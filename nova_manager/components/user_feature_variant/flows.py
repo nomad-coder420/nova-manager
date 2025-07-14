@@ -84,7 +84,9 @@ class GetUserFeatureVariantFlow:
             user_pid=user.pid, feature_pid=feature_flag.pid
         )
         if explicit_assignment:
-            variant = explicit_assignment.variant
+            variant_name = explicit_assignment.variant_name
+            variant_config = explicit_assignment.variant_config
+
             self._save_evaluation_result(
                 user.pid, feature_flag.pid, variant.pid, "explicit_assignment"
             )
@@ -290,7 +292,12 @@ class GetUserFeatureVariantFlow:
         return None
 
     def _save_evaluation_result(
-        self, user_pid: str, feature_pid: str, variant_pid: str, reason: str
+        self,
+        user_pid: str,
+        feature_pid: str,
+        variant_name: str,
+        variant_config: dict,
+        reason: str,
     ):
         """Save or update user's variant assignment based on evaluation"""
 
