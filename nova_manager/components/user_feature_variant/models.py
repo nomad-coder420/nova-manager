@@ -21,6 +21,15 @@ class UserFeatureVariants(BaseOrganisationModel):
         nullable=False,
         index=True,
     )
+    # variant_name: Mapped[UUIDType] = mapped_column(
+    #     UUID(as_uuid=True),
+    #     ForeignKey("feature_variants.pid"),
+    #     nullable=False,
+    #     index=True,
+    # )
+    # variant_config: Mapped[dict] = mapped_column(
+    #     JSON, server_default=func.json("{}"), nullable=False
+    # )
 
     # Unique constraint: one user can have only one variant assignment per feature
     __table_args__ = (
