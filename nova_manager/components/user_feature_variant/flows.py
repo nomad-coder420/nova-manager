@@ -307,7 +307,8 @@ class GetUserFeatureVariantFlow:
             self.user_feature_variants_crud.assign_user_variant(
                 user_pid=user_pid,
                 feature_pid=feature_pid,
-                variant_pid=variant_pid,
+                variant_name=variant_name,
+                variant_config=variant_config,
                 organisation_id=user.organisation_id,
                 app_id=user.app_id,
             )

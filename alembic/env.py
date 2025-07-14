@@ -12,6 +12,7 @@ from nova_manager.core.models import Base
 from nova_manager.components.feature_flags.models import *
 from nova_manager.components.users.models import *
 from nova_manager.components.user_feature_variant.models import *
+from nova_manager.components.segments.models import *
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
