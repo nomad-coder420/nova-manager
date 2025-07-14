@@ -20,9 +20,7 @@ class FeatureFlags(BaseOrganisationModel):
     __tablename__ = "feature_flags"
 
     name: Mapped[str] = mapped_column(String, nullable=False, index=True)
-    description: Mapped[str] = mapped_column(
-        String, nullable=False, index=True, server_default=""
-    )
+    description: Mapped[str] = mapped_column(String, nullable=False, server_default="")
     default_variant_id: Mapped[UUIDType | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("feature_variants.pid"),

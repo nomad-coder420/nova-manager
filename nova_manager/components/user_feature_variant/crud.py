@@ -84,7 +84,7 @@ class UserFeatureVariantsCRUD(BaseCRUD):
         if existing:
             # Update existing assignment
             existing.variant_id = variant_pid
-            self.db.commit()
+            self.db.flush()
             self.db.refresh(existing)
             return existing
         else:
@@ -97,7 +97,7 @@ class UserFeatureVariantsCRUD(BaseCRUD):
                 app_id=app_id,
             )
             self.db.add(assignment)
-            self.db.commit()
+            self.db.flush()
             self.db.refresh(assignment)
             return assignment
 
@@ -108,7 +108,7 @@ class UserFeatureVariantsCRUD(BaseCRUD):
         )
         if assignment:
             self.db.delete(assignment)
-            self.db.commit()
+            self.db.flush()
             return True
         return False
 

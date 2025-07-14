@@ -97,7 +97,7 @@ class FeatureFlagsCRUD(BaseCRUD):
 
         # Set default variant reference
         flag.default_variant_id = default_variant.pid
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(flag)
         return flag
 
@@ -121,7 +121,7 @@ class FeatureFlagsCRUD(BaseCRUD):
 
             if variant:
                 flag.default_variant_id = variant_pid
-                self.db.commit()
+                self.db.flush()
                 self.db.refresh(flag)
         return flag
 
@@ -130,7 +130,7 @@ class FeatureFlagsCRUD(BaseCRUD):
         flag = self.get_by_pid(pid)
         if flag:
             flag.is_active = not flag.is_active
-            self.db.commit()
+            self.db.flush()
             self.db.refresh(flag)
         return flag
 
@@ -184,7 +184,7 @@ class FeatureVariantsCRUD(BaseCRUD):
         """Create a new variant for a feature"""
         variant = FeatureVariants(feature_id=feature_pid, **variant_data)
         self.db.add(variant)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(variant)
         return variant
 
@@ -195,7 +195,7 @@ class FeatureVariantsCRUD(BaseCRUD):
         variant = self.get_by_pid(pid)
         if variant:
             variant.config = config
-            self.db.commit()
+            self.db.flush()
             self.db.refresh(variant)
         return variant
 
@@ -235,7 +235,7 @@ class FeatureVariantsCRUD(BaseCRUD):
             config=new_config if new_config is not None else source.config.copy(),
         )
         self.db.add(cloned_variant)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(cloned_variant)
         return cloned_variant
 
@@ -289,7 +289,7 @@ class TargetingRulesCRUD(BaseCRUD):
             feature_id=feature_pid, rule_config=rule_config, priority=priority
         )
         self.db.add(rule)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(rule)
         return rule
 
@@ -300,7 +300,7 @@ class TargetingRulesCRUD(BaseCRUD):
         rule = self.get_by_pid(pid)
         if rule:
             rule.priority = new_priority
-            self.db.commit()
+            self.db.flush()
             self.db.refresh(rule)
         return rule
 
@@ -311,7 +311,7 @@ class TargetingRulesCRUD(BaseCRUD):
         rule = self.get_by_pid(pid)
         if rule:
             rule.rule_config = rule_config
-            self.db.commit()
+            self.db.flush()
             self.db.refresh(rule)
         return rule
 
@@ -329,7 +329,7 @@ class TargetingRulesCRUD(BaseCRUD):
                 rule.priority = rule_priority["priority"]
                 updated_rules.append(rule)
 
-        self.db.commit()
+        self.db.flush()
         for rule in updated_rules:
             self.db.refresh(rule)
 
@@ -379,7 +379,7 @@ class TargetingRulesCRUD(BaseCRUD):
             priority=new_priority,
         )
         self.db.add(duplicated_rule)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(duplicated_rule)
         return duplicated_rule
 
@@ -415,7 +415,7 @@ class IndividualTargetingCRUD(BaseCRUD):
         """Create a new individual targeting rule"""
         targeting = IndividualTargeting(feature_id=feature_pid, rule_config=rule_config)
         self.db.add(targeting)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(targeting)
         return targeting
 
@@ -426,7 +426,7 @@ class IndividualTargetingCRUD(BaseCRUD):
         targeting = self.get_by_pid(pid)
         if targeting:
             targeting.rule_config = rule_config
-            self.db.commit()
+            self.db.flush()
             self.db.refresh(targeting)
         return targeting
 
@@ -464,7 +464,7 @@ class IndividualTargetingCRUD(BaseCRUD):
             targetings.append(targeting)
 
         self.db.add_all(targetings)
-        self.db.commit()
+        self.db.flush()
 
         for targeting in targetings:
             self.db.refresh(targeting)
@@ -507,6 +507,6 @@ class IndividualTargetingCRUD(BaseCRUD):
             rule_config=source.rule_config.copy(),
         )
         self.db.add(cloned_targeting)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(cloned_targeting)
         return cloned_targeting

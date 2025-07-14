@@ -40,7 +40,7 @@ class BaseCRUD:
         """Create new record"""
         db_obj = self.model(**obj_in)
         self.db.add(db_obj)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(db_obj)
         return db_obj
 
@@ -49,7 +49,7 @@ class BaseCRUD:
         for field, value in obj_in.items():
             setattr(db_obj, field, value)
         self.db.add(db_obj)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(db_obj)
         return db_obj
 
@@ -58,7 +58,7 @@ class BaseCRUD:
         obj = self.db.query(self.model).get(id)
         if obj:
             self.db.delete(obj)
-            self.db.commit()
+            self.db.flush()
         return obj
 
     def delete_by_pid(self, pid: UUIDType) -> Any:
@@ -66,5 +66,5 @@ class BaseCRUD:
         obj = self.get_by_pid(pid)
         if obj:
             self.db.delete(obj)
-            self.db.commit()
+            self.db.flush()
         return obj
