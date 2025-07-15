@@ -15,6 +15,7 @@ from nova_manager.middlewares.exceptions import ExceptionMiddleware
 from nova_manager.api.frontend.router import router as frontend_router
 from nova_manager.api.feature_flags.router import router as feature_flags_router
 from nova_manager.api.segments.router import router as segments_router
+from nova_manager.api.experiences.router import router as experiences_router
 
 
 configure_logging()
@@ -29,6 +30,7 @@ app.mount("/static", StaticFiles(directory="nova_manager/static"), name="static"
 app.include_router(frontend_router)
 app.include_router(feature_flags_router, prefix="/api/v1/feature-flags")
 app.include_router(segments_router, prefix="/api/v1/segments")
+app.include_router(experiences_router, prefix="/api/v1/experiences")
 
 
 @app.exception_handler(RequestValidationError)
