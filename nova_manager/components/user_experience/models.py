@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from uuid import UUID as UUIDType
 from sqlalchemy import (
     JSON,
@@ -73,7 +74,7 @@ class UserFeatureVariants(BaseOrganisationModel):
 
     user_id: Mapped[UUIDType] = mapped_column(UUID(as_uuid=True), nullable=False)
     feature_id: Mapped[UUIDType] = mapped_column(UUID(as_uuid=True), nullable=False)
-    experience_id = Mapped[UUIDType | None] = mapped_column(
+    experience_id: Mapped[UUIDType | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
     variant_name: Mapped[str] = mapped_column(String, nullable=False)
