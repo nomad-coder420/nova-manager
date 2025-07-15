@@ -40,5 +40,5 @@ class BaseModel(Base):
 class BaseOrganisationModel(BaseModel):
     __abstract__ = True
 
-    organisation_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
-    app_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    organisation_id: Mapped[str] = mapped_column(String, nullable=False)
+    app_id: Mapped[str] = mapped_column(String, nullable=False)

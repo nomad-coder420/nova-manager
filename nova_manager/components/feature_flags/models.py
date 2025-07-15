@@ -13,13 +13,14 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from nova_manager.components.experiences.models import Experiences
 from nova_manager.core.models import BaseModel, BaseOrganisationModel
 
 
 class FeatureFlags(BaseOrganisationModel):
     __tablename__ = "feature_flags"
 
-    name: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=False, server_default="")
     keys_config: Mapped[dict] = mapped_column(
         JSON, server_default=func.json("{}"), nullable=False
@@ -36,6 +37,7 @@ class FeatureFlags(BaseOrganisationModel):
         Index(
             "idx_feature_flags_active_org_app", "is_active", "organisation_id", "app_id"
         ),
+        Index("idx_feature_flags_org_app", "organisation_id", "app_id"),
     )
 
     # Relationships
@@ -65,15 +67,13 @@ class FeatureVariants(BaseModel):
         UUID(as_uuid=True),
         ForeignKey("feature_flags.pid"),
         nullable=False,
-        index=True,
     )
     experience_id: Mapped[UUIDType] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("experiences.pid"),
         nullable=False,
-        index=True,
     )
-    name: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
     config: Mapped[dict] = mapped_column(
         JSON, server_default=func.json("{}"), nullable=False
     )
@@ -81,7 +81,13 @@ class FeatureVariants(BaseModel):
     # Unique constraint: variant name must be unique within a feature flag
     __table_args__ = (
         UniqueConstraint("name", "feature_id", name="uq_feature_variants_name_feature"),
+        # Composite unique constraint: one variant per feature-experience pair
+        UniqueConstraint(
+            "feature_id", "experience_id", name="uq_feature_variants_feature_experience"
+        ),
         # Index for common queries
+        Index("idx_feature_variants_feature_id", "feature_id"),
+        Index("idx_feature_variants_experience_id", "experience_id"),
         Index("idx_feature_variants_feature_experience", "feature_id", "experience_id"),
     )
 
@@ -101,9 +107,8 @@ class FeatureVariantsTemplates(BaseModel):
         UUID(as_uuid=True),
         ForeignKey("feature_flags.pid"),
         nullable=False,
-        index=True,
     )
-    name: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
     config: Mapped[dict] = mapped_column(
         JSON, server_default=func.json("{}"), nullable=False
     )
@@ -114,7 +119,7 @@ class FeatureVariantsTemplates(BaseModel):
             "name", "feature_id", name="uq_feature_variants_templates_name_feature"
         ),
         # Index for common queries
-        Index("idx_feature_variants_templates_feature", "feature_id"),
+        Index("idx_feature_variants_templates_feature_id", "feature_id"),
     )
 
     # Relationships

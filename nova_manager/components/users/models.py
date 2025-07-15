@@ -8,7 +8,7 @@ from nova_manager.core.models import BaseOrganisationModel
 class Users(BaseOrganisationModel):
     __tablename__ = "users"
 
-    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False)
     # TODO: Define this into proper tables / columns later
     user_profile: Mapped[dict] = mapped_column(
         JSON, server_default=func.json("{}"), nullable=False
@@ -21,6 +21,7 @@ class Users(BaseOrganisationModel):
         ),
         # Index for common queries
         Index("idx_users_user_id_org_app", "user_id", "organisation_id", "app_id"),
+        Index("idx_users_org_app", "organisation_id", "app_id"),
     )
 
     # Relationships

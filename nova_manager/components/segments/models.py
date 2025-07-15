@@ -19,7 +19,7 @@ from nova_manager.core.models import BaseOrganisationModel
 class Segments(BaseOrganisationModel):
     __tablename__ = "segments"
 
-    name: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=False, server_default="")
 
     # TODO: Define this into proper columns later
@@ -33,7 +33,7 @@ class Segments(BaseOrganisationModel):
             "name", "organisation_id", "app_id", name="uq_segments_name_org_app"
         ),
         # Index for common queries
-        Index("idx_segments_name_org_app", "name", "organisation_id", "app_id"),
+        Index("idx_segments_org_app", "organisation_id", "app_id"),
     )
 
     # Relationships
