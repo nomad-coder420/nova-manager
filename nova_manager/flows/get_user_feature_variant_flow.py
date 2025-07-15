@@ -7,11 +7,8 @@ from sqlalchemy.orm import Session
 from nova_manager.components.feature_flags.crud import (
     FeatureFlagsCRUD,
     FeatureVariantsCRUD,
-    IndividualTargetingCRUD,
-    TargetingRulesCRUD,
 )
 from nova_manager.components.rule_evaluator.controller import RuleEvaluator
-from nova_manager.components.user_feature_variant.crud import UserFeatureVariantsCRUD
 from nova_manager.components.users.crud import UsersCRUD
 
 

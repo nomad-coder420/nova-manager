@@ -14,9 +14,6 @@ from nova_manager.middlewares.exceptions import ExceptionMiddleware
 
 from nova_manager.api.frontend.router import router as frontend_router
 from nova_manager.api.feature_flags.router import router as feature_flags_router
-from nova_manager.api.user_feature_variant.router import (
-    router as user_feature_variant_router,
-)
 
 
 configure_logging()
@@ -30,7 +27,6 @@ app.mount("/static", StaticFiles(directory="nova_manager/static"), name="static"
 # Include Routers
 app.include_router(frontend_router)
 app.include_router(feature_flags_router, prefix="/api/v1/feature-flags")
-app.include_router(user_feature_variant_router, prefix="/api/v1/user-feature-variant")
 
 
 @app.exception_handler(RequestValidationError)

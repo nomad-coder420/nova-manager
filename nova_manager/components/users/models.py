@@ -22,3 +22,11 @@ class Users(BaseOrganisationModel):
         # Index for common queries
         Index("idx_users_user_id_org_app", "user_id", "organisation_id", "app_id"),
     )
+
+    # Relationships
+    user_experiences = relationship(
+        "UserExperience",
+        foreign_keys="UserExperience.user_id",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )

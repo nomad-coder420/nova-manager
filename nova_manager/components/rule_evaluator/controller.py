@@ -1,7 +1,22 @@
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 
 class RuleEvaluator:
+    def _evaluate_targeting_rules(
+        self, targeting_rules: List[Dict[str, Any]], payload: Dict[str, Any]
+    ) -> str | None:
+        """
+        Evaluate targeting rules in order and return the first matching variant.
+        """
+        for rule in targeting_rules:
+            rule_config = rule.get("rule_config")
+
+            if self._evaluate_targeting_rule(rule_config, payload):
+                variant_name = rule_config.get("variant")
+                return variant_name
+
+        return None
+
     def _evaluate_targeting_rule(
         self, rule_config: Dict[str, Any], payload: Dict[str, Any]
     ) -> bool:
@@ -11,7 +26,8 @@ class RuleEvaluator:
         #   "conditions": [
         #     {"field": "country", "operator": "equals", "value": "US", "type": "text"},
         #     {"field": "age", "operator": "greater_than", "value": 18, "type": "number"},
-        #   ]
+        #   ],
+        #   "variant": "variant-1",
         # }
 
         if "conditions" not in rule_config:

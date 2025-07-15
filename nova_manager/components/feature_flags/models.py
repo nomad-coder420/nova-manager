@@ -27,8 +27,8 @@ class FeatureFlags(BaseOrganisationModel):
     # TODO: Add type field here
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    # Unique constraint: feature flag name must be unique within organization + app
     __table_args__ = (
+        # Unique constraint: feature flag name must be unique within organization + app
         UniqueConstraint(
             "name", "organisation_id", "app_id", name="uq_feature_flags_name_org_app"
         ),
@@ -46,17 +46,9 @@ class FeatureFlags(BaseOrganisationModel):
         cascade="all, delete-orphan",
     )
 
-    targeting_rules = relationship(
-        "TargetingRules",
-        foreign_keys="TargetingRules.feature_id",
-        back_populates="feature_flag",
-        cascade="all, delete-orphan",
-        order_by="TargetingRules.priority",
-    )
-
-    individual_targeting = relationship(
-        "IndividualTargeting",
-        foreign_keys="IndividualTargeting.feature_id",
+    variant_templates = relationship(
+        "FeatureVariantsTemplates",
+        foreign_keys="FeatureVariantsTemplates.feature_id",
         back_populates="feature_flag",
         cascade="all, delete-orphan",
     )
@@ -75,6 +67,12 @@ class FeatureVariants(BaseModel):
         nullable=False,
         index=True,
     )
+    experience_id: Mapped[UUIDType] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("experiences.pid"),
+        nullable=False,
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String, nullable=False, index=True)
     config: Mapped[dict] = mapped_column(
         JSON, server_default=func.json("{}"), nullable=False
@@ -83,16 +81,21 @@ class FeatureVariants(BaseModel):
     # Unique constraint: variant name must be unique within a feature flag
     __table_args__ = (
         UniqueConstraint("name", "feature_id", name="uq_feature_variants_name_feature"),
+        # Index for common queries
+        Index("idx_feature_variants_feature_experience", "feature_id", "experience_id"),
     )
 
     # Relationships
     feature_flag = relationship(
         "FeatureFlags", foreign_keys=[feature_id], back_populates="variants"
     )
+    experience = relationship(
+        "Experiences", foreign_keys=[experience_id], back_populates="feature_variants"
+    )
 
 
-class TargetingRules(BaseModel):
-    __tablename__ = "targeting_rules"
+class FeatureVariantsTemplates(BaseModel):
+    __tablename__ = "feature_variants_templates"
 
     feature_id: Mapped[UUIDType] = mapped_column(
         UUID(as_uuid=True),
@@ -100,44 +103,21 @@ class TargetingRules(BaseModel):
         nullable=False,
         index=True,
     )
-    # TODO: Define this into proper columns later
-    rule_config: Mapped[dict] = mapped_column(
+    name: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    config: Mapped[dict] = mapped_column(
         JSON, server_default=func.json("{}"), nullable=False
     )
-    priority: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    # Unique constraint: priority must be unique within a feature flag
+    # Unique constraint: template name must be unique within a feature flag
     __table_args__ = (
         UniqueConstraint(
-            "feature_id", "priority", name="uq_targeting_rules_feature_priority"
+            "name", "feature_id", name="uq_feature_variants_templates_name_feature"
         ),
-        # Index for priority-based queries
-        Index("idx_targeting_rules_feature_priority", "feature_id", "priority"),
+        # Index for common queries
+        Index("idx_feature_variants_templates_feature", "feature_id"),
     )
 
     # Relationships
     feature_flag = relationship(
-        "FeatureFlags", foreign_keys=[feature_id], back_populates="targeting_rules"
-    )
-
-
-class IndividualTargeting(BaseModel):
-    __tablename__ = "individual_targeting"
-
-    feature_id: Mapped[UUIDType] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("feature_flags.pid"),
-        nullable=False,
-        index=True,
-    )
-    # TODO: Define this into proper rows & columns later
-    rule_config: Mapped[dict] = mapped_column(
-        JSON, server_default=func.json("{}"), nullable=False
-    )
-
-    # Relationships
-    feature_flag = relationship(
-        "FeatureFlags",
-        foreign_keys=[feature_id],
-        back_populates="individual_targeting",
+        "FeatureFlags", foreign_keys=[feature_id], back_populates="variant_templates"
     )
