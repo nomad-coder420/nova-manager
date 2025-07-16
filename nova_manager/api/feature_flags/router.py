@@ -2,6 +2,8 @@ import traceback
 from typing import Dict, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
+from nova_manager.components.auth.dependencies import RoleRequired
+from nova_manager.components.auth.enums import AppRole
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -29,7 +31,10 @@ from nova_manager.database.session import get_db
 router = APIRouter()
 
 
-@router.post("/sync-nova-objects/")
+@router.post(
+    "/sync-nova-objects/",
+    dependencies=[Depends(RoleRequired([AppRole.ADMIN]))]
+)
 async def sync_nova_objects(
     sync_request: NovaObjectSyncRequest, db: Session = Depends(get_db)
 ):
@@ -220,7 +225,11 @@ async def sync_nova_objects(
 #         )
 
 
-@router.get("/", response_model=List[FeatureFlagListItem])
+@router.get(
+    "/",
+    response_model=List[FeatureFlagListItem],
+    dependencies=[Depends(RoleRequired([AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN]))]
+)
 async def list_feature_flags(
     organisation_id: str = Query(...),
     app_id: str = Query(...),
