@@ -13,12 +13,18 @@ from nova_manager.api.segments.request_response import (
 )
 from nova_manager.components.segments.crud import SegmentsCRUD
 from nova_manager.database.session import get_db
+from nova_manager.components.auth.manager import current_active_user
+from nova_manager.components.auth.models import AuthUser
 
 router = APIRouter()
 
 
 @router.post("/", response_model=SegmentResponse)
-async def create_segment(segment_data: SegmentCreate, db: Session = Depends(get_db)):
+async def create_segment(
+    segment_data: SegmentCreate, 
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(current_active_user),
+):
     """Create a new segment"""
     try:
         segments_crud = SegmentsCRUD(db)
@@ -69,6 +75,7 @@ async def list_segments(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     db: Session = Depends(get_db),
+    user: AuthUser = Depends(current_active_user),
 ):
     """List segments with optional search"""
     segments_crud = SegmentsCRUD(db)
@@ -99,7 +106,10 @@ async def list_segments(
 
 
 @router.get("/{segment_pid}/", response_model=SegmentDetailedResponse)
-async def get_segment(segment_pid: UUIDType, db: Session = Depends(get_db)):
+async def get_segment(segment_pid: UUIDType, 
+                      db: Session = Depends(get_db),
+                      user: AuthUser = Depends(current_active_user)
+                      ):
     """Get segment by ID"""
     segments_crud = SegmentsCRUD(db)
 
@@ -112,7 +122,10 @@ async def get_segment(segment_pid: UUIDType, db: Session = Depends(get_db)):
 
 @router.put("/{segment_pid}/", response_model=SegmentResponse)
 async def update_segment(
-    segment_pid: UUIDType, segment_update: SegmentUpdate, db: Session = Depends(get_db)
+    segment_pid: UUIDType,
+    segment_update: SegmentUpdate, 
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(current_active_user),
 ):
     """Update segment"""
     segments_crud = SegmentsCRUD(db)
@@ -155,6 +168,7 @@ async def delete_segment(
     segment_pid: UUIDType,
     force: bool = Query(False, description="Force delete even if used in experiences"),
     db: Session = Depends(get_db),
+    user: AuthUser = Depends(current_active_user),
 ):
     """Delete segment"""
     segments_crud = SegmentsCRUD(db)
