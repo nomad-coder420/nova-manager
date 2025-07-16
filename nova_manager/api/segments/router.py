@@ -1,6 +1,7 @@
 from typing import List, Optional
 from uuid import UUID as UUIDType
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from nova_manager.components.rule_evaluator.controller import RuleEvaluator
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -24,7 +25,7 @@ async def create_segment(segment_data: SegmentCreate, db: Session = Depends(get_
         segments_crud = SegmentsCRUD(db)
 
         # Validate rule configuration
-        validation = segments_crud.validate_rule_config(segment_data.rule_config)
+        validation = RuleEvaluator().validate_rule_config(segment_data.rule_config)
         if not validation["valid"]:
             raise HTTPException(
                 status_code=400,
@@ -123,7 +124,7 @@ async def update_segment(
 
     # Validate rule configuration if provided
     if segment_update.rule_config is not None:
-        validation = segments_crud.validate_rule_config(segment_update.rule_config)
+        validation = RuleEvaluator().validate_rule_config(segment_update.rule_config)
         if not validation["valid"]:
             raise HTTPException(
                 status_code=400,
@@ -150,6 +151,7 @@ async def update_segment(
     return updated_segment
 
 
+# TODO: Fix this. Shouldnt delete directly from db.
 @router.delete("/{segment_pid}/")
 async def delete_segment(
     segment_pid: UUIDType,

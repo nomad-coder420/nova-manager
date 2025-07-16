@@ -9,6 +9,7 @@ from nova_manager.api.feature_flags.request_response import (
     FeatureFlagCreate,
     FeatureFlagListItem,
     FeatureFlagResponse,
+    FeatureFlagDetailedResponse,
     FeatureFlagUpdate,
     IndividualTargetingCreate,
     NovaObjectSyncRequest,
@@ -232,6 +233,89 @@ async def get_feature_flag(flag_pid: UUID, db: Session = Depends(get_db)):
     return feature_flag
 
 
+@router.get("/{flag_pid}/details/", response_model=FeatureFlagDetailedResponse)
+async def get_feature_flag_details(flag_pid: UUID, db: Session = Depends(get_db)):
+    """Get feature flag with detailed information including usage statistics and experiences"""
+    feature_flags_crud = FeatureFlagsCRUD(db)
+
+    feature_flag = feature_flags_crud.get_with_full_details(pid=flag_pid)
+    if not feature_flag:
+        raise HTTPException(status_code=404, detail="Feature flag not found")
+
+    # Transform variants data
+    variants = []
+    for variant in feature_flag.variants:
+        variants.append({
+            "pid": variant.pid,
+            "name": variant.name,
+            "config": variant.config,
+            "created_at": variant.created_at,
+        })
+    
+    # Get experiences using this feature flag with campaign and segment data
+    experiences = []
+    experience_ids = set()
+    
+    for variant in feature_flag.variants:
+        if variant.experience and variant.experience.pid not in experience_ids:
+            experience_ids.add(variant.experience.pid)
+            
+            # Get campaigns for this experience
+            campaigns = []
+            for exp_campaign in variant.experience.experience_campaigns:
+                if exp_campaign.campaign:
+                    campaigns.append({
+                        "id": exp_campaign.campaign.pid,
+                        "name": exp_campaign.campaign.name,
+                        "description": exp_campaign.campaign.description,
+                        "status": exp_campaign.campaign.status,
+                        "rule_config": exp_campaign.campaign.rule_config,
+                        "launched_at": exp_campaign.campaign.launched_at.isoformat() if exp_campaign.campaign.launched_at else None,
+                        "target_percentage": exp_campaign.target_percentage
+                    })
+            
+            # Get segments for this experience
+            segments = []
+            for exp_segment in variant.experience.experience_segments:
+                if exp_segment.segment:
+                    segments.append({
+                        "id": exp_segment.segment.pid,
+                        "name": exp_segment.segment.name,
+                        "description": exp_segment.segment.description,
+                        "rule_config": exp_segment.segment.rule_config,
+                        "target_percentage": exp_segment.target_percentage
+                    })
+            
+            experiences.append({
+                "id": variant.experience.pid,
+                "name": variant.experience.name,
+                "description": variant.experience.description,
+                "status": variant.experience.status.title(),
+                "priority": variant.experience.priority,
+                "created_at": variant.experience.created_at.isoformat(),
+                "variants": [v.name for v in variant.experience.feature_variants if v.feature_id == flag_pid], # TODO: Review this
+                "campaigns": campaigns,
+                "segments": segments
+            })
+    
+    return FeatureFlagDetailedResponse(
+        pid=feature_flag.pid,
+        name=feature_flag.name,
+        description=feature_flag.description,
+        is_active=feature_flag.is_active,
+        organisation_id=feature_flag.organisation_id,
+        app_id=feature_flag.app_id,
+        created_at=feature_flag.created_at,
+        modified_at=feature_flag.modified_at,
+        variants=variants,
+        keys_config=feature_flag.keys_config,
+        default_variant=feature_flag.default_variant,
+        experiences=experiences,
+        experience_count=len(experiences),
+        variant_count=len(variants)
+    )
+
+
 # @router.put("/{flag_pid}/", response_model=FeatureFlagResponse)
 # async def update_feature_flag(
 #     flag_pid: UUID, flag_update: FeatureFlagUpdate, db: Session = Depends(get_db)
@@ -363,6 +447,7 @@ async def update_variant(
     return updated_variant
 
 
+# TODO: Fix this. Shouldnt delete directly from db.
 @router.delete("/variants/{variant_pid}/")
 async def delete_variant(variant_pid: UUID, db: Session = Depends(get_db)):
     """Delete a variant"""

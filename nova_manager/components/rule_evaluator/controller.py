@@ -2,6 +2,61 @@ from typing import Any, Dict, List
 
 
 class RuleEvaluator:
+    def validate_rule_config(self, rule_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate segment rule configuration"""
+        errors = []
+        warnings = []
+
+        if not rule_config:
+            errors.append("Rule configuration cannot be empty")
+            return {"valid": False, "errors": errors, "warnings": warnings}
+
+        # Check for required fields in rule config
+        if "conditions" not in rule_config:
+            errors.append("Rule configuration must contain 'conditions'")
+
+        # Validate conditions structure
+        if "conditions" in rule_config:
+            conditions = rule_config["conditions"]
+            if not isinstance(conditions, list):
+                errors.append("Conditions must be a list")
+            else:
+                for i, condition in enumerate(conditions):
+                    if not isinstance(condition, dict):
+                        errors.append(f"Condition {i} must be an object")
+                        continue
+
+                    required_fields = ["field", "operator", "value"]
+                    for field in required_fields:
+                        if field not in condition:
+                            errors.append(
+                                f"Condition {i} missing required field: {field}"
+                            )
+
+                    # Validate operator
+                    valid_operators = [
+                        "equals",
+                        "not_equals",
+                        "greater_than",
+                        "less_than",
+                        "greater_than_or_equal",
+                        "less_than_or_equal",
+                        "in",
+                        "not_in",
+                        "contains",
+                        "starts_with",
+                        "ends_with",
+                    ]
+                    if (
+                        "operator" in condition
+                        and condition["operator"] not in valid_operators
+                    ):
+                        warnings.append(
+                            f"Condition {i} uses unknown operator: {condition['operator']}"
+                        )
+
+        return {"valid": len(errors) == 0, "errors": errors, "warnings": warnings}
+
     def _evaluate_targeting_rules(
         self, targeting_rules: List[Dict[str, Any]], payload: Dict[str, Any]
     ) -> str | None:
@@ -11,7 +66,7 @@ class RuleEvaluator:
         for rule in targeting_rules:
             rule_config = rule.get("rule_config")
 
-            if self._evaluate_targeting_rule(rule_config, payload):
+            if rule_config and self._evaluate_targeting_rule(rule_config, payload):
                 variant_name = rule_config.get("variant")
                 return variant_name
 
@@ -97,3 +152,10 @@ class RuleEvaluator:
             return True
 
         return False
+
+    def evaluate_segment(
+        self, segment_rule_config: Dict[str, Any], user_payload: Dict[str, Any]
+    ) -> bool:
+        """Evaluate if user matches a segment based on segment rule configuration"""
+        # Segments use the same condition evaluation as targeting rules
+        return self._evaluate_targeting_rule(segment_rule_config, user_payload)

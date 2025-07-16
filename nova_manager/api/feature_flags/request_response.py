@@ -97,3 +97,27 @@ class FeatureFlagListItem(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class FeatureFlagDetailedResponse(BaseModel):
+    pid: UUID
+    name: str
+    description: str
+    is_active: bool
+    organisation_id: str
+    app_id: str
+    created_at: datetime
+    modified_at: datetime
+    variants: List[VariantResponse] = []
+    keys_config: Dict[str, Any]
+    default_variant: Dict[str, Any]
+    
+    # Experience usage
+    experiences: List[Dict[str, Any]] = []
+    experience_count: int = 0
+    
+    # Variant count
+    variant_count: int = 0
+
+    class Config:
+        from_attributes = True

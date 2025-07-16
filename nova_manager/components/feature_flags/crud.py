@@ -1,6 +1,7 @@
 from typing import Optional, List, Dict, Any
 from uuid import UUID as UUIDType
-from sqlalchemy.orm import Session, selectinload, joinedload
+from nova_manager.components.experiences.models import ExperienceCampaigns, ExperienceSegments, Experiences
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_
 
 from nova_manager.components.feature_flags.models import FeatureFlags, FeatureVariants
@@ -62,6 +63,32 @@ class FeatureFlagsCRUD(BaseCRUD):
             self.db.flush()
             self.db.refresh(flag)
         return flag
+
+    def get_with_full_details(self, pid: UUIDType) -> Optional[FeatureFlags]:
+        """Get feature flag with all details including experience usage"""
+        return (
+            self.db.query(FeatureFlags)
+            .options(
+                # Load variants and their experiences with campaigns
+                selectinload(FeatureFlags.variants)
+                .selectinload(FeatureVariants.experience)
+                .selectinload(Experiences.experience_campaigns)
+                .selectinload(ExperienceCampaigns.campaign),
+                
+                # Load variants and their experiences with segments
+                selectinload(FeatureFlags.variants)
+                .selectinload(FeatureVariants.experience)
+                .selectinload(Experiences.experience_segments)
+                .selectinload(ExperienceSegments.segment),
+                
+                # Load variants and their experiences with feature variants
+                selectinload(FeatureFlags.variants)
+                .selectinload(FeatureVariants.experience)
+                .selectinload(Experiences.feature_variants),
+            )
+            .filter(FeatureFlags.pid == pid)
+            .first()
+        )
 
 
 class FeatureVariantsCRUD(BaseCRUD):

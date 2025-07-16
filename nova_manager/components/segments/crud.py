@@ -68,7 +68,7 @@ class SegmentsCRUD(BaseCRUD):
             app_id=app_id,
         )
         self.db.add(segment)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(segment)
         return segment
 
@@ -79,7 +79,7 @@ class SegmentsCRUD(BaseCRUD):
         segment = self.get_by_pid(pid)
         if segment:
             segment.rule_config = rule_config
-            self.db.commit()
+            self.db.flush()
             self.db.refresh(segment)
         return segment
 
@@ -161,63 +161,6 @@ class SegmentsCRUD(BaseCRUD):
             "rule_config": segment.rule_config,
         }
 
-    def validate_rule_config(self, rule_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate segment rule configuration"""
-        # TODO: Fix this
-        return {"valid": True, "errors": [], "warnings": []}
-        errors = []
-        warnings = []
-
-        if not rule_config:
-            errors.append("Rule configuration cannot be empty")
-            return {"valid": False, "errors": errors, "warnings": warnings}
-
-        # Check for required fields in rule config
-        if "conditions" not in rule_config:
-            errors.append("Rule configuration must contain 'conditions'")
-
-        # Validate conditions structure
-        if "conditions" in rule_config:
-            conditions = rule_config["conditions"]
-            if not isinstance(conditions, list):
-                errors.append("Conditions must be a list")
-            else:
-                for i, condition in enumerate(conditions):
-                    if not isinstance(condition, dict):
-                        errors.append(f"Condition {i} must be an object")
-                        continue
-
-                    required_fields = ["field", "operator", "value"]
-                    for field in required_fields:
-                        if field not in condition:
-                            errors.append(
-                                f"Condition {i} missing required field: {field}"
-                            )
-
-                    # Validate operator
-                    valid_operators = [
-                        "equals",
-                        "not_equals",
-                        "greater_than",
-                        "less_than",
-                        "greater_than_or_equal",
-                        "less_than_or_equal",
-                        "in",
-                        "not_in",
-                        "contains",
-                        "starts_with",
-                        "ends_with",
-                    ]
-                    if (
-                        "operator" in condition
-                        and condition["operator"] not in valid_operators
-                    ):
-                        warnings.append(
-                            f"Condition {i} uses unknown operator: {condition['operator']}"
-                        )
-
-        return {"valid": len(errors) == 0, "errors": errors, "warnings": warnings}
-
     def clone_segment(
         self,
         source_pid: UUIDType,
@@ -237,7 +180,7 @@ class SegmentsCRUD(BaseCRUD):
             app_id=source.app_id,
         )
         self.db.add(cloned_segment)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(cloned_segment)
         return cloned_segment
 

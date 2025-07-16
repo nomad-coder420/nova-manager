@@ -81,6 +81,11 @@ class UserFeatureVariants(BaseOrganisationModel):
     variant_config: Mapped[dict] = mapped_column(
         JSON, server_default=func.json("{}"), nullable=False
     )
+    variant_assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
 
     __table_args__ = (
         # BUSINESS RULE: One variant per user per feature per org/app

@@ -4,7 +4,7 @@ from uuid import UUID as UUIDType
 from sqlalchemy.orm import Session, selectinload, joinedload
 from sqlalchemy import and_, or_, desc, asc
 
-from nova_manager.components.experiences.models import Experiences, ExperienceSegments
+from nova_manager.components.experiences.models import ExperienceCampaigns, Experiences, ExperienceSegments
 from nova_manager.components.segments.models import Segments
 from nova_manager.core.base_crud import BaseCRUD
 
@@ -30,6 +30,87 @@ class ExperiencesCRUD(BaseCRUD):
             )
             .first()
         )
+
+    def bulk_validate_feature_flags(self, feature_ids: List[UUIDType]) -> Dict[UUIDType, bool]:
+        """Bulk validate feature flags existence"""
+        from nova_manager.components.feature_flags.models import FeatureFlags
+        
+        existing_flags = (
+            self.db.query(FeatureFlags.pid)
+            .filter(FeatureFlags.pid.in_(feature_ids))
+            .all()
+        )
+        
+        existing_ids = {flag.pid for flag in existing_flags}
+        return {flag_id: flag_id in existing_ids for flag_id in feature_ids}
+
+    def bulk_validate_segments(self, segment_ids: List[UUIDType]) -> Dict[UUIDType, bool]:
+        """Bulk validate segments existence"""
+        existing_segments = (
+            self.db.query(Segments.pid)
+            .filter(Segments.pid.in_(segment_ids))
+            .all()
+        )
+        
+        existing_ids = {segment.pid for segment in existing_segments}
+        return {segment_id: segment_id in existing_ids for segment_id in segment_ids}
+
+    def create_experience_with_relationships(
+        self,
+        name: str,
+        description: str,
+        priority: int,
+        status: str,
+        organisation_id: str,
+        app_id: str,
+        object_variants: Dict[UUIDType, Dict[str, Any]],
+        segment_configs: Optional[List[Dict[str, Any]]] = None,
+    ) -> Experiences:
+        """Create experience with all relationships in optimized way"""
+        # Create the experience
+        experience = Experiences(
+            name=name,
+            description=description,
+            priority=priority,
+            status=status,
+            organisation_id=organisation_id,
+            app_id=app_id,
+        )
+        self.db.add(experience)
+        self.db.flush()  # Get the ID without committing
+        
+        # Bulk create feature variants
+        if object_variants:
+            from nova_manager.components.feature_flags.models import FeatureVariants
+            
+            variants_to_create = []
+            for feature_id, variant_data in object_variants.items():
+                variant = FeatureVariants(
+                    feature_id=feature_id,
+                    experience_id=experience.pid,
+                    name=variant_data["name"],
+                    config=variant_data["values"],
+                )
+                variants_to_create.append(variant)
+            
+            if variants_to_create:
+                self.db.add_all(variants_to_create)
+        
+        # Bulk create experience segments
+        if segment_configs:
+            segments_to_create = []
+            for segment_config in segment_configs:
+                exp_segment = ExperienceSegments(
+                    experience_id=experience.pid,
+                    segment_id=segment_config["segment_id"],
+                    target_percentage=segment_config["target_percentage"],
+                )
+                segments_to_create.append(exp_segment)
+            
+            if segments_to_create:
+                self.db.add_all(segments_to_create)
+        
+        return experience
 
     def get_multi_by_org(
         self,
@@ -129,6 +210,9 @@ class ExperiencesCRUD(BaseCRUD):
                 ),
                 selectinload(Experiences.feature_variants),
                 selectinload(Experiences.user_experiences),
+                selectinload(Experiences.experience_campaigns).selectinload(
+                    ExperienceCampaigns.campaign
+                ),
             )
             .filter(Experiences.pid == pid)
             .first()
