@@ -1,4 +1,5 @@
 from enum import Enum
+from uuid import uuid4
 from fastapi_users.db import SQLAlchemyBaseUserTable
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import String, ForeignKey, Integer, Enum as SAEnum
@@ -21,6 +22,14 @@ class AuthUser(Base, SQLAlchemyBaseUserTable[int]):
 
 class Organisation(BaseModel):
     __tablename__ = "organisations"
+    # Override pid to string UUID so FKs align
+    pid: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        default=lambda: str(uuid4()),
+        index=True,
+        unique=True,
+    )
     name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     apps = relationship("App", back_populates="organisation", cascade="all, delete-orphan")
     user_memberships = relationship(
@@ -30,6 +39,14 @@ class Organisation(BaseModel):
 
 class App(BaseModel):
     __tablename__ = "apps"
+    # Override pid to string UUID so FKs align
+    pid: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        default=lambda: str(uuid4()),
+        index=True,
+        unique=True,
+    )
     name: Mapped[str] = mapped_column(String, nullable=False)
     organisation_id: Mapped[str] = mapped_column(String, ForeignKey("organisations.pid"), nullable=False)
     organisation = relationship("Organisation", back_populates="apps")
