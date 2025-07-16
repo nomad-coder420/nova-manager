@@ -15,12 +15,18 @@ from nova_manager.api.segments.request_response import (
 from nova_manager.components.segments.crud import SegmentsCRUD
 from nova_manager.database.session import get_db
 from nova_manager.components.auth.manager import current_active_user
+from nova_manager.components.auth.dependencies import RoleRequired
+from nova_manager.components.auth.enums import AppRole
 from nova_manager.components.auth.models import AuthUser
 
 router = APIRouter()
 
 
-@router.post("/", response_model=SegmentResponse)
+@router.post(
+    "/",
+    response_model=SegmentResponse,
+    dependencies=[Depends(RoleRequired([AppRole.ANALYST, AppRole.ADMIN]))]
+)
 async def create_segment(
     segment_data: SegmentCreate, 
     db: Session = Depends(get_db),
@@ -66,7 +72,11 @@ async def create_segment(
         )
 
 
-@router.get("/", response_model=List[SegmentListResponse])
+@router.get(
+    "/",
+    response_model=List[SegmentListResponse],
+    dependencies=[Depends(RoleRequired([AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN]))]
+)
 async def list_segments(
     organisation_id: str = Query(...),
     app_id: str = Query(...),
@@ -97,11 +107,16 @@ async def list_segments(
     return segments
 
 
-@router.get("/{segment_pid}/", response_model=SegmentDetailedResponse)
-async def get_segment(segment_pid: UUIDType, 
-                      db: Session = Depends(get_db),
-                      user: AuthUser = Depends(current_active_user)
-                      ):
+@router.get(
+    "/{segment_pid}/",
+    response_model=SegmentDetailedResponse,
+    dependencies=[Depends(RoleRequired([AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN]))]
+)
+async def get_segment(
+    segment_pid: UUIDType,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(current_active_user),
+):
     """Get segment by ID"""
     segments_crud = SegmentsCRUD(db)
 
@@ -112,7 +127,11 @@ async def get_segment(segment_pid: UUIDType,
     return segment
 
 
-@router.put("/{segment_pid}/", response_model=SegmentResponse)
+@router.put(
+    "/{segment_pid}/",
+    response_model=SegmentResponse,
+    dependencies=[Depends(RoleRequired([AppRole.DEVELOPER, AppRole.ADMIN]))]
+)
 async def update_segment(
     segment_pid: UUIDType,
     segment_update: SegmentUpdate, 
@@ -156,7 +175,10 @@ async def update_segment(
 
 
 # TODO: Fix this. Shouldnt delete directly from db.
-@router.delete("/{segment_pid}/")
+@router.delete(
+    "/{segment_pid}/",
+    dependencies=[Depends(RoleRequired([AppRole.ADMIN]))]
+)
 async def delete_segment(
     segment_pid: UUIDType,
     force: bool = Query(False, description="Force delete even if used in experiences"),

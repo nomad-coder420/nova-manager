@@ -1,6 +1,6 @@
 from uuid import UUID as UUIDType, uuid4
 from datetime import datetime
-from sqlalchemy import UUID, Integer, DateTime, String, func
+from sqlalchemy import UUID, Integer, DateTime, String, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase
 
 
@@ -40,5 +40,13 @@ class BaseModel(Base):
 class BaseOrganisationModel(BaseModel):
     __abstract__ = True
 
-    organisation_id: Mapped[str] = mapped_column(String, nullable=False)
-    app_id: Mapped[str] = mapped_column(String, nullable=False)
+    organisation_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("organisations.pid"),
+        nullable=False,
+    )
+    app_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("apps.pid"),
+        nullable=False,
+    )
