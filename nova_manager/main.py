@@ -16,6 +16,7 @@ from nova_manager.api.frontend.router import router as frontend_router
 from nova_manager.api.feature_flags.router import router as feature_flags_router
 from nova_manager.api.segments.router import router as segments_router
 from nova_manager.api.experiences.router import router as experiences_router
+from nova_manager.api.auth.router import router as auth_router
 
 
 configure_logging()
@@ -31,6 +32,7 @@ app.include_router(frontend_router)
 app.include_router(feature_flags_router, prefix="/api/v1/feature-flags")
 app.include_router(segments_router, prefix="/api/v1/segments")
 app.include_router(experiences_router, prefix="/api/v1/experiences")
+app.include_router(auth_router, prefix="/api/v1")
 
 
 @app.exception_handler(RequestValidationError)
