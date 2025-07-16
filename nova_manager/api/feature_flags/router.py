@@ -293,7 +293,7 @@ async def get_feature_flag_details(flag_pid: UUID, db: Session = Depends(get_db)
                 "status": variant.experience.status.title(),
                 "priority": variant.experience.priority,
                 "created_at": variant.experience.created_at.isoformat(),
-                "variants": [v.name for v in variant.experience.feature_variants if v.feature_id == flag_pid], # TODO: Review this
+                "variants": [v.name for v in variant.experience.feature_variants if v.feature_id == flag_pid],
                 "campaigns": campaigns,
                 "segments": segments
             })
