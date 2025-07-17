@@ -91,10 +91,7 @@ async def list_segments(
     # Add experience count to each segment
     result = []
     for segment in segments:
-        stats = segments_crud.get_segment_usage_stats(pid=segment.pid)
-        result.append(
-            {**segment.__dict__, "experience_count": stats.get("experience_count", 0)}
-        )
+        result.append({**segment.__dict__, "experience_count": 0})
 
     return result
 
@@ -149,29 +146,3 @@ async def update_segment(
     updated_segment = segments_crud.update(db_obj=segment, obj_in=update_data)
 
     return updated_segment
-
-
-# TODO: Fix this. Shouldnt delete directly from db.
-@router.delete("/{segment_pid}/")
-async def delete_segment(
-    segment_pid: UUIDType,
-    force: bool = Query(False, description="Force delete even if used in experiences"),
-    db: Session = Depends(get_db),
-):
-    """Delete segment"""
-    segments_crud = SegmentsCRUD(db)
-
-    segment = segments_crud.get_by_pid(segment_pid)
-    if not segment:
-        raise HTTPException(status_code=404, detail="Segment not found")
-
-    # Check if segment is used in experiences
-    stats = segments_crud.get_segment_usage_stats(pid=segment_pid)
-    if stats.get("experience_count", 0) > 0 and not force:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot delete segment. It is used in {stats['experience_count']} experience(s). Use force=true to delete anyway.",
-        )
-
-    segments_crud.delete_by_pid(pid=segment_pid)
-    return {"message": "Segment deleted successfully"}

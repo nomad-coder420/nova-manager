@@ -1,3 +1,5 @@
+import traceback
+from typing import Dict
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -20,7 +22,6 @@ async def get_user_feature_variant(
 ):
     """
     Get variant for a single feature/object for a user.
-    This is the legacy endpoint for backward compatibility.
     """
     try:
         flow = GetUserFeatureVariantFlow(db)
@@ -33,21 +34,13 @@ async def get_user_feature_variant(
             payload=request.payload,
         )
 
-        return GetVariantResponse(
-            feature_id=str(result.feature_id),
-            feature_name=result.feature_name,
-            variant_name=result.variant_name,
-            variant_config=result.variant_config,
-            experience_id=str(result.experience_id) if result.experience_id else None,
-            experience_name=result.experience_name,
-            evaluation_reason=result.evaluation_reason,
-        )
+        return result
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/get-variants-batch/", response_model=GetVariantsResponse)
+@router.post("/get-variants-batch/", response_model=Dict[str, GetVariantResponse])
 async def get_user_feature_variants_batch(
     request: GetVariantsRequest,
     db: Session = Depends(get_db),
@@ -66,29 +59,13 @@ async def get_user_feature_variants_batch(
             feature_names=request.feature_names,
         )
 
-        features = []
-        for result in results:
-            features.append(
-                GetVariantResponse(
-                    feature_id=str(result.feature_id),
-                    feature_name=result.feature_name,
-                    variant_name=result.variant_name,
-                    variant_config=result.variant_config,
-                    experience_id=(
-                        str(result.experience_id) if result.experience_id else None
-                    ),
-                    experience_name=result.experience_name,
-                    evaluation_reason=result.evaluation_reason,
-                )
-            )
-
-        return GetVariantsResponse(features=features)
+        return results
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/get-all-variants/", response_model=GetVariantsResponse)
+@router.post("/get-all-variants/", response_model=Dict[str, GetVariantResponse])
 async def get_all_user_feature_variants(
     request: GetVariantsRequest,
     db: Session = Depends(get_db),
@@ -108,23 +85,8 @@ async def get_all_user_feature_variants(
             feature_names=None,  # None means get all
         )
 
-        features = []
-        for result in results:
-            features.append(
-                GetVariantResponse(
-                    feature_id=str(result.feature_id),
-                    feature_name=result.feature_name,
-                    variant_name=result.variant_name,
-                    variant_config=result.variant_config,
-                    experience_id=(
-                        str(result.experience_id) if result.experience_id else None
-                    ),
-                    experience_name=result.experience_name,
-                    evaluation_reason=result.evaluation_reason,
-                )
-            )
-
-        return GetVariantsResponse(features=features)
+        return results
 
     except Exception as e:
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,3 +1,4 @@
+import traceback
 from typing import Dict, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -38,12 +39,13 @@ async def sync_nova_objects(
     This endpoint:
     1. Takes nova-objects.json structure from client
     2. Creates/updates feature flags for each object
-    3. Creates default variants with the provided properties
+    3. Creates/updates default variants with default values
     4. Returns summary of operations performed
     """
 
     # Initialize CRUD instances
     flags_crud = FeatureFlagsCRUD(db)
+    variants_crud = FeatureVariantsCRUD(db)
 
     # Track statistics
     stats = {
@@ -53,8 +55,6 @@ async def sync_nova_objects(
         "objects_skipped": 0,
         "details": [],
     }
-
-    # TODO: Remove inactive flags also from here
 
     # Process each object from the sync request
     for object_name, object_props in sync_request.objects.items():
@@ -71,14 +71,41 @@ async def sync_nova_objects(
             keys_config = object_props.keys
 
             # TODO: Add keys_config validation here
-
+            # Update existing flag
             if existing_flag:
-                # Update existing flag
                 # Check if config has actually changed
                 if existing_flag.keys_config != keys_config:
-                    updated_variant = flags_crud.update(
-                        db_obj=existing_flag, obj_in={"keys_config": keys_config}
+                    # Update the feature flag
+                    updated_flag = flags_crud.update(
+                        db_obj=existing_flag,
+                        obj_in={
+                            "keys_config": keys_config,
+                            "type": object_props.type,
+                        },
                     )
+
+                    # Update or create default variant
+                    default_variant_name = "default"
+                    default_variant = variants_crud.get_by_name(
+                        name=default_variant_name, feature_pid=existing_flag.pid
+                    )
+                    if default_variant:
+                        # Update existing default variant
+                        variants_crud.update(
+                            db_obj=default_variant,
+                            obj_in={
+                                "config": updated_flag.default_variant,
+                            },
+                        )
+                    else:
+                        # Create new default variant
+                        variants_crud.create(
+                            obj_in={
+                                "feature_id": existing_flag.pid,
+                                "name": default_variant_name,
+                                "config": updated_flag.default_variant,
+                            }
+                        )
 
                     stats["objects_updated"] += 1
                     stats["details"].append(
@@ -86,7 +113,7 @@ async def sync_nova_objects(
                             "object_name": object_name,
                             "action": "updated",
                             "flag_id": str(existing_flag.pid),
-                            "message": "Updated default variant properties",
+                            "message": "Updated feature flag and default variant",
                         }
                     )
                 else:
@@ -106,12 +133,22 @@ async def sync_nova_objects(
                     "name": object_name,
                     "description": f"Auto-generated from nova-objects.json for {object_name}",
                     "keys_config": keys_config,
+                    "type": object_props.type,
                     "organisation_id": sync_request.organisation_id,
                     "app_id": sync_request.app_id,
                     "is_active": True,
                 }
 
                 new_flag = flags_crud.create(obj_in=flag_data)
+
+                # Create default feature variant for the flag
+                variants_crud.create(
+                    obj_in={
+                        "feature_id": new_flag.pid,
+                        "name": "default",
+                        "config": new_flag.default_variant,
+                    }
+                )
 
                 stats["objects_created"] += 1
                 stats["details"].append(
@@ -133,6 +170,7 @@ async def sync_nova_objects(
                     "message": f"Failed to process: {str(obj_error)}",
                 }
             )
+            traceback.print_exc()
             continue
 
     dashboard_url = f"https://dashboard.nova.com/apps/{sync_request.app_id}/objects"
@@ -218,7 +256,23 @@ async def list_feature_flags(
             }
         )
 
-    return result
+    return flags
+
+
+@router.get("/available/", response_model=List[FeatureFlagListItem])
+async def list_available_feature_flags(
+    organisation_id: str = Query(...),
+    app_id: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """List feature flags that are not assigned to any experience"""
+    feature_flags_crud = FeatureFlagsCRUD(db)
+
+    flags = feature_flags_crud.get_available_flags(
+        organisation_id=organisation_id, app_id=app_id
+    )
+
+    return flags
 
 
 @router.get("/{flag_pid}/", response_model=FeatureFlagResponse)
@@ -245,59 +299,75 @@ async def get_feature_flag_details(flag_pid: UUID, db: Session = Depends(get_db)
     # Transform variants data
     variants = []
     for variant in feature_flag.variants:
-        variants.append({
-            "pid": variant.pid,
-            "name": variant.name,
-            "config": variant.config,
-            "created_at": variant.created_at,
-        })
-    
+        variants.append(
+            {
+                "pid": variant.pid,
+                "name": variant.name,
+                "config": variant.config,
+                "created_at": variant.created_at,
+            }
+        )
+
     # Get experiences using this feature flag with campaign and segment data
     experiences = []
     experience_ids = set()
-    
+
     for variant in feature_flag.variants:
         if variant.experience and variant.experience.pid not in experience_ids:
             experience_ids.add(variant.experience.pid)
-            
+
             # Get campaigns for this experience
             campaigns = []
             for exp_campaign in variant.experience.experience_campaigns:
                 if exp_campaign.campaign:
-                    campaigns.append({
-                        "id": exp_campaign.campaign.pid,
-                        "name": exp_campaign.campaign.name,
-                        "description": exp_campaign.campaign.description,
-                        "status": exp_campaign.campaign.status,
-                        "rule_config": exp_campaign.campaign.rule_config,
-                        "launched_at": exp_campaign.campaign.launched_at.isoformat() if exp_campaign.campaign.launched_at else None,
-                        "target_percentage": exp_campaign.target_percentage
-                    })
-            
+                    campaigns.append(
+                        {
+                            "id": exp_campaign.campaign.pid,
+                            "name": exp_campaign.campaign.name,
+                            "description": exp_campaign.campaign.description,
+                            "status": exp_campaign.campaign.status,
+                            "rule_config": exp_campaign.campaign.rule_config,
+                            "launched_at": (
+                                exp_campaign.campaign.launched_at.isoformat()
+                                if exp_campaign.campaign.launched_at
+                                else None
+                            ),
+                            "target_percentage": exp_campaign.target_percentage,
+                        }
+                    )
+
             # Get segments for this experience
             segments = []
             for exp_segment in variant.experience.experience_segments:
                 if exp_segment.segment:
-                    segments.append({
-                        "id": exp_segment.segment.pid,
-                        "name": exp_segment.segment.name,
-                        "description": exp_segment.segment.description,
-                        "rule_config": exp_segment.segment.rule_config,
-                        "target_percentage": exp_segment.target_percentage
-                    })
-            
-            experiences.append({
-                "id": variant.experience.pid,
-                "name": variant.experience.name,
-                "description": variant.experience.description,
-                "status": variant.experience.status.title(),
-                "priority": variant.experience.priority,
-                "created_at": variant.experience.created_at.isoformat(),
-                "variants": [v.name for v in variant.experience.feature_variants if v.feature_id == flag_pid],
-                "campaigns": campaigns,
-                "segments": segments
-            })
-    
+                    segments.append(
+                        {
+                            "id": exp_segment.segment.pid,
+                            "name": exp_segment.segment.name,
+                            "description": exp_segment.segment.description,
+                            "rule_config": exp_segment.segment.rule_config,
+                            "target_percentage": exp_segment.target_percentage,
+                        }
+                    )
+
+            experiences.append(
+                {
+                    "id": variant.experience.pid,
+                    "name": variant.experience.name,
+                    "description": variant.experience.description,
+                    "status": variant.experience.status.title(),
+                    "priority": variant.experience.priority,
+                    "created_at": variant.experience.created_at.isoformat(),
+                    "variants": [
+                        v.name
+                        for v in variant.experience.feature_variants
+                        if v.feature_id == flag_pid
+                    ],
+                    "campaigns": campaigns,
+                    "segments": segments,
+                }
+            )
+
     return FeatureFlagDetailedResponse(
         pid=feature_flag.pid,
         name=feature_flag.name,
@@ -312,63 +382,8 @@ async def get_feature_flag_details(flag_pid: UUID, db: Session = Depends(get_db)
         default_variant=feature_flag.default_variant,
         experiences=experiences,
         experience_count=len(experiences),
-        variant_count=len(variants)
+        variant_count=len(variants),
     )
-
-
-# @router.put("/{flag_pid}/", response_model=FeatureFlagResponse)
-# async def update_feature_flag(
-#     flag_pid: UUID, flag_update: FeatureFlagUpdate, db: Session = Depends(get_db)
-# ):
-#     """Update feature flag"""
-#     feature_flags_crud = FeatureFlagsCRUD(db)
-
-#     feature_flag = feature_flags_crud.get_by_pid(flag_pid)
-#     if not feature_flag:
-#         raise HTTPException(status_code=404, detail="Feature flag not found")
-
-#     # Update only provided fields
-#     update_data = flag_update.model_dump(exclude_unset=True)
-#     if update_data:
-#         try:
-#             feature_flag = feature_flags_crud.update(
-#                 db_obj=feature_flag, obj_in=update_data
-#             )
-#         except IntegrityError:
-#             raise HTTPException(
-#                 status_code=400, detail="Feature flag with this name already exists"
-#             )
-
-#     # Return with variants
-#     return feature_flags_crud.get_with_variants(pid=flag_pid)
-
-
-# @router.delete("/{flag_pid}/")
-# async def delete_feature_flag(flag_pid: UUID, db: Session = Depends(get_db)):
-#     """Delete feature flag"""
-#     feature_flags_crud = FeatureFlagsCRUD(db)
-
-#     feature_flag = feature_flags_crud.get_by_pid(flag_pid)
-#     if not feature_flag:
-#         raise HTTPException(status_code=404, detail="Feature flag not found")
-
-#     feature_flags_crud.delete_by_pid(pid=flag_pid)
-#     return {"message": "Feature flag deleted successfully"}
-
-
-# @router.post("/{flag_pid}/toggle/")
-# async def toggle_feature_flag(flag_pid: UUID, db: Session = Depends(get_db)):
-#     """Toggle feature flag active status"""
-#     feature_flags_crud = FeatureFlagsCRUD(db)
-
-#     feature_flag = feature_flags_crud.toggle_active(pid=flag_pid)
-#     if not feature_flag:
-#         raise HTTPException(status_code=404, detail="Feature flag not found")
-
-#     return {
-#         "message": f"Feature flag {'activated' if feature_flag.is_active else 'deactivated'}",
-#         "is_active": feature_flag.is_active,
-#     }
 
 
 @router.post("/{flag_pid}/variants/", response_model=VariantResponse)
@@ -445,17 +460,3 @@ async def update_variant(
         db_obj=variant, obj_in=variant_data.model_dump()
     )
     return updated_variant
-
-
-# TODO: Fix this. Shouldnt delete directly from db.
-@router.delete("/variants/{variant_pid}/")
-async def delete_variant(variant_pid: UUID, db: Session = Depends(get_db)):
-    """Delete a variant"""
-    feature_variants_crud = FeatureVariantsCRUD(db)
-
-    variant = feature_variants_crud.get_by_pid(variant_pid)
-    if not variant:
-        raise HTTPException(status_code=404, detail="Variant not found")
-
-    feature_variants_crud.delete_by_pid(pid=variant_pid)
-    return {"message": "Variant deleted successfully"}

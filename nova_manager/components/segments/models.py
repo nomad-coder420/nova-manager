@@ -1,15 +1,4 @@
-from sqlalchemy import (
-    JSON,
-    UUID,
-    Boolean,
-    Enum,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    UniqueConstraint,
-    func,
-)
+from sqlalchemy import JSON, Index, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 

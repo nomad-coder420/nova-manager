@@ -1,7 +1,9 @@
 from datetime import datetime
 from uuid import UUID as UUIDType
+from nova_manager.components.feature_flags.models import FeatureFlags
 from sqlalchemy import (
     UUID,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -9,6 +11,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    false,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -24,11 +27,7 @@ class Experiences(BaseOrganisationModel):
 
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=False, server_default="")
-    priority: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False)
-    last_updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
 
     # TODO: Verify these table args
     __table_args__ = (
@@ -36,42 +35,22 @@ class Experiences(BaseOrganisationModel):
         UniqueConstraint(
             "name", "organisation_id", "app_id", name="uq_experiences_name_org_app"
         ),
-        # Priority must be unique within org/app (business rule)
-        UniqueConstraint(
-            "priority",
-            "organisation_id",
-            "app_id",
-            name="uq_experiences_priority_org_app",
-        ),
         # Index for common queries
         Index("idx_experiences_status_org_app", "status", "organisation_id", "app_id"),
-        Index(
-            "idx_experiences_priority_org_app", "priority", "organisation_id", "app_id"
-        ),
         Index("idx_experiences_name_org_app", "name", "organisation_id", "app_id"),
-        Index(
-            "idx_experiences_updated_org_app",
-            "last_updated_at",
-            "organisation_id",
-            "app_id",
-        ),
         Index("idx_experiences_org_app", "organisation_id", "app_id"),
-        # ORDERING INDEXES: For efficient sorting
-        Index(
-            "idx_experiences_priority_created_org_app",
-            "priority",
-            "created_at",
-            "organisation_id",
-            "app_id",
-        ),
-        # For reverse chronological ordering (most common pattern)
-        Index("idx_experiences_created_desc", "created_at", postgresql_using="btree"),
     )
 
     # Relationships
-    feature_variants = relationship(
-        "FeatureVariants",
-        foreign_keys="FeatureVariants.experience_id",
+    feature_flags = relationship(
+        "FeatureFlags",
+        foreign_keys="FeatureFlags.experience_id",
+        back_populates="experience",
+    )
+
+    personalisations = relationship(
+        "Personalisations",
+        foreign_keys="Personalisations.experience_id",
         back_populates="experience",
         cascade="all, delete-orphan",
     )
@@ -80,6 +59,7 @@ class Experiences(BaseOrganisationModel):
         "ExperienceSegments",
         foreign_keys="ExperienceSegments.experience_id",
         back_populates="experience",
+        order_by="ExperienceSegments.priority.asc()",
         cascade="all, delete-orphan",
     )
 
@@ -90,65 +70,71 @@ class Experiences(BaseOrganisationModel):
         cascade="all, delete-orphan",
     )
 
-    experience_campaigns = relationship(
-        "ExperienceCampaigns",
-        foreign_keys="ExperienceCampaigns.experience_id",
-        back_populates="experience",
-        cascade="all, delete-orphan",
-    )
 
-    # Many-to-many relationship with campaigns through junction table
-    campaigns = relationship(
-        "Campaigns",
-        secondary="experience_campaigns",
-        back_populates="experiences",
-        viewonly=True,
-    )
+class Personalisations(BaseModel):
+    __tablename__ = "personalisations"
 
-
-class ExperienceCampaigns(BaseModel):
-    __tablename__ = "experience_campaigns"
-
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str] = mapped_column(String, nullable=False, server_default="")
     experience_id: Mapped[UUIDType] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("experiences.pid"),
         nullable=False,
     )
-    campaign_id: Mapped[UUIDType] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("campaigns.pid"),
-        nullable=False,
-    )
-    target_percentage: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
-    created_at: Mapped[datetime] = mapped_column(
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    last_updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     __table_args__ = (
-        # Unique constraint: one relationship per experience-campaign pair
-        UniqueConstraint(
-            "experience_id", "campaign_id", name="uq_experience_campaigns_exp_camp"
-        ),
-        # Check constraint: target_percentage must be between 0 and 100
-        CheckConstraint(
-            "target_percentage >= 0 AND target_percentage <= 100",
-            name="ck_experience_campaigns_valid_percentage",
-        ),
-        # Index for common queries
-        Index("idx_experience_campaigns_experience_id", "experience_id"),
-        Index("idx_experience_campaigns_campaign_id", "campaign_id"),
+        UniqueConstraint("name", "experience_id", name="uq_personalisations_name_exp"),
+        Index("idx_personalisations_experience_id", "experience_id"),
     )
 
     # Relationships
     experience = relationship(
-        "Experiences",
-        foreign_keys=[experience_id],
-        back_populates="experience_campaigns",
+        "Experiences", foreign_keys=[experience_id], back_populates="personalisations"
     )
-    campaign = relationship(
-        "Campaigns",
-        foreign_keys=[campaign_id],
-        back_populates="experience_campaigns",
+
+    feature_variants = relationship(
+        "PersonalisationFeatureVariants",
+        foreign_keys="PersonalisationFeatureVariants.personalisation_id",
+        back_populates="personalisation",
+        cascade="all, delete-orphan",
+    )
+
+    experience_segment_personalisations = relationship(
+        "ExperienceSegmentPersonalisations",
+        foreign_keys="ExperienceSegmentPersonalisations.personalisation_id",
+        back_populates="personalisation",
+        cascade="all, delete-orphan",
+    )
+
+
+class PersonalisationFeatureVariants(BaseModel):
+    __tablename__ = "personalisation_feature_variants"
+
+    personalisation_id: Mapped[UUIDType] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("personalisations.pid"),
+        nullable=False,
+    )
+    feature_variant_id: Mapped[UUIDType] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("feature_variants.pid"),
+        nullable=False,
+    )
+
+    # Relationships
+    personalisation = relationship(
+        "Personalisations",
+        foreign_keys=[personalisation_id],
+        back_populates="feature_variants",
+    )
+    feature_variant = relationship(
+        "FeatureVariants",
+        foreign_keys=[feature_variant_id],
+        back_populates="personalisation_feature_variants",
     )
 
 
@@ -166,6 +152,7 @@ class ExperienceSegments(BaseModel):
         nullable=False,
     )
     target_percentage: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     __table_args__ = (
         # Unique constraint: one relationship per experience-segment pair
@@ -180,6 +167,7 @@ class ExperienceSegments(BaseModel):
         # Index for common queries
         Index("idx_experience_segments_experience_id", "experience_id"),
         Index("idx_experience_segments_segment_id", "segment_id"),
+        Index("idx_experience_segments_priority", "priority"),
     )
 
     # Relationships
@@ -189,5 +177,45 @@ class ExperienceSegments(BaseModel):
         back_populates="experience_segments",
     )
     segment = relationship(
-        "Segments", foreign_keys=[segment_id], back_populates="experience_segments"
+        "Segments",
+        foreign_keys=[segment_id],
+        back_populates="experience_segments",
+    )
+
+    personalisations = relationship(
+        "ExperienceSegmentPersonalisations",
+        foreign_keys="ExperienceSegmentPersonalisations.experience_segment_id",
+        back_populates="experience_segment",
+        cascade="all, delete-orphan",
+    )
+
+
+class ExperienceSegmentPersonalisations(BaseModel):
+    __tablename__ = "experience_segment_personalisations"
+
+    experience_segment_id: Mapped[UUIDType] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("experience_segments.pid"),
+        nullable=False,
+        index=True,
+    )
+    personalisation_id: Mapped[UUIDType] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("personalisations.pid"),
+        nullable=False,
+        index=True,
+    )
+    target_percentage: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+
+    # Relationships
+    experience_segment = relationship(
+        "ExperienceSegments",
+        foreign_keys=[experience_segment_id],
+        back_populates="personalisations",
+    )
+
+    personalisation = relationship(
+        "Personalisations",
+        foreign_keys=[personalisation_id],
+        back_populates="experience_segment_personalisations",
     )

@@ -1,4 +1,5 @@
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
+from uuid import UUID as UUIDType
 from pydantic import BaseModel
 
 
@@ -19,14 +20,19 @@ class GetVariantsRequest(BaseModel):
 
 
 class GetVariantResponse(BaseModel):
-    feature_id: str
+    feature_id: UUIDType
     feature_name: str
+    variant_id: UUIDType | None
     variant_name: str
-    variant_config: dict
-    experience_id: Optional[str] = None
-    experience_name: Optional[str] = None
+    variant_config: Dict[str, Any]
+    experience_id: UUIDType | None
+    experience_name: str | None
+    personalisation_id: UUIDType | None
+    personalisation_name: str | None
+    segment_id: UUIDType | None
+    segment_name: str | None
     evaluation_reason: str
 
 
 class GetVariantsResponse(BaseModel):
-    features: List[GetVariantResponse]
+    features: Dict[str, GetVariantResponse]

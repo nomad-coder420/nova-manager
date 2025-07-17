@@ -13,7 +13,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from nova_manager.components.experiences.models import Experiences
 from nova_manager.core.models import BaseModel, BaseOrganisationModel
 
 
@@ -25,7 +24,12 @@ class FeatureFlags(BaseOrganisationModel):
     keys_config: Mapped[dict] = mapped_column(
         JSON, server_default=func.json("{}"), nullable=False
     )
-    # TODO: Add type field here
+    type: Mapped[str] = mapped_column(String, nullable=False, server_default="")
+    experience_id: Mapped[UUIDType | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("experiences.pid"),
+        nullable=True,
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     __table_args__ = (
@@ -41,6 +45,10 @@ class FeatureFlags(BaseOrganisationModel):
     )
 
     # Relationships
+    experience = relationship(
+        "Experiences", foreign_keys=[experience_id], back_populates="feature_flags"
+    )
+
     variants = relationship(
         "FeatureVariants",
         foreign_keys="FeatureVariants.feature_id",
@@ -68,11 +76,6 @@ class FeatureVariants(BaseModel):
         ForeignKey("feature_flags.pid"),
         nullable=False,
     )
-    experience_id: Mapped[UUIDType] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("experiences.pid"),
-        nullable=False,
-    )
     name: Mapped[str] = mapped_column(String, nullable=False)
     config: Mapped[dict] = mapped_column(
         JSON, server_default=func.json("{}"), nullable=False
@@ -81,22 +84,20 @@ class FeatureVariants(BaseModel):
     # Unique constraint: variant name must be unique within a feature flag
     __table_args__ = (
         UniqueConstraint("name", "feature_id", name="uq_feature_variants_name_feature"),
-        # Composite unique constraint: one variant per feature-experience pair
-        UniqueConstraint(
-            "feature_id", "experience_id", name="uq_feature_variants_feature_experience"
-        ),
         # Index for common queries
         Index("idx_feature_variants_feature_id", "feature_id"),
-        Index("idx_feature_variants_experience_id", "experience_id"),
-        Index("idx_feature_variants_feature_experience", "feature_id", "experience_id"),
     )
 
     # Relationships
     feature_flag = relationship(
         "FeatureFlags", foreign_keys=[feature_id], back_populates="variants"
     )
-    experience = relationship(
-        "Experiences", foreign_keys=[experience_id], back_populates="feature_variants"
+
+    personalisation_feature_variants = relationship(
+        "PersonalisationFeatureVariants",
+        foreign_keys="PersonalisationFeatureVariants.feature_variant_id",
+        back_populates="feature_variant",
+        cascade="all, delete-orphan",
     )
 
 

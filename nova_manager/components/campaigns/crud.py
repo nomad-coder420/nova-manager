@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 from uuid import UUID as UUIDType
 from datetime import datetime
 
-from nova_manager.components.experiences.models import Experiences, ExperienceCampaigns
+from nova_manager.components.experiences.models import Experiences
 from nova_manager.core.base_crud import BaseCRUD
 from nova_manager.components.campaigns.models import Campaigns
 
@@ -130,7 +130,7 @@ class CampaignsCRUD(BaseCRUD):
         """Get campaigns that have experiences"""
         return (
             self.db.query(Campaigns)
-            .join(ExperienceCampaigns, Campaigns.pid == ExperienceCampaigns.campaign_id)
+            # .join(ExperienceCampaigns, Campaigns.pid == ExperienceCampaigns.campaign_id)
             .filter(
                 and_(
                     Campaigns.organisation_id == organisation_id,
@@ -148,29 +148,29 @@ class CampaignsCRUD(BaseCRUD):
             return {}
 
         # Count experiences using this campaign through junction table
-        experience_count = (
-            self.db.query(ExperienceCampaigns)
-            .filter(ExperienceCampaigns.campaign_id == pid)
-            .count()
-        )
+        # experience_count = (
+        #     self.db.query(ExperienceCampaigns)
+        #     .filter(ExperienceCampaigns.campaign_id == pid)
+        #     .count()
+        # )
 
-        # Get active experiences using this campaign through junction table
-        active_experiences = (
-            self.db.query(ExperienceCampaigns)
-            .join(Experiences, ExperienceCampaigns.experience_id == Experiences.pid)
-            .filter(
-                and_(
-                    ExperienceCampaigns.campaign_id == pid,
-                    Experiences.status == "active"
-                )
-            )
-            .count()
-        )
+        # # Get active experiences using this campaign through junction table
+        # active_experiences = (
+        #     self.db.query(ExperienceCampaigns)
+        #     .join(Experiences, ExperienceCampaigns.experience_id == Experiences.pid)
+        #     .filter(
+        #         and_(
+        #             ExperienceCampaigns.campaign_id == pid,
+        #             Experiences.status == "active"
+        #         )
+        #     )
+        #     .count()
+        # )
 
         return {
             "campaign_name": campaign.name,
-            "experience_count": experience_count,
-            "active_experiences": active_experiences,
+            # "experience_count": experience_count,
+            # "active_experiences": active_experiences,
             "rule_config": campaign.rule_config,
             "status": campaign.status,
             "launched_at": campaign.launched_at.isoformat(),
@@ -213,7 +213,7 @@ class CampaignsCRUD(BaseCRUD):
     def get_campaign_with_details(self, pid: UUIDType) -> Optional[Dict[str, Any]]:
         """Get campaign with full details including experience relationships"""
         campaign = self.get_with_experiences(pid)
-        
+
         if not campaign:
             return None
 
@@ -300,139 +300,3 @@ class CampaignsCRUD(BaseCRUD):
             .limit(limit)
             .all()
         )
-
-    def add_experience_to_campaign(
-        self, campaign_id: UUIDType, experience_id: UUIDType, target_percentage: int = 100
-    ) -> Optional[ExperienceCampaigns]:
-        """Add an experience to a campaign with target percentage"""
-        # Validate target_percentage
-        if target_percentage < 0 or target_percentage > 100:
-            raise ValueError("target_percentage must be between 0 and 100")
-            
-        # Check if relationship already exists
-        existing = (
-            self.db.query(ExperienceCampaigns)
-            .filter(
-                and_(
-                    ExperienceCampaigns.campaign_id == campaign_id,
-                    ExperienceCampaigns.experience_id == experience_id,
-                )
-            )
-            .first()
-        )
-        
-        if existing:
-            # Update existing relationship's target_percentage
-            existing.target_percentage = target_percentage
-            self.db.flush()
-            self.db.refresh(existing)
-            return existing
-
-        # Create new relationship
-        experience_campaign = ExperienceCampaigns(
-            campaign_id=campaign_id,
-            experience_id=experience_id,
-            target_percentage=target_percentage,
-        )
-        self.db.add(experience_campaign)
-        self.db.flush()
-        self.db.refresh(experience_campaign)
-        return experience_campaign
-
-    def remove_experience_from_campaign(
-        self, campaign_id: UUIDType, experience_id: UUIDType
-    ) -> bool:
-        """Remove an experience from a campaign"""
-        relationship = (
-            self.db.query(ExperienceCampaigns)
-            .filter(
-                and_(
-                    ExperienceCampaigns.campaign_id == campaign_id,
-                    ExperienceCampaigns.experience_id == experience_id,
-                )
-            )
-            .first()
-        )
-        
-        if relationship:
-            self.db.delete(relationship)
-            self.db.flush()
-            return True
-        return False
-
-    def get_experiences_for_campaign(
-        self, campaign_id: UUIDType, skip: int = 0, limit: int = 100
-    ) -> List[Experiences]:
-        """Get all experiences for a specific campaign"""
-        return (
-            self.db.query(Experiences)
-            .join(ExperienceCampaigns, Experiences.pid == ExperienceCampaigns.experience_id)
-            .filter(ExperienceCampaigns.campaign_id == campaign_id)
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-
-    def get_campaigns_for_experience(
-        self, experience_id: UUIDType, skip: int = 0, limit: int = 100
-    ) -> List[Campaigns]:
-        """Get all campaigns for a specific experience"""
-        return (
-            self.db.query(Campaigns)
-            .join(ExperienceCampaigns, Campaigns.pid == ExperienceCampaigns.campaign_id)
-            .filter(ExperienceCampaigns.experience_id == experience_id)
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-
-    def update_experience_campaign_target_percentage(
-        self, campaign_id: UUIDType, experience_id: UUIDType, target_percentage: int
-    ) -> Optional[ExperienceCampaigns]:
-        """Update the target percentage for an experience-campaign relationship"""
-        # Validate target_percentage
-        if target_percentage < 0 or target_percentage > 100:
-            raise ValueError("target_percentage must be between 0 and 100")
-            
-        relationship = (
-            self.db.query(ExperienceCampaigns)
-            .filter(
-                and_(
-                    ExperienceCampaigns.campaign_id == campaign_id,
-                    ExperienceCampaigns.experience_id == experience_id,
-                )
-            )
-            .first()
-        )
-        
-        if relationship:
-            relationship.target_percentage = target_percentage
-            self.db.flush()
-            self.db.refresh(relationship)
-            return relationship
-        return None
-
-    def get_experience_campaign_details(
-        self, campaign_id: UUIDType, experience_id: UUIDType
-    ) -> Optional[Dict[str, Any]]:
-        """Get details of a specific experience-campaign relationship"""
-        relationship = (
-            self.db.query(ExperienceCampaigns)
-            .filter(
-                and_(
-                    ExperienceCampaigns.campaign_id == campaign_id,
-                    ExperienceCampaigns.experience_id == experience_id,
-                )
-            )
-            .first()
-        )
-        
-        if not relationship:
-            return None
-            
-        return {
-            "campaign_id": relationship.campaign_id,
-            "experience_id": relationship.experience_id,
-            "target_percentage": relationship.target_percentage,
-            "created_at": relationship.created_at.isoformat(),
-        }

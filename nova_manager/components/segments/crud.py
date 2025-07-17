@@ -3,7 +3,6 @@ from sqlalchemy import and_, or_
 from typing import List, Optional, Dict, Any
 from uuid import UUID as UUIDType
 
-from nova_manager.components.experiences.models import ExperienceSegments, Experiences
 from nova_manager.core.base_crud import BaseCRUD
 from nova_manager.components.segments.models import Segments
 
@@ -110,57 +109,6 @@ class SegmentsCRUD(BaseCRUD):
             .all()
         )
 
-    def get_segments_with_experiences(
-        self, organisation_id: str, app_id: str
-    ) -> List[Segments]:
-        """Get segments that are used in experiences"""
-        return (
-            self.db.query(Segments)
-            .join(ExperienceSegments, Segments.pid == ExperienceSegments.segment_id)
-            .filter(
-                and_(
-                    Segments.organisation_id == organisation_id,
-                    Segments.app_id == app_id,
-                )
-            )
-            .distinct()
-            .all()
-        )
-
-    def get_segment_usage_stats(self, pid: UUIDType) -> Dict[str, Any]:
-        """Get usage statistics for a segment"""
-        segment = self.get_by_pid(pid)
-        if not segment:
-            return {}
-
-        # Count experiences using this segment
-        experience_count = (
-            self.db.query(ExperienceSegments)
-            .filter(ExperienceSegments.segment_id == pid)
-            .count()
-        )
-
-        # Get active experiences using this segment
-        active_experiences = (
-            self.db.query(Experiences)
-            .join(
-                ExperienceSegments, Experiences.pid == ExperienceSegments.experience_id
-            )
-            .filter(
-                and_(
-                    ExperienceSegments.segment_id == pid, Experiences.status == "active"
-                )
-            )
-            .count()
-        )
-
-        return {
-            "segment_name": segment.name,
-            "experience_count": experience_count,
-            "active_experiences": active_experiences,
-            "rule_config": segment.rule_config,
-        }
-
     def clone_segment(
         self,
         source_pid: UUIDType,
@@ -188,13 +136,12 @@ class SegmentsCRUD(BaseCRUD):
         """Get segment with experience segments loaded"""
         return (
             self.db.query(Segments)
-            .options(
-                selectinload(Segments.experience_segments).selectinload(
-                    ExperienceSegments.experience
-                )
-            )
-            .filter(Segments.pid == pid)
-            .first()
+            # .options(
+            #     selectinload(Segments.experience_segments).selectinload(
+            #         ExperienceSegments.experience
+            #     )
+            # )
+            .filter(Segments.pid == pid).first()
         )
 
     def get_segment_with_details(self, pid: UUIDType) -> Optional[Dict[str, Any]]:

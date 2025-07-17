@@ -1,9 +1,10 @@
 from typing import Any, Dict, List
+import hashlib
 
 
 class RuleEvaluator:
     def validate_rule_config(self, rule_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate segment rule configuration"""
+        """Validate rule configuration"""
         errors = []
         warnings = []
 
@@ -57,6 +58,112 @@ class RuleEvaluator:
 
         return {"valid": len(errors) == 0, "errors": errors, "warnings": warnings}
 
+    def evaluate_target_percentage(
+        self, user_id: str, target_percentage: int, context_id: str = ""
+    ) -> bool:
+        """
+        Evaluate if a user falls within the target percentage using consistent hashing.
+
+        Args:
+            user_id: Unique identifier for the user
+            target_percentage: Target percentage (0-100)
+            context_id: Additional context for hashing (experience_id, segment_id, etc.)
+
+        Returns:
+            bool: True if user is within target percentage
+        """
+        if target_percentage <= 0:
+            return False
+        if target_percentage >= 100:
+            return True
+
+        # Create a consistent hash based on user_id and context
+        hash_input = f"{user_id}:{context_id}"
+        hash_digest = hashlib.md5(hash_input.encode()).hexdigest()
+
+        # Convert first 8 characters of hash to integer
+        hash_int = int(hash_digest[:8], 16)
+
+        # Map to 0-100 range
+        percentage_bucket = hash_int % 100
+
+        return percentage_bucket < target_percentage
+
+    def evaluate_rule_with_target_percentage(
+        self,
+        rule_config: Dict[str, Any],
+        user_payload: Dict[str, Any],
+        user_id: str,
+        context_id: str,
+        target_percentage: int = 100,
+    ) -> bool:
+        """
+        Generic method to evaluate if user matches rule and falls within target percentage.
+
+        Args:
+            rule_config: Rule configuration to evaluate
+            user_payload: User payload for rule evaluation
+            user_id: User identifier for percentage calculation
+            context_id: Context identifier for consistent hashing
+            target_percentage: Target percentage for this rule
+
+        Returns:
+            bool: True if user matches rule and is within target percentage
+        """
+        # First check if user matches the rule
+        if not self.evaluate_rule(rule_config, user_payload):
+            return False
+
+        # Then check if user falls within target percentage
+        return self.evaluate_target_percentage(user_id, target_percentage, context_id)
+
+    def bulk_evaluate_rules_with_target_percentage(
+        self,
+        rules_data: List[Dict[str, Any]],
+        user_payload: Dict[str, Any],
+        user_id: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Bulk evaluate multiple rules with target percentages.
+
+        Args:
+            rules_data: List of rule data with rule_config, context_id, target_percentage
+            user_payload: User payload for rule evaluation
+            user_id: User identifier for percentage calculation
+
+        Returns:
+            List of rule evaluation results
+        """
+        results = []
+
+        for rule_data in rules_data:
+            context_id = rule_data["context_id"]
+            rule_config = rule_data["rule_config"]
+            target_percentage = rule_data.get("target_percentage", 100)
+
+            matches = self.evaluate_rule_with_target_percentage(
+                rule_config, user_payload, user_id, context_id, target_percentage
+            )
+
+            results.append(
+                {
+                    "context_id": context_id,
+                    "matches": matches,
+                    "target_percentage": target_percentage,
+                }
+            )
+
+        return results
+
+    def evaluate_rule(
+        self, rule_config: Dict[str, Any], user_payload: Dict[str, Any]
+    ) -> bool:
+        """
+        Generic method to evaluate if user matches a rule based on rule configuration.
+        This replaces the old evaluate_segment method.
+        """
+        return self._evaluate_rule_conditions(rule_config, user_payload)
+
     def _evaluate_targeting_rules(
         self, targeting_rules: List[Dict[str, Any]], payload: Dict[str, Any]
     ) -> str | None:
@@ -66,23 +173,22 @@ class RuleEvaluator:
         for rule in targeting_rules:
             rule_config = rule.get("rule_config")
 
-            if rule_config and self._evaluate_targeting_rule(rule_config, payload):
+            if rule_config and self._evaluate_rule_conditions(rule_config, payload):
                 variant_name = rule_config.get("variant")
                 return variant_name
 
         return None
 
-    def _evaluate_targeting_rule(
+    def _evaluate_rule_conditions(
         self, rule_config: Dict[str, Any], payload: Dict[str, Any]
     ) -> bool:
-        """Evaluate targeting rule with conditions"""
+        """Evaluate rule conditions"""
         # Example rule format:
         # {
         #   "conditions": [
         #     {"field": "country", "operator": "equals", "value": "US", "type": "text"},
         #     {"field": "age", "operator": "greater_than", "value": 18, "type": "number"},
-        #   ],
-        #   "variant": "variant-1",
+        #   ]
         # }
 
         if "conditions" not in rule_config:
@@ -152,10 +258,3 @@ class RuleEvaluator:
             return True
 
         return False
-
-    def evaluate_segment(
-        self, segment_rule_config: Dict[str, Any], user_payload: Dict[str, Any]
-    ) -> bool:
-        """Evaluate if user matches a segment based on segment rule configuration"""
-        # Segments use the same condition evaluation as targeting rules
-        return self._evaluate_targeting_rule(segment_rule_config, user_payload)

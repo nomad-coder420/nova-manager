@@ -1,3 +1,4 @@
+import traceback
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 from fastapi.responses import JSONResponse
@@ -21,6 +22,7 @@ class ExceptionMiddleware(BaseHTTPMiddleware):
 
         except HTTPException as e:
             logger.exception(e)
+            traceback.print_exc()
             response = JSONResponse(
                 status_code=e.status_code,
                 content={"detail": e.detail},
@@ -28,6 +30,7 @@ class ExceptionMiddleware(BaseHTTPMiddleware):
 
         except Exception as e:
             logger.exception(e)
+            traceback.print_exc()
             response = JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 content={
