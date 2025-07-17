@@ -40,13 +40,17 @@ router.include_router(
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from nova_manager.components.auth.dependencies import get_token_payload
+from nova_manager.components.auth.dependencies import (
+    get_token_payload,
+    require_user_authentication,
+)
 from nova_manager.components.auth.enums import OrganisationRole
 from nova_manager.components.auth.models import (
     UserAppMembership,
     UserOrganisationMembership,
     Organisation,
     App,
+    AuthUser,
 )
 from nova_manager.components.auth.manager import get_jwt_strategy
 from nova_manager.database.session import get_async_session
@@ -90,16 +94,15 @@ async def list_apps(
 @router.post("/auth/organisations", response_model=OrganisationRead, tags=["auth"])
 async def create_organisation(
     data: OrganisationCreate,
-    payload: dict = Depends(get_token_payload),
+    user: AuthUser = require_user_authentication,
     session: AsyncSession = Depends(get_async_session),
 ):
     """Create a new organisation and add the current user as owner."""
-    user_id = int(payload.get("sub"))
     org = Organisation(name=data.name)
     session.add(org)
     await session.flush()
     membership = UserOrganisationMembership(
-        user_id=user_id,
+        user_id=user.id,
         organisation_id=str(org.pid),
         role=OrganisationRole.OWNER,
     )
@@ -107,17 +110,21 @@ async def create_organisation(
     await session.commit()
     return OrganisationRead(pid=str(org.pid), name=org.name)
 
+
 @router.get("/auth/organisations", response_model=list[OrganisationRead], tags=["auth"])
 async def list_organisations(
-    payload: dict = Depends(get_token_payload),
+    user: AuthUser = require_user_authentication,
     session: AsyncSession = Depends(get_async_session),
 ):
     """List all organisations the current user belongs to."""
-    user_id = int(payload.get("sub"))
-    q = select(Organisation).join(
-        UserOrganisationMembership,
-        Organisation.pid == UserOrganisationMembership.organisation_id,
-    ).filter(UserOrganisationMembership.user_id == user_id)
+    q = (
+        select(Organisation)
+        .join(
+            UserOrganisationMembership,
+            Organisation.pid == UserOrganisationMembership.organisation_id,
+        )
+        .filter(UserOrganisationMembership.user_id == user.id)
+    )
     result = await session.execute(q)
     orgs = result.scalars().all()
     return [OrganisationRead(pid=str(o.pid), name=o.name) for o in orgs]

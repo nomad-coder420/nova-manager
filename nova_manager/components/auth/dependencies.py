@@ -3,7 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from nova_manager.components.auth.manager import get_jwt_strategy
+from nova_manager.components.auth.manager import get_jwt_strategy, current_active_user
 from nova_manager.database.session import get_async_session
 from nova_manager.components.auth.models import UserAppMembership, AppRole
 
@@ -32,6 +32,12 @@ async def get_current_app_pid(
     if not app_pid:
         raise HTTPException(status_code=403, detail="No application context in token")
     return app_pid
+
+
+# This is our "Level 1" dependency. It just checks if the user is logged in.
+# We use it for organisation-level endpoints.
+# It's just an alias to make the code's intent clearer.
+require_user_authentication = Depends(current_active_user)
 
 
 class RoleRequired:
