@@ -26,3 +26,7 @@ class OrganisationRead(BaseModel):
 class AppResponse(BaseModel):
     pid: str
     name: str
+
+# Add request schema for creating apps
+class AppCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
