@@ -419,7 +419,7 @@ class GetUserFeatureVariantFlow:
 
                     segment_target_result = (
                         self.rule_evaluator.evaluate_target_percentage(
-                            user.user_id,
+                            str(user.pid),
                             experience_segment.target_percentage,
                             context_id,
                         )
@@ -444,7 +444,7 @@ class GetUserFeatureVariantFlow:
 
             # Check if user falls within this personalisation's target percentage
             if self.rule_evaluator.evaluate_target_percentage(
-                user.user_id, segment_personalisation.target_percentage, context_id
+                str(user.pid), segment_personalisation.target_percentage, context_id
             ):
                 # If we found a matching personalisation, stop looking for more personalisations
                 return segment_personalisation

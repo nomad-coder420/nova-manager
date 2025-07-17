@@ -1,5 +1,6 @@
 from typing import Any, Dict, List
 import hashlib
+import struct
 
 
 class RuleEvaluator:
@@ -64,6 +65,8 @@ class RuleEvaluator:
         """
         Evaluate if a user falls within the target percentage using consistent hashing.
 
+        Uses improved distribution algorithm for better A/B testing results.
+
         Args:
             user_id: Unique identifier for the user
             target_percentage: Target percentage (0-100)
@@ -74,20 +77,27 @@ class RuleEvaluator:
         """
         if target_percentage <= 0:
             return False
+
         if target_percentage >= 100:
             return True
 
         # Create a consistent hash based on user_id and context
         hash_input = f"{user_id}:{context_id}"
-        hash_digest = hashlib.md5(hash_input.encode()).hexdigest()
+        hash_digest = hashlib.sha256(hash_input.encode()).digest()
 
-        # Convert first 8 characters of hash to integer
-        hash_int = int(hash_digest[:8], 16)
+        # Convert first 8 bytes of hash to unsigned 64-bit integer for better distribution
+        hash_int = struct.unpack(">Q", hash_digest[:8])[0]
 
-        # Map to 0-100 range
-        percentage_bucket = hash_int % 100
+        # Convert to float between 0.0 and 1.0 with high precision
+        # Using the full 64-bit range for maximum distribution uniformity
+        percentage_float = hash_int / (2**64 - 1)
 
-        return percentage_bucket < target_percentage
+        # Convert target percentage to float for comparison
+        target_float = target_percentage / 100.0
+
+        result = percentage_float < target_float
+
+        return result
 
     def evaluate_rule_with_target_percentage(
         self,
