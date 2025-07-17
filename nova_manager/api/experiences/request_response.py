@@ -118,8 +118,6 @@ class ExperienceResponse(BaseModel):
     name: str
     description: str
     status: str
-    organisation_id: str
-    app_id: str
     created_at: datetime
     modified_at: datetime
 
@@ -332,12 +330,6 @@ class MessageResponse(BaseModel):
     message: str
     success: bool = True
     details: Optional[Dict[str, Any]] = None
-
-
-class ValidationResponse(BaseModel):
-    valid: bool
-    errors: List[str]
-    warnings: List[str]
 
 
 class ExperienceSearchResponse(BaseModel):

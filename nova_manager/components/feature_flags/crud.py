@@ -108,23 +108,14 @@ class FeatureFlagsCRUD(BaseCRUD):
         """Get feature flag with all details including experience usage"""
         return (
             self.db.query(FeatureFlags)
-            # .options(
-            #     # Load variants and their experiences with campaigns
-            #     selectinload(FeatureFlags.variants)
-            #     .selectinload(FeatureVariants.experience)
-            #     .selectinload(Experiences.experience_campaigns)
-            #     .selectinload(ExperienceCampaigns.campaign),
-            #     # Load variants and their experiences with segments
-            #     selectinload(FeatureFlags.variants)
-            #     .selectinload(FeatureVariants.experience)
-            #     .selectinload(Experiences.experience_segments)
-            #     .selectinload(ExperienceSegments.segment),
-            #     # Load variants and their experiences with feature variants
-            #     selectinload(FeatureFlags.variants)
-            #     .selectinload(FeatureVariants.experience)
-            #     .selectinload(Experiences.feature_variants),
-            # )
-            .filter(FeatureFlags.pid == pid).first()
+            .options(
+                # Load variants
+                selectinload(FeatureFlags.variants),
+                # Load experience segments
+                selectinload(FeatureFlags.experience),
+            )
+            .filter(FeatureFlags.pid == pid)
+            .first()
         )
 
     def get_available_flags(

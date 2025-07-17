@@ -87,13 +87,7 @@ async def list_segments(
             organisation_id=organisation_id, app_id=app_id, skip=skip, limit=limit
         )
 
-    # TODO: Optimize this
-    # Add experience count to each segment
-    result = []
-    for segment in segments:
-        result.append({**segment.__dict__, "experience_count": 0})
-
-    return result
+    return segments
 
 
 @router.get("/{segment_pid}/", response_model=SegmentDetailedResponse)

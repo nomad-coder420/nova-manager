@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from uuid import UUID as UUIDType
-from sqlalchemy.orm import Session, selectinload, joinedload
+from nova_manager.api.experiences.request_response import PersonalisationCreate
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_, or_, desc, asc
 
 from nova_manager.components.experiences.models import (
@@ -274,7 +275,9 @@ class PersonalisationsCRUD(BaseCRUD):
             .first()
         )
 
-    def get_default_personalisations_by_ids(self, personalisation_ids: List[UUIDType]) -> List[Personalisations]:
+    def get_default_personalisations_by_ids(
+        self, personalisation_ids: List[UUIDType]
+    ) -> List[Personalisations]:
         """Get personalisations by IDs that are marked as default"""
         return (
             self.db.query(Personalisations)
@@ -288,14 +291,14 @@ class PersonalisationsCRUD(BaseCRUD):
         )
 
     def create_personalisation_with_variants(
-        self, personalisation_data: Dict[str, Any], variants_data: List[Dict[str, Any]]
+        self, personalisation_data: PersonalisationCreate
     ) -> Personalisations:
         """Create a personalisation with its variants"""
         # Create personalisation
         personalisation = Personalisations(
-            name=personalisation_data["name"],
-            description=personalisation_data.get("description", ""),
-            experience_id=personalisation_data["experience_id"],
+            name=personalisation_data.name,
+            description=personalisation_data.description or "",
+            experience_id=personalisation_data.experience_id or "",
             last_updated_at=datetime.now(timezone.utc),
         )
         self.db.add(personalisation)
@@ -306,26 +309,25 @@ class PersonalisationsCRUD(BaseCRUD):
         feature_variants_crud = FeatureVariantsCRUD(self.db)
 
         # Handle variants - either create new or use existing
-        for variant_data in variants_data:
+        for variant_data in personalisation_data.variants:
             variant = None
 
             # Check if variant_id is provided (selecting existing variant)
-            if "variant_id" in variant_data and variant_data["variant_id"]:
-                variant = feature_variants_crud.get_by_pid(variant_data["variant_id"])
+            if variant_data.variant_id:
+                variant = feature_variants_crud.get_by_pid(variant_data.variant_id)
                 if not variant:
                     raise ValueError(
-                        f"Variant with ID {variant_data['variant_id']} not found"
+                        f"Variant with ID {variant_data.variant_id} not found"
                     )
             else:
                 # Create new variant
-                variant = FeatureVariants(
-                    feature_id=variant_data["feature_id"],
-                    name=variant_data["name"],
-                    config=variant_data["config"],
+                feature_variants_crud = FeatureVariantsCRUD(self.db)
+                variant = feature_variants_crud.create_variant(
+                    feature_pid=variant_data.feature_id,
+                    variant_data=variant_data.model_dump(
+                        exclude={"feature_id", "variant_id"}
+                    ),
                 )
-                self.db.add(variant)
-                self.db.flush()
-                self.db.refresh(variant)
 
             # Create junction table entry
             junction_entry = PersonalisationFeatureVariants(

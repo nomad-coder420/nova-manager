@@ -334,20 +334,7 @@ async def create_personalisation(
 
     # Create personalisation with variants
     personalisation = personalisations_crud.create_personalisation_with_variants(
-        personalisation_data={
-            "name": personalisation_data.name,
-            "description": personalisation_data.description,
-            "experience_id": experience_pid,
-        },
-        variants_data=[
-            {
-                "feature_id": variant.feature_id,
-                "variant_id": variant.variant_id,
-                "name": variant.name,
-                "config": variant.config,
-            }
-            for variant in personalisation_data.variants
-        ],
+        personalisation_data
     )
 
     return personalisation

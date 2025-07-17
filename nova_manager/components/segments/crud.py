@@ -1,3 +1,7 @@
+from nova_manager.components.experiences.models import (
+    ExperienceSegmentPersonalisations,
+    ExperienceSegments,
+)
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_, or_
 from typing import List, Optional, Dict, Any
@@ -144,43 +148,15 @@ class SegmentsCRUD(BaseCRUD):
             .filter(Segments.pid == pid).first()
         )
 
-    def get_segment_with_details(self, pid: UUIDType) -> Optional[Dict[str, Any]]:
+    def get_segment_with_details(self, pid: UUIDType) -> Optional[Segments]:
         """Get segment with full details including experience relationships"""
-        segment = self.get_with_experience_segments(pid=pid)
-        if not segment:
-            return None
-
-        # Transform experience_segments for response
-        experience_segments_data = []
-        active_experiences = 0
-
-        for exp_seg in segment.experience_segments:
-            experience_data = {
-                "pid": exp_seg.pid,
-                "experience_id": exp_seg.experience_id,
-                "name": exp_seg.experience.name if exp_seg.experience else "Unknown",
-                "status": (
-                    exp_seg.experience.status if exp_seg.experience else "Unknown"
-                ),
-                "target_percentage": exp_seg.target_percentage,
-                "created_at": exp_seg.created_at.isoformat(),
-            }
-            experience_segments_data.append(experience_data)
-
-            # Count active experiences
-            if exp_seg.experience and exp_seg.experience.status == "active":
-                active_experiences += 1
-
-        return {
-            "pid": segment.pid,
-            "name": segment.name,
-            "description": segment.description,
-            "rule_config": segment.rule_config,
-            "organisation_id": segment.organisation_id,
-            "app_id": segment.app_id,
-            "created_at": segment.created_at.isoformat(),
-            "modified_at": segment.modified_at.isoformat(),
-            "experience_segments": experience_segments_data,
-            "experience_count": len(experience_segments_data),
-            "active_experiences": active_experiences,
-        }
+        return (
+            self.db.query(Segments)
+            .options(
+                selectinload(Segments.experience_segments)
+                .selectinload(ExperienceSegments.personalisations)
+                .selectinload(ExperienceSegmentPersonalisations.personalisation)
+            )
+            .filter(Segments.pid == pid)
+            .first()
+        )

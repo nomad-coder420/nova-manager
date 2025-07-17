@@ -4,6 +4,8 @@ from typing_extensions import TypedDict
 from uuid import UUID
 from pydantic import BaseModel
 
+from nova_manager.api.experiences.request_response import ExperienceResponse
+
 
 class VariantCreate(BaseModel):
     name: str
@@ -95,6 +97,8 @@ class FeatureFlagListItem(BaseModel):
     is_active: bool
     keys_config: Dict[str, NovaObjectKeyDefinition]
     default_variant: Dict[str, Any]
+    variants: List[VariantResponse]
+    experience: ExperienceResponse | None
     created_at: datetime
 
     class Config:
@@ -105,21 +109,14 @@ class FeatureFlagDetailedResponse(BaseModel):
     pid: UUID
     name: str
     description: str
+    type: str
     is_active: bool
-    organisation_id: str
-    app_id: str
+    keys_config: Dict[str, Any]
+    default_variant: Dict[str, Any]
     created_at: datetime
     modified_at: datetime
     variants: List[VariantResponse] = []
-    keys_config: Dict[str, Any]
-    default_variant: Dict[str, Any]
-
-    # Experience usage
-    experiences: List[Dict[str, Any]] = []
-    experience_count: int = 0
-
-    # Variant count
-    variant_count: int = 0
+    experience: ExperienceResponse | None
 
     class Config:
         from_attributes = True

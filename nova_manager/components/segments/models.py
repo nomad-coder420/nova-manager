@@ -32,3 +32,7 @@ class Segments(BaseOrganisationModel):
         back_populates="segment",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def experience_count(self):
+        return len(self.experience_segments)

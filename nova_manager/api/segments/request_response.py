@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from uuid import UUID as UUIDType
+from nova_manager.api.experiences.request_response import ExperienceResponse
 from pydantic import BaseModel, Field
 
 
@@ -33,13 +34,39 @@ class SegmentUpdate(BaseModel):
     rule_config: Optional[Dict[str, Any]] = None
 
 
-class ExperienceSegmentResponse(BaseModel):
+class PersonalisationResponse(BaseModel):
     pid: UUIDType
-    experience_id: UUIDType
     name: str
-    status: str
-    target_percentage: int
+    description: str
+    is_default: bool
+    last_updated_at: datetime
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ExperiencePersonalisationResponse(BaseModel):
+    pid: UUIDType
+    personalisation_id: UUIDType
+    target_percentage: int
+    personalisation: PersonalisationResponse
+
+    class Config:
+        from_attributes = True
+
+
+class SegmentExperienceResponse(BaseModel):
+    pid: UUIDType
+    target_percentage: int
+    experience: ExperienceResponse
+    personalisations: List[ExperiencePersonalisationResponse]
+    priority: int
+    created_at: datetime
+    modified_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class SegmentResponse(BaseModel):
@@ -73,30 +100,14 @@ class SegmentListResponse(BaseModel):
 
 class SegmentDetailedResponse(BaseModel):
     """Detailed segment response with relationships"""
+
     pid: UUIDType
     name: str
     description: str
     rule_config: Dict[str, Any]
-    organisation_id: str
-    app_id: str
-    created_at: str
-    modified_at: str
-    experience_segments: List[ExperienceSegmentResponse] = []
-    experience_count: int = 0
-    active_experiences: int = 0
+    created_at: datetime
+    modified_at: datetime
+    experience_segments: List[SegmentExperienceResponse] = []
 
     class Config:
         from_attributes = True
-
-
-class SegmentStatsResponse(BaseModel):
-    segment_name: str
-    experience_count: int
-    active_experiences: int
-    rule_config: Dict[str, Any]
-
-
-class ValidationResponse(BaseModel):
-    valid: bool
-    errors: List[str]
-    warnings: List[str]
