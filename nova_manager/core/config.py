@@ -15,3 +15,4 @@ BIGQUERY_RAW_EVENTS_TABLE_NAME = getenv("BIGQUERY_RAW_EVENTS_TABLE_NAME") or ""
 # and that it is NOT hardcoded in production.
 # Use environment variables to set this value.
 SECRET_KEY = getenv("SECRET_KEY") or "a-very-secret-key-that-is-not-secret"
+DEBUG = getenv("DEBUG", "False").lower() in ("true", "1", "t")
