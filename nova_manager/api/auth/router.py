@@ -5,6 +5,8 @@ from nova_manager.api.auth.request_response import (
     UserCreate,
     OrganisationCreate,
     OrganisationRead,
+    AppCreate,
+    AppResponse,
 )
 
 router = APIRouter()
@@ -45,7 +47,7 @@ from nova_manager.components.auth.dependencies import (
     require_user_authentication,
 )
 from nova_manager.core.log import logger
-from nova_manager.components.auth.enums import OrganisationRole
+from nova_manager.components.auth.enums import OrganisationRole, AppRole
 from nova_manager.components.auth.models import (
     UserAppMembership,
     UserOrganisationMembership,
@@ -78,19 +80,19 @@ async def switch_app(
     token = get_jwt_strategy().write_token(new_payload)
     return {"access_token": token}
 
-@router.get("/auth/apps", tags=["auth"])
+@router.get("/auth/apps", response_model=list[AppResponse], tags=["auth"])
 async def list_apps(
-    payload: dict = Depends(get_token_payload),
+    user: AuthUser = require_user_authentication,
     session: AsyncSession = Depends(get_async_session),
 ):
-    """List all apps the current user is a member of."""
-    user_id = int(payload.get("sub"))
+    """List all apps the current authenticated user is a member of."""
+    # Query apps for this user
     q = select(App).join(UserAppMembership, App.pid == UserAppMembership.app_id).filter(
-        UserAppMembership.user_id == user_id
+        UserAppMembership.user_id == user.id
     )
     result = await session.execute(q)
     apps = result.scalars().all()
-    return [{"pid": str(app.pid), "name": app.name} for app in apps]
+    return [AppResponse(pid=str(app.pid), name=app.name) for app in apps]
   
 @router.post("/auth/organisations", response_model=OrganisationRead, tags=["auth"])
 async def create_organisation(
@@ -133,3 +135,34 @@ async def list_organisations(
     result = await session.execute(q)
     orgs = result.scalars().all()
     return [OrganisationRead(pid=str(o.pid), name=o.name) for o in orgs]
+  
+@router.post("/auth/organisations/{org_pid}/apps", response_model=AppResponse, tags=["auth"])
+async def create_app(
+    org_pid: str,
+    data: AppCreate,
+    user: AuthUser = require_user_authentication,
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Create a new app within the given organisation if user is owner/admin."""
+    # Verify the user is an owner or admin of the organisation
+    q = select(UserOrganisationMembership).filter_by(
+        user_id=user.id, organisation_id=org_pid
+    )
+    result = await session.execute(q)
+    membership = result.scalars().first()
+    if not membership or membership.role not in (
+        OrganisationRole.OWNER.value, OrganisationRole.ADMIN.value
+    ):
+        raise HTTPException(
+            status_code=403, detail="Insufficient permissions for organisation"
+        )
+    # Create the app and assign the creator as app-admin
+    app = App(name=data.name, organisation_id=org_pid)
+    session.add(app)
+    await session.flush()
+    app_membership = UserAppMembership(
+        user_id=user.id, app_id=str(app.pid), role=AppRole.ADMIN.value
+    )
+    session.add(app_membership)
+    await session.commit()
+    return AppResponse(pid=str(app.pid), name=app.name)
