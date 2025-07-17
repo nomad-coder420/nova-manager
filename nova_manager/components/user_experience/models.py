@@ -50,24 +50,32 @@ class UserExperiencePersonalisation(BaseOrganisationModel):
 
     # TODO: Review these table args
     __table_args__ = (
-        # Unique constraint: one specific personalisation assignment per user-experience pair
+        # BUSINESS RULE: One personalisation assignment per user-experience pair within org/app scope
+        # Fixed to include organisation_id and app_id for proper scoping
         UniqueConstraint(
             "user_id",
-            "experience_id",
-            "personalisation_id",
-            name="uq_user_experience_user_exp_pers",
+            "experience_id", 
+            "organisation_id",
+            "app_id",
+            name="uq_user_experience_user_exp_org_app",
         ),
-        # Index for common queries
+        # PRIMARY QUERY OPTIMIZATION: Covers main query pattern from get_user_experiences_personalisations
+        # Query: user_id = ? AND organisation_id = ? AND app_id = ? AND experience_id IN (?)
         Index(
-            "idx_user_experience_user_org_app", "user_id", "organisation_id", "app_id"
+            "idx_user_experience_main_query",
+            "user_id", 
+            "organisation_id", 
+            "app_id", 
+            "experience_id"
         ),
+        # EXPERIENCE-BASED QUERIES: For queries filtering by experience within org/app
         Index(
             "idx_user_experience_experience_org_app",
             "experience_id",
             "organisation_id",
             "app_id",
         ),
-        Index("idx_user_experience_org_app", "organisation_id", "app_id"),
+        # TIME-BASED QUERIES: For analytics and reporting by assignment time
         Index(
             "idx_user_experience_assigned_org_app",
             "assigned_at",
