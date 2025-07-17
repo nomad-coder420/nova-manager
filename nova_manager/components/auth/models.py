@@ -57,7 +57,15 @@ class UserOrganisationMembership(BaseModel):
     __tablename__ = "user_organisation_membership"
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("auth_user.id"), nullable=False)
     organisation_id: Mapped[str] = mapped_column(String, ForeignKey("organisations.pid"), nullable=False)
-    role: Mapped["OrganisationRole"] = mapped_column(SAEnum(OrganisationRole), nullable=False)
+    role: Mapped["OrganisationRole"] = mapped_column(
+        SAEnum(
+            OrganisationRole,
+            native_enum=False,
+            validate_strings=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
+        nullable=False,
+    )
     user = relationship("AuthUser", back_populates="organisation_memberships")
     organisation = relationship("Organisation", back_populates="user_memberships")
 
@@ -66,7 +74,15 @@ class UserAppMembership(BaseModel):
     __tablename__ = "user_app_membership"
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("auth_user.id"), nullable=False)
     app_id: Mapped[str] = mapped_column(String, ForeignKey("apps.pid"), nullable=False)
-    role: Mapped["AppRole"] = mapped_column(SAEnum(AppRole), nullable=False)
+    role: Mapped["AppRole"] = mapped_column(
+        SAEnum(
+            AppRole,
+            native_enum=False,
+            validate_strings=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
+        nullable=False,
+    )
     user = relationship("AuthUser", back_populates="app_memberships")
     app = relationship("App", back_populates="user_memberships")
 
