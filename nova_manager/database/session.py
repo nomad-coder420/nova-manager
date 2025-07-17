@@ -1,10 +1,10 @@
 from sqlalchemy import create_engine
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from nova_manager.core.config import DATABASE_URL
 from nova_manager.core.log import logger
-
+from typing import AsyncGenerator
 
 # Synchronous engine for existing parts of the app and Alembic migrations
 engine = create_engine(DATABASE_URL)
@@ -29,6 +29,7 @@ def get_db():
         db.close()
 
 
-async def get_async_session():
+async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
-        yield session
+        async with session.begin():
+            yield session

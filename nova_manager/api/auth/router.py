@@ -94,6 +94,7 @@ async def list_apps(
     apps = result.scalars().all()
     return [AppResponse(pid=str(app.pid), name=app.name) for app in apps]
   
+# Replace this entire function
 @router.post("/auth/organisations", response_model=OrganisationRead, tags=["auth"])
 async def create_organisation(
     data: OrganisationCreate,
@@ -101,9 +102,11 @@ async def create_organisation(
     session: AsyncSession = Depends(get_async_session),
 ):
     """Create a new organisation and add the current user as owner."""
+    # In create_organisation function
     org = Organisation(name=data.name)
     session.add(org)
-    await session.flush()
+    await session.flush()  # Flush to get the generated org.pid
+
     membership = UserOrganisationMembership(
         user_id=user.id,
         organisation_id=str(org.pid),
@@ -111,11 +114,9 @@ async def create_organisation(
     )
     session.add(membership)
     logger.debug(f"In create_organisation: membership.role = {membership.role!r}")
-    # Capture PID and name before commit to avoid post-commit attribute expiration reload
-    org_pid = str(org.pid)
-    org_name = org.name
-    await session.commit()
-    return OrganisationRead(pid=org_pid, name=org_name)
+
+    # No commit needed, the dependency handles it.
+    return OrganisationRead(pid=str(org.pid), name=org.name)
 
 
 @router.get("/auth/organisations", response_model=list[OrganisationRead], tags=["auth"])
@@ -136,6 +137,7 @@ async def list_organisations(
     orgs = result.scalars().all()
     return [OrganisationRead(pid=str(o.pid), name=o.name) for o in orgs]
   
+# Replace this entire function
 @router.post("/auth/organisations/{org_pid}/apps", response_model=AppResponse, tags=["auth"])
 async def create_app(
     org_pid: str,
@@ -146,7 +148,7 @@ async def create_app(
     """Create a new app within the given organisation if user is owner/admin."""
     # Verify the user is an owner or admin of the organisation
     q = select(UserOrganisationMembership).filter_by(
-        user_id=user.id, organisation_id=org_pid
+    user_id=user.id, organisation_id=org_pid
     )
     result = await session.execute(q)
     membership = result.scalars().first()
@@ -156,13 +158,15 @@ async def create_app(
         raise HTTPException(
             status_code=403, detail="Insufficient permissions for organisation"
         )
-    # Create the app and assign the creator as app-admin
+
     app = App(name=data.name, organisation_id=org_pid)
     session.add(app)
-    await session.flush()
+    await session.flush()  # Flush to get the generated app.pid
+
     app_membership = UserAppMembership(
         user_id=user.id, app_id=str(app.pid), role=AppRole.ADMIN.value
     )
     session.add(app_membership)
-    await session.commit()
+
+    # No commit needed, the dependency handles it.
     return AppResponse(pid=str(app.pid), name=app.name)
