@@ -91,8 +91,6 @@ class ExperiencesCRUD(BaseCRUD):
                 selectinload(Experiences.experience_segments).selectinload(
                     ExperienceSegments.personalisations
                 ),
-                # Load user experiences
-                selectinload(Experiences.user_experiences),
             )
             .filter(Experiences.pid == pid)
             .first()

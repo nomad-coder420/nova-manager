@@ -11,13 +11,11 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
-    false,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from nova_manager.core.models import BaseModel, BaseOrganisationModel
-from nova_manager.components.user_experience.models import UserExperience
 from nova_manager.components.segments.models import Segments
 from nova_manager.components.campaigns.models import Campaigns
 
@@ -63,9 +61,9 @@ class Experiences(BaseOrganisationModel):
         cascade="all, delete-orphan",
     )
 
-    user_experiences = relationship(
-        "UserExperience",
-        foreign_keys="UserExperience.experience_id",
+    user_experience_personalisations = relationship(
+        "UserExperiencePersonalisation",
+        foreign_keys="UserExperiencePersonalisation.experience_id",
         back_populates="experience",
         cascade="all, delete-orphan",
     )
@@ -106,6 +104,13 @@ class Personalisations(BaseModel):
     experience_segment_personalisations = relationship(
         "ExperienceSegmentPersonalisations",
         foreign_keys="ExperienceSegmentPersonalisations.personalisation_id",
+        back_populates="personalisation",
+        cascade="all, delete-orphan",
+    )
+
+    user_experience_personalisations = relationship(
+        "UserExperiencePersonalisation",
+        foreign_keys="UserExperiencePersonalisation.personalisation_id",
         back_populates="personalisation",
         cascade="all, delete-orphan",
     )

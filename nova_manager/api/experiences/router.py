@@ -188,7 +188,6 @@ async def get_experience(experience_pid: UUIDType, db: Session = Depends(get_db)
         feature_flags_count=len(feature_flags),
         personalisations_count=len(personalisations),
         segments_count=len(experience_segments),
-        user_experience_count=len(experience.user_experiences),
     )
 
 

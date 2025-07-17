@@ -1,11 +1,16 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 from fastapi import HTTPException
 from nova_manager.components.experiences.models import (
     ExperienceSegmentPersonalisations,
     ExperienceSegments,
+    Personalisations,
 )
 from nova_manager.components.segments.models import Segments
+from nova_manager.components.user_experience.crud import (
+    PersonalisationAssignment,
+    UserExperiencePersonalisationCRUD,
+)
 from nova_manager.components.users.models import Users
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -31,15 +36,36 @@ class ObjectVariantAssignment(BaseModel):
     evaluation_reason: str
 
 
+class ExperienceSegmentPersonalisationCache:
+    """Cache data structure for experience segment personalisation"""
+
+    def __init__(
+        self,
+        personalisation: Personalisations | None,
+        segment: Segments | None,
+        experience_segment_personalisation_id: UUID | None,
+    ):
+        self.personalisation = personalisation
+        self.segment = segment
+        self.experience_segment_personalisation_id = (
+            experience_segment_personalisation_id
+        )
+
+
 class GetUserFeatureVariantFlow:
     def __init__(self, db: Session):
         self.db = db
         self.rule_evaluator = RuleEvaluator()
         self.users_crud = UsersCRUD(db)
         self.feature_flags_crud = FeatureFlagsCRUD(db)
+        self.user_experience_personalisation_crud = UserExperiencePersonalisationCRUD(
+            db
+        )
 
         # Cache fields
-        self.experience_personalisation_map = {}
+        self.experience_personalisation_map: Dict[
+            UUID, ExperienceSegmentPersonalisationCache
+        ] = {}
         self.segment_results_map = {}
 
     def get_variants_for_objects(
@@ -61,8 +87,19 @@ class GetUserFeatureVariantFlow:
             organisation_id, app_id, feature_names
         )
 
+        # Step 3: Load existing user experience personalisation cache
+        self._load_experience_personalisation_cache(
+            user=user,
+            organisation_id=organisation_id,
+            app_id=app_id,
+            features=features,
+        )
+
         # Process each feature
         results = {}
+
+        # Collect user experience personalisation assignments for bulk upsert
+        personalisation_assignments: List[PersonalisationAssignment] = []
 
         for feature in features:
             if feature.name in results:
@@ -75,13 +112,30 @@ class GetUserFeatureVariantFlow:
                 experience_name = feature.experience.name
                 experience_segments = feature.experience.experience_segments
 
-                selected_personalisation, segment = (
-                    self._get_experience_segment_personalisation(
-                        user, experience_id, experience_segments
-                    )
+                cache_data, from_cache = self._get_experience_segment_personalisation(
+                    user, experience_id, experience_segments
+                )
+
+                selected_personalisation = cache_data.personalisation
+                segment = cache_data.segment
+                experience_segment_personalisation_id = (
+                    cache_data.experience_segment_personalisation_id
                 )
 
                 if selected_personalisation and segment:
+                    evaluation_reason = "segment_match_personalisation"
+
+                    if not from_cache:
+                        personalisation_assignments.append(
+                            PersonalisationAssignment(
+                                experience_id=experience_id,
+                                personalisation_id=selected_personalisation.pid,
+                                segment_id=segment.pid,
+                                experience_segment_personalisation_id=experience_segment_personalisation_id,
+                                evaluation_reason=evaluation_reason,
+                            )
+                        )
+
                     for pfv in selected_personalisation.feature_variants:
                         pfv_feature_flag = pfv.feature_variant.feature_flag
 
@@ -100,7 +154,7 @@ class GetUserFeatureVariantFlow:
                             personalisation_name=selected_personalisation.name,
                             segment_id=segment.pid,
                             segment_name=segment.name,
-                            evaluation_reason="segment_match_personalisation",
+                            evaluation_reason=f"{evaluation_reason}{'_cache' if from_cache else ''}",
                         )
 
                         results[pfv_feature_name] = pfv_feature_variant
@@ -109,9 +163,22 @@ class GetUserFeatureVariantFlow:
                             feature_variant = pfv_feature_variant
 
                 elif not segment:
+                    evaluation_reason = "no_segment_match"
+
+                    if not from_cache:
+                        personalisation_assignments.append(
+                            PersonalisationAssignment(
+                                experience_id=experience_id,
+                                personalisation_id=None,
+                                segment_id=None,
+                                experience_segment_personalisation_id=None,
+                                evaluation_reason=evaluation_reason,
+                            )
+                        )
+
                     feature_variant = self._find_default_variant(
                         feature,
-                        "no_segment_match",
+                        f"{evaluation_reason}{'_cache' if from_cache else ''}",
                         experience_id=experience_id,
                         experience_name=experience_name,
                     )
@@ -147,7 +214,15 @@ class GetUserFeatureVariantFlow:
                 )
 
             results[feature.name] = feature_variant
-            print("\n\n\n\n\n\n############\n\n\n\n\n\n")
+
+        # Bulk upsert user experience personalisation assignments
+        if personalisation_assignments:
+            self.user_experience_personalisation_crud.bulk_create_user_experience_personalisations(
+                user_id=user.pid,
+                organisation_id=organisation_id,
+                app_id=app_id,
+                personalisation_assignments=personalisation_assignments,
+            )
 
         return results
 
@@ -234,42 +309,88 @@ class GetUserFeatureVariantFlow:
             evaluation_reason=f"{reason}_no_default_error",
         )
 
+    def _load_experience_personalisation_cache(
+        self,
+        user: Users,
+        organisation_id: str,
+        app_id: str,
+        features: List[FeatureFlags],
+    ):
+        # Extract unique experience IDs from features (single pass)
+        experience_ids = list(
+            {
+                feature.experience_id
+                for feature in features
+                if feature.experience_id is not None
+            }
+        )
+
+        if experience_ids:
+            # Load existing assignments from DB (single query with relationships)
+            existing_assignments = self.user_experience_personalisation_crud.get_user_experiences_personalisations(
+                user_id=user.pid,
+                organisation_id=organisation_id,
+                app_id=app_id,
+                experience_ids=experience_ids,
+            )
+
+            # Populate cache (single loop)
+            for assignment in existing_assignments:
+                cache_data = ExperienceSegmentPersonalisationCache(
+                    personalisation=assignment.personalisation,
+                    segment=assignment.segment,
+                    experience_segment_personalisation_id=assignment.experience_segment_personalisation_id,
+                )
+                self.experience_personalisation_map[assignment.experience_id] = (
+                    cache_data
+                )
+
     def _get_experience_segment_personalisation(
         self,
         user: Users,
         experience_id: UUID,
         experience_segments: List[ExperienceSegments],
-    ):
-        selected_personalisation, segment = None, None
-
+    ) -> Tuple[ExperienceSegmentPersonalisationCache, bool]:
         if experience_id in self.experience_personalisation_map:
-            selected_personalisation, segment = self.experience_personalisation_map[
-                experience_id
-            ]
+            cached_data = self.experience_personalisation_map[experience_id]
+            return cached_data, True
 
         else:
             experience_segment = self._evaluate_experience_segments(
                 user, experience_id, experience_segments
             )
 
-            print("experience_segment", experience_segment)
-
             if experience_segment:
                 segment = experience_segment.segment
 
-                selected_personalisation = self._evaluate_segment_personalisations(
-                    user,
-                    experience_id,
-                    segment,
-                    experience_segment.personalisations,
+                selected_segment_personalisation = (
+                    self._evaluate_segment_personalisations(
+                        user,
+                        experience_id,
+                        segment,
+                        experience_segment.personalisations,
+                    )
                 )
 
-                self.experience_personalisation_map[experience_id] = (
-                    selected_personalisation,
-                    segment,
-                )
+                if selected_segment_personalisation:
+                    personalisation = selected_segment_personalisation.personalisation
 
-        return selected_personalisation, segment
+                    cache_data = ExperienceSegmentPersonalisationCache(
+                        personalisation=personalisation,
+                        segment=segment,
+                        experience_segment_personalisation_id=selected_segment_personalisation.pid,
+                    )
+                    self.experience_personalisation_map[experience_id] = cache_data
+
+                    return cache_data, False
+
+        null_assignment = ExperienceSegmentPersonalisationCache(
+            personalisation=None,
+            segment=None,
+            experience_segment_personalisation_id=None,
+        )
+
+        return null_assignment, False
 
     def _evaluate_experience_segments(
         self,
@@ -292,7 +413,6 @@ class GetUserFeatureVariantFlow:
 
                     self.segment_results_map[segment.pid] = segment_result
 
-                print("segment_result", segment_result)
                 if segment_result:
                     # User matches the segment rule, now check target percentage
                     context_id = f"{experience_id}:{segment.pid}"
@@ -304,8 +424,6 @@ class GetUserFeatureVariantFlow:
                             context_id,
                         )
                     )
-
-                    print("segment_target_result", segment_target_result)
 
                     # Check if user falls within this experience segment's target percentage
                     if segment_target_result:
@@ -319,7 +437,7 @@ class GetUserFeatureVariantFlow:
         experience_id: UUID,
         segment: Segments,
         segment_personalisations: List[ExperienceSegmentPersonalisations],
-    ):
+    ) -> ExperienceSegmentPersonalisations | None:
         # Evaluate each personalisation's target percentage
         for segment_personalisation in segment_personalisations:
             context_id = f"{experience_id}:{segment.pid}:{segment_personalisation.personalisation_id}"
@@ -328,11 +446,8 @@ class GetUserFeatureVariantFlow:
             if self.rule_evaluator.evaluate_target_percentage(
                 user.user_id, segment_personalisation.target_percentage, context_id
             ):
-                # User matches this personalisation, find the variant for this feature
-                selected_personalisation = segment_personalisation.personalisation
-
                 # If we found a matching personalisation, stop looking for more personalisations
-                return selected_personalisation
+                return segment_personalisation
 
         # No matching personalisation found. Error!
         return None

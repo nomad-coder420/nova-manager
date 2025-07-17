@@ -25,9 +25,9 @@ class Users(BaseOrganisationModel):
     )
 
     # Relationships
-    user_experiences = relationship(
-        "UserExperience",
-        foreign_keys="UserExperience.user_id",
+    user_experience_personalisations = relationship(
+        "UserExperiencePersonalisation",
+        foreign_keys="UserExperiencePersonalisation.user_id",
         back_populates="user",
         cascade="all, delete-orphan",
     )

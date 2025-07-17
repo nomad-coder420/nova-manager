@@ -320,7 +320,6 @@ class ExperienceDetailedResponse(BaseModel):
     feature_flags_count: int = 0
     personalisations_count: int = 0
     segments_count: int = 0
-    user_experience_count: int = 0
 
     class Config:
         from_attributes = True
