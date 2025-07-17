@@ -44,6 +44,7 @@ from nova_manager.components.auth.dependencies import (
     get_token_payload,
     require_user_authentication,
 )
+from nova_manager.core.log import logger
 from nova_manager.components.auth.enums import OrganisationRole
 from nova_manager.components.auth.models import (
     UserAppMembership,
@@ -104,11 +105,15 @@ async def create_organisation(
     membership = UserOrganisationMembership(
         user_id=user.id,
         organisation_id=str(org.pid),
-        role=OrganisationRole.OWNER,
+        role=OrganisationRole.OWNER.value,
     )
     session.add(membership)
+    logger.debug(f"In create_organisation: membership.role = {membership.role!r}")
+    # Capture PID and name before commit to avoid post-commit attribute expiration reload
+    org_pid = str(org.pid)
+    org_name = org.name
     await session.commit()
-    return OrganisationRead(pid=str(org.pid), name=org.name)
+    return OrganisationRead(pid=org_pid, name=org_name)
 
 
 @router.get("/auth/organisations", response_model=list[OrganisationRead], tags=["auth"])
