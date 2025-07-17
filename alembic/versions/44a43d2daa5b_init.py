@@ -1,8 +1,8 @@
 """init
 
-Revision ID: ffefdd7d68af
+Revision ID: 44a43d2daa5b
 Revises: 
-Create Date: 2025-07-17 20:46:18.526262
+Create Date: 2025-07-17 20:52:05.872979
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'ffefdd7d68af'
+revision: str = '44a43d2daa5b'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -212,13 +212,12 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['segment_id'], ['segments.pid'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.pid'], ),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('user_id', 'experience_id', 'personalisation_id', name='uq_user_experience_user_exp_pers')
+    sa.UniqueConstraint('user_id', 'experience_id', 'organisation_id', 'app_id', name='uq_user_experience_user_exp_org_app')
     )
     op.create_index('idx_user_experience_assigned_org_app', 'user_experience_personalisation', ['assigned_at', 'organisation_id', 'app_id'], unique=False)
     op.create_index('idx_user_experience_experience_org_app', 'user_experience_personalisation', ['experience_id', 'organisation_id', 'app_id'], unique=False)
-    op.create_index('idx_user_experience_org_app', 'user_experience_personalisation', ['organisation_id', 'app_id'], unique=False)
+    op.create_index('idx_user_experience_main_query', 'user_experience_personalisation', ['user_id', 'organisation_id', 'app_id', 'experience_id'], unique=False)
     op.create_index('idx_user_experience_user_assigned', 'user_experience_personalisation', ['user_id', 'assigned_at'], unique=False)
-    op.create_index('idx_user_experience_user_org_app', 'user_experience_personalisation', ['user_id', 'organisation_id', 'app_id'], unique=False)
     op.create_index(op.f('ix_user_experience_personalisation_id'), 'user_experience_personalisation', ['id'], unique=True)
     op.create_index(op.f('ix_user_experience_personalisation_pid'), 'user_experience_personalisation', ['pid'], unique=True)
     op.create_table('personalisation_feature_variants',
@@ -245,9 +244,8 @@ def downgrade() -> None:
     op.drop_table('personalisation_feature_variants')
     op.drop_index(op.f('ix_user_experience_personalisation_pid'), table_name='user_experience_personalisation')
     op.drop_index(op.f('ix_user_experience_personalisation_id'), table_name='user_experience_personalisation')
-    op.drop_index('idx_user_experience_user_org_app', table_name='user_experience_personalisation')
     op.drop_index('idx_user_experience_user_assigned', table_name='user_experience_personalisation')
-    op.drop_index('idx_user_experience_org_app', table_name='user_experience_personalisation')
+    op.drop_index('idx_user_experience_main_query', table_name='user_experience_personalisation')
     op.drop_index('idx_user_experience_experience_org_app', table_name='user_experience_personalisation')
     op.drop_index('idx_user_experience_assigned_org_app', table_name='user_experience_personalisation')
     op.drop_table('user_experience_personalisation')
