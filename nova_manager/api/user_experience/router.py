@@ -9,7 +9,6 @@ from nova_manager.api.user_experience.request_response import (
     GetVariantRequest,
     GetVariantResponse,
     GetVariantsRequest,
-    GetVariantsResponse,
 )
 
 router = APIRouter()

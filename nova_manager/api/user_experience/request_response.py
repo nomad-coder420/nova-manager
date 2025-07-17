@@ -32,7 +32,3 @@ class GetVariantResponse(BaseModel):
     segment_id: UUIDType | None
     segment_name: str | None
     evaluation_reason: str
-
-
-class GetVariantsResponse(BaseModel):
-    features: Dict[str, GetVariantResponse]
