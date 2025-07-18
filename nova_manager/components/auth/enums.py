@@ -8,7 +8,19 @@ class OrganisationRole(str, Enum):
 
 
 class AppRole(str, Enum):
+    OWNER = "owner"
     ADMIN = "admin"
     DEVELOPER = "developer"
     ANALYST = "analyst"
     VIEWER = "viewer"
+
+
+class InvitationTargetType(str, Enum):
+    ORG = "org"
+    APP = "app"
+
+
+class InvitationStatus(str, Enum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
