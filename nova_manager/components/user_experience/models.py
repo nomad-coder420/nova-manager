@@ -35,10 +35,12 @@ class UserExperiencePersonalisation(BaseOrganisationModel):
         ForeignKey("personalisations.pid"),
         nullable=True,
     )
+    segment_name: Mapped[str | None] = mapped_column(String, nullable=True)
     segment_id: Mapped[UUIDType | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("segments.pid"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
+    )
+    experience_segment_id: Mapped[UUIDType | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
     )
     experience_segment_personalisation_id: Mapped[UUIDType | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
@@ -54,7 +56,7 @@ class UserExperiencePersonalisation(BaseOrganisationModel):
         # Fixed to include organisation_id and app_id for proper scoping
         UniqueConstraint(
             "user_id",
-            "experience_id", 
+            "experience_id",
             "organisation_id",
             "app_id",
             name="uq_user_experience_user_exp_org_app",
@@ -63,10 +65,10 @@ class UserExperiencePersonalisation(BaseOrganisationModel):
         # Query: user_id = ? AND organisation_id = ? AND app_id = ? AND experience_id IN (?)
         Index(
             "idx_user_experience_main_query",
-            "user_id", 
-            "organisation_id", 
-            "app_id", 
-            "experience_id"
+            "user_id",
+            "organisation_id",
+            "app_id",
+            "experience_id",
         ),
         # EXPERIENCE-BASED QUERIES: For queries filtering by experience within org/app
         Index(
@@ -101,10 +103,6 @@ class UserExperiencePersonalisation(BaseOrganisationModel):
         "Personalisations",
         foreign_keys=[personalisation_id],
         back_populates="user_experience_personalisations",
-    )
-    segment = relationship(
-        "Segments",
-        foreign_keys=[segment_id],
     )
 
 

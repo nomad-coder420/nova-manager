@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 from fastapi import HTTPException
@@ -6,23 +7,25 @@ from nova_manager.components.experiences.models import (
     ExperienceSegments,
     Personalisations,
 )
-from nova_manager.components.segments.models import Segments
-from nova_manager.components.user_experience.crud import (
-    PersonalisationAssignment,
-    UserExperiencePersonalisationCRUD,
-)
-from nova_manager.components.users.models import Users
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from nova_manager.components.users.models import Users
+from nova_manager.components.segments.models import Segments
+from nova_manager.components.feature_flags.models import FeatureFlags
+
+from nova_manager.components.users.crud_async import UsersAsyncCRUD
+from nova_manager.components.feature_flags.crud_async import FeatureFlagsAsyncCRUD
+from nova_manager.components.user_experience.crud_async import (
+    UserExperiencePersonalisationAsyncCRUD,
+    PersonalisationAssignment,
+)
 
 from nova_manager.components.rule_evaluator.controller import RuleEvaluator
-from nova_manager.components.users.crud import UsersCRUD
-from nova_manager.components.feature_flags.crud import FeatureFlagsCRUD
-from nova_manager.components.feature_flags.models import FeatureFlags, FeatureVariants
 
 
 class ObjectVariantAssignment(BaseModel):
-    feature_id: UUID
+    feature_id: UUID | None
     feature_name: str
     variant_id: UUID | None
     variant_name: str
@@ -56,14 +59,14 @@ class ExperiencePersonalisationCache:
         )
 
 
-class GetUserFeatureVariantFlow:
-    def __init__(self, db: Session):
+class GetUserFeatureVariantFlowAsync:
+    def __init__(self, db: AsyncSession):
         self.db = db
         self.rule_evaluator = RuleEvaluator()
-        self.users_crud = UsersCRUD(db)
-        self.feature_flags_crud = FeatureFlagsCRUD(db)
-        self.user_experience_personalisation_crud = UserExperiencePersonalisationCRUD(
-            db
+        self.users_crud = UsersAsyncCRUD(db)
+        self.feature_flags_crud = FeatureFlagsAsyncCRUD(db)
+        self.user_experience_personalisation_crud = (
+            UserExperiencePersonalisationAsyncCRUD(db)
         )
 
         # Cache fields
@@ -72,7 +75,7 @@ class GetUserFeatureVariantFlow:
         ] = {}
         self.segment_results_map = {}
 
-    def get_variants_for_objects(
+    async def get_variants_for_objects(
         self,
         user_id: str,
         organisation_id: str,
@@ -81,18 +84,22 @@ class GetUserFeatureVariantFlow:
         feature_names: Optional[List[str]] = None,
     ) -> Dict[str, ObjectVariantAssignment]:
         # Step 1: Check if user exists, if yes update user payload, if no create user
-        user = self._update_or_create_user(user_id, organisation_id, app_id, payload)
+        user = await self._update_or_create_user(
+            user_id, organisation_id, app_id, payload
+        )
 
         if not user:
             raise HTTPException(status_code=404, detail=f"User '{user_id}' not found")
 
         # Step 2: Fetch features with experiences and related data in single query
-        features = self.feature_flags_crud.get_flags_with_full_experience_data(
+        features = await self.feature_flags_crud.get_flags_with_full_experience_data(
             organisation_id, app_id, feature_names
         )
 
+        feature_name_map = {feature.name: feature for feature in features}
+
         # Step 3: Load existing user experience personalisation cache
-        self._load_experience_personalisation_cache(
+        await self._load_experience_personalisation_cache(
             user=user,
             organisation_id=organisation_id,
             app_id=app_id,
@@ -105,7 +112,27 @@ class GetUserFeatureVariantFlow:
         # Collect user experience personalisation assignments for bulk upsert
         personalisation_assignments: List[PersonalisationAssignment] = []
 
-        for feature in features:
+        for feature_name in feature_name_map:
+            feature = feature_name_map.get(feature_name)
+
+            if not feature:
+                unknown_assignment = ObjectVariantAssignment(
+                    feature_id=None,
+                    feature_name="unknown_feature",
+                    variant_id=None,
+                    variant_name="default",
+                    variant_config={},
+                    experience_id=None,
+                    experience_name=None,
+                    personalisation_id=None,
+                    personalisation_name=None,
+                    segment_id=None,
+                    segment_name=None,
+                    evaluation_reason="unknown_feature",
+                )
+                results[feature_name] = unknown_assignment
+                continue
+
             if feature.name in results:
                 continue
 
@@ -227,7 +254,7 @@ class GetUserFeatureVariantFlow:
 
         # Bulk upsert user experience personalisation assignments
         if personalisation_assignments:
-            self.user_experience_personalisation_crud.bulk_create_user_experience_personalisations(
+            await self.user_experience_personalisation_crud.bulk_create_user_experience_personalisations(
                 user_id=user.pid,
                 organisation_id=organisation_id,
                 app_id=app_id,
@@ -236,25 +263,20 @@ class GetUserFeatureVariantFlow:
 
         return results
 
-    def _update_or_create_user(
+    async def _update_or_create_user(
         self, user_id: str, organisation_id: str, app_id: str, payload: Dict[str, Any]
     ):
-        user = self.users_crud.get_by_user_id(
+        existing_user = await self.users_crud.get_by_user_id(
             user_id=user_id, organisation_id=organisation_id, app_id=app_id
         )
 
-        if user:
+        if existing_user:
             # User exists, update user profile with new payload
-            self.users_crud.update(db_obj=user, obj_in={"user_profile": payload})
+            user = await self.users_crud.update_user_profile(existing_user, payload)
         else:
             # User doesn't exist, create new user with user profile
-            user = self.users_crud.create(
-                {
-                    "user_id": user_id,
-                    "organisation_id": organisation_id,
-                    "app_id": app_id,
-                    "user_profile": payload,
-                }
+            user = await self.users_crud.create_user(
+                user_id, organisation_id, app_id, payload
             )
 
         return user
@@ -270,22 +292,6 @@ class GetUserFeatureVariantFlow:
         Find the default variant for a feature flag.
         Looks for a variant named 'default' in the feature's variants.
         """
-        if not feature.variants:
-            return ObjectVariantAssignment(
-                feature_id=feature.pid,
-                feature_name=feature.name,
-                variant_id=None,  # No specific variant
-                variant_name="default",
-                variant_config=feature.default_variant,
-                experience_id=experience_id,
-                experience_name=experience_name,
-                personalisation_id=None,
-                personalisation_name=None,
-                segment_id=None,
-                segment_name=None,
-                evaluation_reason=f"{reason}_no_variant_assigned_error",
-            )
-
         # Look for variant named 'default'
         for variant in feature.variants:
             if variant.name.lower() == "default":
@@ -319,7 +325,7 @@ class GetUserFeatureVariantFlow:
             evaluation_reason=f"{reason}_no_default_error",
         )
 
-    def _load_experience_personalisation_cache(
+    async def _load_experience_personalisation_cache(
         self,
         user: Users,
         organisation_id: str,
@@ -337,7 +343,7 @@ class GetUserFeatureVariantFlow:
 
         if experience_ids:
             # Load existing assignments from DB (single query with relationships)
-            existing_assignments = self.user_experience_personalisation_crud.get_user_experiences_personalisations(
+            existing_assignments = await self.user_experience_personalisation_crud.get_user_experiences_personalisations(
                 user_id=user.pid,
                 organisation_id=organisation_id,
                 app_id=app_id,
@@ -468,7 +474,7 @@ class GetUserFeatureVariantFlow:
         # No matching personalisation found. Error!
         return None
 
-    def get_user_feature_variant(
+    async def get_user_feature_variant(
         self,
         user_id: str,
         feature_name: str,
@@ -476,7 +482,7 @@ class GetUserFeatureVariantFlow:
         app_id: str,
         payload: Dict[str, Any],
     ) -> ObjectVariantAssignment:
-        results = self.get_variants_for_objects(
+        results = await self.get_variants_for_objects(
             user_id=user_id,
             organisation_id=organisation_id,
             app_id=app_id,

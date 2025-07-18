@@ -158,6 +158,9 @@ class ExperienceSegments(BaseModel):
     )
     target_percentage: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
     __table_args__ = (
         # Unique constraint: one relationship per experience-segment pair
