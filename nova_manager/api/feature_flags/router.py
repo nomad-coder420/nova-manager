@@ -26,6 +26,9 @@ from nova_manager.components.feature_flags.crud import (
     FeatureVariantsCRUD,
 )
 from nova_manager.database.session import get_db
+from fastapi import Depends
+from nova_manager.components.auth.dependencies import RoleRequired
+from nova_manager.components.auth.enums import AppRole
 
 
 router = APIRouter()
@@ -33,7 +36,9 @@ router = APIRouter()
 
 @router.post(
     "/sync-nova-objects/",
-    dependencies=[Depends(RoleRequired([AppRole.ADMIN]))]
+    dependencies=[Depends(RoleRequired([
+        AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
 )
 async def sync_nova_objects(
     sync_request: NovaObjectSyncRequest, db: Session = Depends(get_db)
@@ -228,7 +233,9 @@ async def sync_nova_objects(
 @router.get(
     "/",
     response_model=List[FeatureFlagListItem],
-    dependencies=[Depends(RoleRequired([AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN]))]
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
 )
 async def list_feature_flags(
     organisation_id: str = Query(...),
@@ -270,7 +277,11 @@ async def list_feature_flags(
     return flags
 
 
-@router.get("/available/", response_model=List[FeatureFlagListItem])
+@router.get("/available/", response_model=List[FeatureFlagListItem],
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def list_available_feature_flags(
     organisation_id: str = Query(...),
     app_id: str = Query(...),
@@ -286,7 +297,11 @@ async def list_available_feature_flags(
     return flags
 
 
-@router.get("/{flag_pid}/", response_model=FeatureFlagResponse)
+@router.get("/{flag_pid}/", response_model=FeatureFlagResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def get_feature_flag(flag_pid: UUID, db: Session = Depends(get_db)):
     """Get feature flag by ID with all variants"""
     feature_flags_crud = FeatureFlagsCRUD(db)
@@ -298,7 +313,11 @@ async def get_feature_flag(flag_pid: UUID, db: Session = Depends(get_db)):
     return feature_flag
 
 
-@router.get("/{flag_pid}/details/", response_model=FeatureFlagDetailedResponse)
+@router.get("/{flag_pid}/details/", response_model=FeatureFlagDetailedResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def get_feature_flag_details(flag_pid: UUID, db: Session = Depends(get_db)):
     """Get feature flag with detailed information including usage statistics and experiences"""
     feature_flags_crud = FeatureFlagsCRUD(db)
@@ -310,7 +329,11 @@ async def get_feature_flag_details(flag_pid: UUID, db: Session = Depends(get_db)
     return feature_flag
 
 
-@router.post("/{flag_pid}/variants/", response_model=VariantResponse)
+@router.post("/{flag_pid}/variants/", response_model=VariantResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def create_variant(
     flag_pid: UUID, variant_data: VariantCreate, db: Session = Depends(get_db)
 ):
@@ -341,7 +364,11 @@ async def create_variant(
     return variant
 
 
-@router.get("/{flag_pid}/variants/", response_model=List[VariantResponse])
+@router.get("/{flag_pid}/variants/", response_model=List[VariantResponse],
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def get_feature_variants(flag_pid: UUID, db: Session = Depends(get_db)):
     """Get all variants for a feature flag"""
     feature_flags_crud = FeatureFlagsCRUD(db)
@@ -356,7 +383,11 @@ async def get_feature_variants(flag_pid: UUID, db: Session = Depends(get_db)):
     return variants
 
 
-@router.put("/variants/{variant_pid}/", response_model=VariantResponse)
+@router.put("/variants/{variant_pid}/", response_model=VariantResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def update_variant(
     variant_pid: UUID, variant_data: VariantCreate, db: Session = Depends(get_db)
 ):
