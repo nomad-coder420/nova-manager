@@ -8,7 +8,7 @@ class Campaigns(BaseOrganisationModel):
     __tablename__ = "campaigns"
 
     name: Mapped[str] = mapped_column(String, nullable=False)
-    description: Mapped[str] = mapped_column(String, nullable=False, server_default="")
+    description: Mapped[str] = mapped_column(String, nullable=False, default="")
     status: Mapped[str] = mapped_column(String, nullable=False)
 
     # TODO: Define this into proper columns later

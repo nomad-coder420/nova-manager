@@ -20,11 +20,11 @@ class FeatureFlags(BaseOrganisationModel):
     __tablename__ = "feature_flags"
 
     name: Mapped[str] = mapped_column(String, nullable=False)
-    description: Mapped[str] = mapped_column(String, nullable=False, server_default="")
+    description: Mapped[str] = mapped_column(String, nullable=False, default="")
     keys_config: Mapped[dict] = mapped_column(
         JSON, server_default=func.json("{}"), nullable=False
     )
-    type: Mapped[str] = mapped_column(String, nullable=False, server_default="")
+    type: Mapped[str] = mapped_column(String, nullable=False, default="")
     experience_id: Mapped[UUIDType | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("experiences.pid"),

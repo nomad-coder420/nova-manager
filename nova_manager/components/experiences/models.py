@@ -24,7 +24,7 @@ class Experiences(BaseOrganisationModel):
     __tablename__ = "experiences"
 
     name: Mapped[str] = mapped_column(String, nullable=False)
-    description: Mapped[str] = mapped_column(String, nullable=False, server_default="")
+    description: Mapped[str] = mapped_column(String, nullable=False, default="")
     status: Mapped[str] = mapped_column(String, nullable=False)
 
     # TODO: Verify these table args
@@ -73,7 +73,7 @@ class Personalisations(BaseModel):
     __tablename__ = "personalisations"
 
     name: Mapped[str] = mapped_column(String, nullable=False)
-    description: Mapped[str] = mapped_column(String, nullable=False, server_default="")
+    description: Mapped[str] = mapped_column(String, nullable=False, default="")
     experience_id: Mapped[UUIDType] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("experiences.pid"),
