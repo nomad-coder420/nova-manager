@@ -51,7 +51,7 @@ async def get_current_org_pid(
 # This is our "Level 1" dependency. It just checks if the user is logged in.
 # We use it for organisation-level endpoints.
 # It's just an alias to make the code's intent clearer.
-require_user_authentication = Depends(current_active_user)
+require_user_authentication = current_active_user
 
 
 class RoleRequired:
