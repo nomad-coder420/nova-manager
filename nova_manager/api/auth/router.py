@@ -82,7 +82,7 @@ async def switch_app(
 
 @router.get("/auth/apps", response_model=list[AppResponse], tags=["auth"])
 async def list_apps(
-    user: AuthUser = require_user_authentication,
+    user: AuthUser = Depends(require_user_authentication),
     session: AsyncSession = Depends(get_async_session),
 ):
     """List all apps the current authenticated user is a member of."""
@@ -98,7 +98,7 @@ async def list_apps(
 @router.post("/auth/organisations", response_model=OrganisationRead, tags=["auth"])
 async def create_organisation(
     data: OrganisationCreate,
-    user: AuthUser = require_user_authentication,
+    user: AuthUser = Depends(require_user_authentication),
     session: AsyncSession = Depends(get_async_session),
 ):
     """Create a new organisation and add the current user as owner."""
@@ -121,7 +121,7 @@ async def create_organisation(
 
 @router.get("/auth/organisations", response_model=list[OrganisationRead], tags=["auth"])
 async def list_organisations(
-    user: AuthUser = require_user_authentication,
+    user: AuthUser = Depends(require_user_authentication),
     session: AsyncSession = Depends(get_async_session),
 ):
     """List all organisations the current user belongs to."""
@@ -142,7 +142,7 @@ async def list_organisations(
 async def create_app(
     org_pid: str,
     data: AppCreate,
-    user: AuthUser = require_user_authentication,
+    user: AuthUser = Depends(require_user_authentication),
     session: AsyncSession = Depends(get_async_session),
 ):
     """Create a new app within the given organisation if user is owner/admin."""
