@@ -25,7 +25,7 @@ router = APIRouter()
 @router.post(
     "/",
     response_model=SegmentResponse,
-    dependencies=[Depends(RoleRequired([AppRole.ANALYST, AppRole.ADMIN]))]
+    dependencies=[Depends(RoleRequired([AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER]))]
 )
 async def create_segment(
     segment_data: SegmentCreate, 
@@ -75,7 +75,7 @@ async def create_segment(
 @router.get(
     "/",
     response_model=List[SegmentListResponse],
-    dependencies=[Depends(RoleRequired([AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN]))]
+    dependencies=[Depends(RoleRequired([AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER]))]
 )
 async def list_segments(
     organisation_id: str = Query(...),
@@ -110,7 +110,7 @@ async def list_segments(
 @router.get(
     "/{segment_pid}/",
     response_model=SegmentDetailedResponse,
-    dependencies=[Depends(RoleRequired([AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN]))]
+    dependencies=[Depends(RoleRequired([AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER]))]
 )
 async def get_segment(
     segment_pid: UUIDType,
@@ -130,7 +130,7 @@ async def get_segment(
 @router.put(
     "/{segment_pid}/",
     response_model=SegmentResponse,
-    dependencies=[Depends(RoleRequired([AppRole.DEVELOPER, AppRole.ADMIN]))]
+    dependencies=[Depends(RoleRequired([AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER]))]
 )
 async def update_segment(
     segment_pid: UUIDType,
@@ -177,7 +177,7 @@ async def update_segment(
 # TODO: Fix this. Shouldnt delete directly from db.
 @router.delete(
     "/{segment_pid}/",
-    dependencies=[Depends(RoleRequired([AppRole.ADMIN]))]
+    dependencies=[Depends(RoleRequired([AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER]))]
 )
 async def delete_segment(
     segment_pid: UUIDType,

@@ -5,6 +5,9 @@ from nova_manager.components.feature_flags.crud import FeatureFlagsCRUD
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
+from fastapi import Depends
+from nova_manager.components.auth.dependencies import RoleRequired
+from nova_manager.components.auth.enums import AppRole
 
 from nova_manager.api.experiences.request_response import (
     ExperienceClone,
@@ -32,7 +35,13 @@ from nova_manager.database.session import get_db
 router = APIRouter()
 
 
-@router.post("/", response_model=ExperienceResponse)
+@router.post(
+    "/",
+    response_model=ExperienceResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def create_experience(
     experience_data: ExperienceCreate, db: Session = Depends(get_db)
 ):
@@ -98,7 +107,13 @@ async def create_experience(
     return experience
 
 
-@router.get("/", response_model=List[ExperienceListResponse])
+@router.get(
+    "/",
+    response_model=List[ExperienceListResponse],
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def list_experiences(
     organisation_id: str = Query(...),
     app_id: str = Query(...),
@@ -162,7 +177,13 @@ async def list_experiences(
     return result
 
 
-@router.get("/{experience_pid}/", response_model=ExperienceDetailedResponse)
+@router.get(
+    "/{experience_pid}/",
+    response_model=ExperienceDetailedResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def get_experience(experience_pid: UUIDType, db: Session = Depends(get_db)):
     """Get experience by ID with full details"""
     experiences_crud = ExperiencesCRUD(db)
@@ -191,7 +212,13 @@ async def get_experience(experience_pid: UUIDType, db: Session = Depends(get_db)
     )
 
 
-@router.put("/{experience_pid}/", response_model=ExperienceResponse)
+@router.put(
+    "/{experience_pid}/",
+    response_model=ExperienceResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def update_experience(
     experience_pid: UUIDType,
     experience_update: ExperienceUpdate,
@@ -225,7 +252,13 @@ async def update_experience(
     return experience
 
 
-@router.put("/{experience_pid}/status/", response_model=ExperienceResponse)
+@router.put(
+    "/{experience_pid}/status/",
+    response_model=ExperienceResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def update_experience_status(
     experience_pid: UUIDType,
     status_update: ExperienceStatusUpdate,
@@ -241,7 +274,13 @@ async def update_experience_status(
     return experience
 
 
-@router.post("/{experience_pid}/clone/", response_model=ExperienceResponse)
+@router.post(
+    "/{experience_pid}/clone/",
+    response_model=ExperienceResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def clone_experience(
     experience_pid: UUIDType,
     clone_data: ExperienceClone,
