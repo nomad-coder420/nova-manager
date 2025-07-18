@@ -160,7 +160,7 @@ async def list_org_members(
 async def list_app_members(
     app_pid: str,
     user=Depends(require_user_authentication),
-    perm=Depends(RoleRequired([AppRole.ADMIN, AppRole.DEVELOPER, AppRole.ANALYST, AppRole.VIEWER])),
+    perm=Depends(RoleRequired([AppRole.OWNER, AppRole.ADMIN, AppRole.DEVELOPER, AppRole.ANALYST, AppRole.VIEWER])),
     session: AsyncSession = Depends(get_async_session),
 ):
     """List all members of an application"""
@@ -294,6 +294,7 @@ async def remove_app_member(
 async def leave_organisation(
     org_pid: str,
     current_user=Depends(require_user_authentication),
+    perm=Depends(OrganisationRoleRequired([OrganisationRole.OWNER, OrganisationRole.ADMIN, OrganisationRole.MEMBER])),
     session: AsyncSession = Depends(get_async_session),
 ):
     """Current user leaves an organization"""
@@ -326,6 +327,7 @@ async def leave_organisation(
 async def leave_application(
     app_pid: str,
     current_user=Depends(require_user_authentication),
+    perm=Depends(RoleRequired([AppRole.OWNER, AppRole.ADMIN, AppRole.DEVELOPER, AppRole.ANALYST, AppRole.VIEWER])),
     session: AsyncSession = Depends(get_async_session),
 ):
     """Current user leaves an application"""
