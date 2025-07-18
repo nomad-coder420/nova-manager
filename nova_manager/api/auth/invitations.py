@@ -48,7 +48,12 @@ async def invite_to_organisation(
     """
     Invite a user to an organisation (owner/admin only).
     """
-    # Create invitation
+    # Restrict org Admins from inviting OWNER or ADMIN roles
+    q_caller = select(UserOrganisationMembership).filter_by(organisation_id=org_pid, user_id=user.id)
+    res_caller = await session.execute(q_caller)
+    caller_mem = res_caller.scalars().first()
+    if caller_mem.role == OrganisationRole.ADMIN.value and data.role in (OrganisationRole.OWNER.value, OrganisationRole.ADMIN.value):
+        raise HTTPException(status_code=403, detail="Admins may only invite members or viewers to the organization")
     inv = Invitation(
         target_type=InvitationTargetType.ORG,
         target_id=org_pid,
@@ -174,15 +179,26 @@ async def change_org_member_role(
     user_id: int,
     data: RoleChangeRequest,
     user=Depends(require_user_authentication),
-    perm=Depends(OrganisationRoleRequired([OrganisationRole.OWNER])),
+    perm=Depends(OrganisationRoleRequired([OrganisationRole.OWNER, OrganisationRole.ADMIN])),
     session: AsyncSession = Depends(get_async_session),
 ):
     """Change role of an organization member"""
+    # Fetch target membership
     q = select(UserOrganisationMembership).filter_by(organisation_id=org_pid, user_id=user_id)
     result = await session.execute(q)
     membership = result.scalars().first()
     if not membership:
         raise HTTPException(status_code=404, detail="Membership not found")
+    # Fetch caller membership
+    q_c = select(UserOrganisationMembership).filter_by(organisation_id=org_pid, user_id=user.id)
+    res_c = await session.execute(q_c)
+    caller_mem = res_c.scalars().first()
+    # If caller is ADMIN, cannot change roles of OWNER or ADMIN, or promote to those roles
+    if caller_mem.role == OrganisationRole.ADMIN.value:
+        if membership.role in (OrganisationRole.OWNER.value, OrganisationRole.ADMIN.value) or \
+           data.role in (OrganisationRole.OWNER.value, OrganisationRole.ADMIN.value):
+            raise HTTPException(status_code=403, detail="Admins may only change member/viewer roles in the organization")
+    # Apply role change
     membership.role = data.role
     await session.flush()
     email = (await session.get(AuthUser, user_id)).email
@@ -194,15 +210,26 @@ async def change_app_member_role(
     user_id: int,
     data: RoleChangeRequest,
     user=Depends(require_user_authentication),
-    perm=Depends(RoleRequired([AppRole.OWNER])),
+    perm=Depends(RoleRequired([AppRole.OWNER, AppRole.ADMIN])),
     session: AsyncSession = Depends(get_async_session),
 ):
     """Change role of an application member"""
+    # Fetch target membership
     q = select(UserAppMembership).filter_by(app_id=app_pid, user_id=user_id)
     result = await session.execute(q)
     membership = result.scalars().first()
     if not membership:
         raise HTTPException(status_code=404, detail="Membership not found")
+    # Fetch caller membership
+    q_c = select(UserAppMembership).filter_by(app_id=app_pid, user_id=user.id)
+    res_c = await session.execute(q_c)
+    caller_mem = res_c.scalars().first()
+    # If caller is ADMIN, cannot change roles of OWNER or ADMIN, or promote to those roles
+    if caller_mem.role == AppRole.ADMIN.value:
+        if membership.role in (AppRole.OWNER.value, AppRole.ADMIN.value) or \
+           data.role in (AppRole.OWNER.value, AppRole.ADMIN.value):
+            raise HTTPException(status_code=403, detail="Admins may only change developer/analyst/viewer roles in the application")
+    # Apply role change
     membership.role = data.role
     await session.flush()
     email = (await session.get(AuthUser, user_id)).email
@@ -213,7 +240,7 @@ async def remove_org_member(
     org_pid: str,
     user_id: int,
     user=Depends(require_user_authentication),
-    perm=Depends(OrganisationRoleRequired([OrganisationRole.OWNER])),
+    perm=Depends(OrganisationRoleRequired([OrganisationRole.OWNER, OrganisationRole.ADMIN])),
     session: AsyncSession = Depends(get_async_session),
 ):
     """Remove a member from an organization"""
@@ -222,6 +249,12 @@ async def remove_org_member(
     membership = result.scalars().first()
     if not membership:
         raise HTTPException(status_code=404, detail="Membership not found")
+    # Restrict Admins from removing OWNER or ADMIN
+    q_c = select(UserOrganisationMembership).filter_by(organisation_id=org_pid, user_id=user.id)
+    res_c = await session.execute(q_c)
+    caller_mem = res_c.scalars().first()
+    if caller_mem.role == OrganisationRole.ADMIN.value and membership.role in (OrganisationRole.OWNER.value, OrganisationRole.ADMIN.value):
+        raise HTTPException(status_code=403, detail="Admins may only remove members or viewers from the organization")
     # Also remove user from all apps under this organisation
     from nova_manager.components.auth.models import App, UserAppMembership as UAM
     # Find app memberships where app.organisation_id == org_pid
@@ -239,7 +272,7 @@ async def remove_app_member(
     app_pid: str,
     user_id: int,
     user=Depends(require_user_authentication),
-    perm=Depends(RoleRequired([AppRole.OWNER])),
+    perm=Depends(RoleRequired([AppRole.OWNER, AppRole.ADMIN])),
     session: AsyncSession = Depends(get_async_session),
 ):
     """Remove a member from an application"""
@@ -248,6 +281,12 @@ async def remove_app_member(
     membership = result.scalars().first()
     if not membership:
         raise HTTPException(status_code=404, detail="Membership not found")
+    # Restrict Admins from removing OWNER or ADMIN
+    q_c = select(UserAppMembership).filter_by(app_id=app_pid, user_id=user.id)
+    res_c = await session.execute(q_c)
+    caller_mem = res_c.scalars().first()
+    if caller_mem.role == AppRole.ADMIN.value and membership.role in (AppRole.OWNER.value, AppRole.ADMIN.value):
+        raise HTTPException(status_code=403, detail="Admins may only remove developer/analyst/viewer roles from the application")
     await session.delete(membership)
     await session.flush()
 
@@ -318,6 +357,12 @@ async def invite_to_app(
     """
     Invite a user to an application (app owner/admin only).
     """
+    # Restrict app Admins from inviting OWNER or ADMIN roles
+    q_caller = select(UserAppMembership).filter_by(app_id=app_pid, user_id=user.id)
+    res_caller = await session.execute(q_caller)
+    caller_mem = res_caller.scalars().first()
+    if caller_mem.role == AppRole.ADMIN.value and data.role in (AppRole.OWNER.value, AppRole.ADMIN.value):
+        raise HTTPException(status_code=403, detail="Admins may only invite developers, analysts, or viewers to the application")
     inv = Invitation(
         target_type=InvitationTargetType.APP,
         target_id=app_pid,
