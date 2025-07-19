@@ -1,3 +1,4 @@
+import pandas as pd
 from datetime import datetime, timezone
 import json
 from typing import TypedDict
@@ -82,15 +83,15 @@ class BigQueryService:
             [{"event_name": event_name, "event_data": event_data}],
         )
 
-    def run_query(self, query: str, organisation_id: str, app_id: str):
+    def run_query(self, query: str):
         query_job = bq_client.query(query)
         rows = query_job.result()
 
-        # Convert to list of dictionaries for API responses
-        results = []
-        for row in rows:
-            results.append(dict(row))
+        result_df: pd.DataFrame = rows.to_dataframe()
 
-        # print(rows.to_dataframe())
+        result_json = result_df.to_json(orient="records")
 
-        return results
+        if result_json:
+            return json.loads(result_json)
+
+        return []

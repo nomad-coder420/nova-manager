@@ -14,7 +14,6 @@ class Metrics(BaseOrganisationModel):
     config: Mapped[dict] = mapped_column(
         JSON, nullable=False, server_default=func.json("{}")
     )
-    query: Mapped[str] = mapped_column(String, nullable=False, default="")
 
     __table_args__ = (
         # Index for common queries

@@ -1,7 +1,10 @@
+from datetime import datetime
+from typing import Dict, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from nova_manager.api.metrics.request_response import (
     CreateMetricRequest,
+    ComputeMetricRequest,
     MetricResponse,
     TrackEventRequest,
 )
@@ -29,21 +32,27 @@ async def track_event(event: TrackEventRequest):
     return {"success": True}
 
 
-@router.get("/{metric_id}/evaluate/", response_model=list[dict])
-async def evaluate_metric(metric_id: UUID, db: Session = Depends(get_db)):
-    metrics_crud = MetricsCRUD(db)
+@router.post("/compute/", response_model=List[Dict])
+async def compute_metric(compute_request: ComputeMetricRequest):
+    organisation_id = compute_request.organisation_id
+    app_id = compute_request.app_id
+    type = compute_request.type
+    config = compute_request.config
+    time_range = compute_request.time_range
+    granularity = compute_request.granularity
+
+    start = time_range.start
+    end = time_range.end
+
+    query_builder = QueryBuilder(organisation_id, app_id)
+
+    config.update(
+        {"time_range": {"start": start, "end": end}, "granularity": granularity}
+    )
+    query = query_builder.build_query(type, config)
+
     big_query_service = BigQueryService()
-
-    metric = metrics_crud.get_by_pid(metric_id)
-
-    if not metric:
-        raise HTTPException(status_code=404, detail="Metric not found")
-
-    query = metric.query
-    organisation_id = metric.organisation_id
-    app_id = metric.app_id
-
-    result = big_query_service.run_query(query, organisation_id, app_id)
+    result = big_query_service.run_query(query)
 
     return result
 
@@ -52,18 +61,14 @@ async def evaluate_metric(metric_id: UUID, db: Session = Depends(get_db)):
 async def create_metric(
     metric_data: CreateMetricRequest, db: Session = Depends(get_db)
 ):
-    organisation_id = metric_data.organisation_id
-    app_id = metric_data.app_id
-
-    query_builder = QueryBuilder(organisation_id, app_id)
     metrics_crud = MetricsCRUD(db)
 
+    organisation_id = metric_data.organisation_id
+    app_id = metric_data.app_id
     name = metric_data.name
     description = metric_data.description
     type = metric_data.type
     config = metric_data.config
-
-    query = query_builder.build_query(name, type, config)
 
     metric = metrics_crud.create(
         {
@@ -73,12 +78,13 @@ async def create_metric(
             "description": description,
             "type": type,
             "config": config,
-            "query": query,
         }
     )
 
+    return metric
 
-@router.get("/", response_model=list[MetricResponse])
+
+@router.get("/", response_model=List[MetricResponse])
 async def list_metric(
     organisation_id: str = Query(...),
     app_id: str = Query(...),
@@ -89,3 +95,15 @@ async def list_metric(
     metrics = metrics_crud.get_multi(organisation_id=organisation_id, app_id=app_id)
 
     return metrics
+
+
+@router.get("/{metric_id}/", response_model=MetricResponse)
+async def get_metric(metric_id: UUID, db: Session = Depends(get_db)):
+    metrics_crud = MetricsCRUD(db)
+
+    metric = metrics_crud.get_by_pid(metric_id)
+
+    if not metric:
+        raise HTTPException(status_code=404, detail="Metric not found")
+
+    return metric

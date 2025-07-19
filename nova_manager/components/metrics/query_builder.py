@@ -14,8 +14,6 @@ class EventFilter(TypedDict):
 
 
 class BaseMetricConfig(TypedDict):
-    time_range: TimeRange
-    time_granularity: Literal["hourly", "daily", "weekly", "monthly", "yearly", "none"]
     group_by: list[str]
     filters: dict
 
@@ -67,7 +65,6 @@ class QueryBuilder:
 
     def build_query(
         self,
-        metric_name: str,
         metric_type: Literal["count", "aggregation", "ratio", "retention"],
         metric_config: (
             CountMetricConfig
@@ -91,7 +88,7 @@ class QueryBuilder:
         raise Exception(f"Unsupported metric_type: {metric_type}")
 
     def _build_count_query(self, metric_config: CountMetricConfig):
-        time_granularity = metric_config.get("time_granularity")
+        granularity = metric_config.get("granularity")
         time_range = metric_config.get("time_range")
         group_by = metric_config.get("group_by") or []
         filters = metric_config.get("filters") or {}
@@ -139,7 +136,7 @@ class QueryBuilder:
         )
 
     def _build_aggregation_query(self, metric_config: AggregationMetricConfig):
-        time_granularity = metric_config.get("time_granularity")
+        granularity = metric_config.get("granularity")
         time_range = metric_config.get("time_range")
         group_by = metric_config.get("group_by") or []
         filters = metric_config.get("filters") or {}
@@ -188,7 +185,7 @@ class QueryBuilder:
         )
 
     def _build_ratio_query(self, metric_config: RatioMetricConfig):
-        time_granularity = metric_config.get("time_granularity")
+        granularity = metric_config.get("granularity")
         time_range = metric_config.get("time_range")
         group_by = metric_config.get("group_by") or []
         filters = metric_config.get("filters") or {}
@@ -202,7 +199,7 @@ class QueryBuilder:
                 "event_name": numerator_config.get("event_name"),
                 "distinct": False,
                 "time_range": time_range,
-                "time_granularity": time_granularity,
+                "granularity": granularity,
                 "group_by": group_by,
                 "filters": numerator_filters,
             }
@@ -217,7 +214,7 @@ class QueryBuilder:
                 "event_name": denominator_config.get("event_name"),
                 "distinct": False,
                 "time_range": time_range,
-                "time_granularity": time_granularity,
+                "granularity": granularity,
                 "group_by": group_by,
                 "filters": denominator_filters,
             }
@@ -251,7 +248,7 @@ class QueryBuilder:
 
     # TODO: Review this query
     def _build_retention_query(self, metric_config: RetentionMetricConfig):
-        time_granularity = metric_config.get("time_granularity")
+        granularity = metric_config.get("granularity")
         time_range = metric_config.get("time_range")
         group_by = metric_config.get("group_by") or []
         filters = metric_config.get("filters") or {}
@@ -264,7 +261,7 @@ class QueryBuilder:
         end = time_range.get("end") or ""
 
         window_sql = self._interval_sql(retention_window)
-        bucket_expr = self._time_bucket("e.server_ts", time_granularity)
+        bucket_expr = self._time_bucket("e.server_ts", granularity)
 
         # Initial cohort CTE
         initial_event_name = initial_event.get("event_name")
@@ -372,10 +369,10 @@ class QueryBuilder:
         return f"`{self.dataset_name}.event_{event_name}_props`"
 
     def _get_select_parts(self, metric_config: BaseMetricConfig):
-        time_granularity = metric_config.get("time_granularity")
+        granularity = metric_config.get("granularity")
         group_by = metric_config.get("group_by") or []
 
-        time_bucket = self._time_bucket("e.server_ts", time_granularity)
+        time_bucket = self._time_bucket("e.server_ts", granularity)
         group_selects = self._group_selects(group_by, "e")
 
         period_expression = f"{time_bucket} AS period"

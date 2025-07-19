@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Dict, Literal
 from uuid import UUID as UUIDType
 from datetime import datetime
 from pydantic import BaseModel
@@ -23,6 +23,7 @@ class CreateMetricRequest(BaseModel):
 
 
 class MetricResponse(BaseModel):
+    pid: UUIDType
     name: str
     description: str
     type: Literal["count", "aggregation", "ratio", "retention"]
@@ -30,3 +31,17 @@ class MetricResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class TimeRange(BaseModel):
+    start: str
+    end: str
+
+
+class ComputeMetricRequest(BaseModel):
+    organisation_id: str
+    app_id: str
+    type: Literal["count", "aggregation", "ratio", "retention"]
+    config: Dict[str, Any]
+    time_range: TimeRange
+    granularity: Literal["hourly", "daily", "weekly", "monthly", "yearly", "none"]
