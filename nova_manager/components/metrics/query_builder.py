@@ -14,6 +14,8 @@ class EventFilter(TypedDict):
 
 
 class BaseMetricConfig(TypedDict):
+    time_range: TimeRange
+    granularity: str
     group_by: list[str]
     filters: dict
 
@@ -101,7 +103,9 @@ class QueryBuilder:
 
         select_parts = self._get_select_parts(metric_config)
 
-        count_expression = "COUNT(DISTINCT e.user_id)" if distinct else "COUNT(*)"
+        count_expression = (
+            "COUNT(DISTINCT e.user_id) AS count" if distinct else "COUNT(*) AS count"
+        )
         select_parts.append(count_expression)
 
         select_expression = "SELECT " + ",\n    ".join(select_parts)
@@ -150,9 +154,8 @@ class QueryBuilder:
 
         select_parts = self._get_select_parts(metric_config)
 
-        metric_alias = f"{aggregation.lower()}_{property}"
         aggregation_expression = (
-            f"{aggregation.upper()}(CAST(p_val.value AS FLOAT64)) AS {metric_alias}"
+            f"{aggregation.upper()}(CAST(p_val.value AS FLOAT64)) AS aggregation"
         )
         select_parts.append(aggregation_expression)
 
@@ -223,7 +226,7 @@ class QueryBuilder:
         with_expression = f"WITH\n num AS (\n{numerator_expression}\n),\n den AS (\n{denominator_expression}\n)"
 
         select_parts = [
-            "num.period",
+            "num.period AS period",
             f"SAFE_DIVIDE(num.num_val, den.den_val) AS ratio",
         ] + [f"num.{c}" for c in group_by]
         select_expression = "SELECT " + ",\n    ".join(select_parts)
@@ -311,14 +314,14 @@ class QueryBuilder:
         )
 
         # Final select
-        select_cols = ["i.cohort_period"] + [f"i.{c}" for c in group_by]
+        select_cols = ["i.cohort_period AS period"] + [f"i.{c}" for c in group_by]
         select_list = ", ".join(select_cols)
         group_clause = ", ".join(select_cols)
 
         final_sql = (
             "SELECT\n    "
             + select_list
-            + ",\n    COUNT(DISTINCT i.user_id) AS cohort_users,\n    COUNT(DISTINCT IF(r.ret_ts IS NOT NULL, i.user_id, NULL)) AS retained_users,\n    SAFE_DIVIDE(COUNT(DISTINCT IF(r.ret_ts IS NOT NULL, i.user_id, NULL)), COUNT(DISTINCT i.user_id)) AS retention_rate"
+            + ",\n    COUNT(DISTINCT i.user_id) AS cohort_users,\n    COUNT(DISTINCT IF(r.ret_ts IS NOT NULL, i.user_id, NULL)) AS retained_users,\n    SAFE_DIVIDE(COUNT(DISTINCT IF(r.ret_ts IS NOT NULL, i.user_id, NULL)), COUNT(DISTINCT i.user_id)) AS retention"
             + f"\nFROM initial_cohort i\nLEFT JOIN return_events r\n  ON r.user_id = i.user_id\n  AND r.ret_ts > i.first_ts\n  AND r.ret_ts < TIMESTAMP_ADD(i.first_ts, {window_sql})\nGROUP BY {group_clause}\nORDER BY i.cohort_period"
         )
 
