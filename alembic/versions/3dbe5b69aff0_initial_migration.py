@@ -1,8 +1,8 @@
-"""Initial migration
+"""initial migration
 
-Revision ID: a7c04eab34a2
+Revision ID: 3dbe5b69aff0
 Revises: 
-Create Date: 2025-07-18 13:03:32.039042
+Create Date: 2025-07-19 22:16:58.196449
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'a7c04eab34a2'
+revision: str = '3dbe5b69aff0'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -70,7 +70,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_user_organisation_membership_pid'), 'user_organisation_membership', ['pid'], unique=True)
     op.create_table('campaigns',
     sa.Column('name', sa.String(), nullable=False),
-    sa.Column('description', sa.String(), server_default='', nullable=False),
+    sa.Column('description', sa.String(), nullable=False),
     sa.Column('status', sa.String(), nullable=False),
     sa.Column('rule_config', sa.JSON(), server_default=sa.text("json('{}')"), nullable=False),
     sa.Column('launched_at', sa.DateTime(timezone=True), nullable=False),
@@ -90,7 +90,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_campaigns_pid'), 'campaigns', ['pid'], unique=True)
     op.create_table('experiences',
     sa.Column('name', sa.String(), nullable=False),
-    sa.Column('description', sa.String(), server_default='', nullable=False),
+    sa.Column('description', sa.String(), nullable=False),
     sa.Column('status', sa.String(), nullable=False),
     sa.Column('organisation_id', sa.String(), nullable=False),
     sa.Column('app_id', sa.String(), nullable=False),
@@ -108,9 +108,28 @@ def upgrade() -> None:
     op.create_index('idx_experiences_status_org_app', 'experiences', ['status', 'organisation_id', 'app_id'], unique=False)
     op.create_index(op.f('ix_experiences_id'), 'experiences', ['id'], unique=True)
     op.create_index(op.f('ix_experiences_pid'), 'experiences', ['pid'], unique=True)
+    op.create_table('metrics',
+    sa.Column('name', sa.String(), nullable=False),
+    sa.Column('description', sa.String(), nullable=False),
+    sa.Column('type', sa.String(), nullable=False),
+    sa.Column('config', sa.JSON(), server_default=sa.text("json('{}')"), nullable=False),
+    sa.Column('organisation_id', sa.String(), nullable=False),
+    sa.Column('app_id', sa.String(), nullable=False),
+    sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
+    sa.Column('pid', sa.UUID(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('modified_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['app_id'], ['apps.pid'], ),
+    sa.ForeignKeyConstraint(['organisation_id'], ['organisations.pid'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index('idx_metrics_name_org_app', 'metrics', ['name', 'organisation_id', 'app_id'], unique=False)
+    op.create_index('idx_metrics_org_app', 'metrics', ['organisation_id', 'app_id'], unique=False)
+    op.create_index(op.f('ix_metrics_id'), 'metrics', ['id'], unique=True)
+    op.create_index(op.f('ix_metrics_pid'), 'metrics', ['pid'], unique=True)
     op.create_table('segments',
     sa.Column('name', sa.String(), nullable=False),
-    sa.Column('description', sa.String(), server_default='', nullable=False),
+    sa.Column('description', sa.String(), nullable=False),
     sa.Column('rule_config', sa.JSON(), server_default=sa.text("json('{}')"), nullable=False),
     sa.Column('organisation_id', sa.String(), nullable=False),
     sa.Column('app_id', sa.String(), nullable=False),
@@ -129,7 +148,7 @@ def upgrade() -> None:
     op.create_table('user_app_membership',
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('app_id', sa.String(), nullable=False),
-    sa.Column('role', sa.Enum('admin', 'developer', 'analyst', 'viewer', name='approle', native_enum=False), nullable=False),
+    sa.Column('role', sa.Enum('owner', 'admin', 'developer', 'analyst', 'viewer', name='approle', native_enum=False), nullable=False),
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('pid', sa.UUID(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
@@ -158,11 +177,28 @@ def upgrade() -> None:
     op.create_index('idx_users_user_id_org_app', 'users', ['user_id', 'organisation_id', 'app_id'], unique=False)
     op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=True)
     op.create_index(op.f('ix_users_pid'), 'users', ['pid'], unique=True)
+    op.create_table('experience_metrics',
+    sa.Column('experience_id', sa.UUID(), nullable=False),
+    sa.Column('metric_id', sa.UUID(), nullable=False),
+    sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
+    sa.Column('pid', sa.UUID(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('modified_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['experience_id'], ['experiences.pid'], ),
+    sa.ForeignKeyConstraint(['metric_id'], ['metrics.pid'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('experience_id', 'metric_id', name='uq_experience_metrics_exp_metric')
+    )
+    op.create_index(op.f('ix_experience_metrics_experience_id'), 'experience_metrics', ['experience_id'], unique=False)
+    op.create_index(op.f('ix_experience_metrics_id'), 'experience_metrics', ['id'], unique=True)
+    op.create_index(op.f('ix_experience_metrics_metric_id'), 'experience_metrics', ['metric_id'], unique=False)
+    op.create_index(op.f('ix_experience_metrics_pid'), 'experience_metrics', ['pid'], unique=True)
     op.create_table('experience_segments',
     sa.Column('experience_id', sa.UUID(), nullable=False),
     sa.Column('segment_id', sa.UUID(), nullable=False),
     sa.Column('target_percentage', sa.Integer(), nullable=False),
     sa.Column('priority', sa.Integer(), nullable=False),
+    sa.Column('last_updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('pid', sa.UUID(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
@@ -180,9 +216,9 @@ def upgrade() -> None:
     op.create_index(op.f('ix_experience_segments_pid'), 'experience_segments', ['pid'], unique=True)
     op.create_table('feature_flags',
     sa.Column('name', sa.String(), nullable=False),
-    sa.Column('description', sa.String(), server_default='', nullable=False),
+    sa.Column('description', sa.String(), nullable=False),
     sa.Column('keys_config', sa.JSON(), server_default=sa.text("json('{}')"), nullable=False),
-    sa.Column('type', sa.String(), server_default='', nullable=False),
+    sa.Column('type', sa.String(), nullable=False),
     sa.Column('experience_id', sa.UUID(), nullable=True),
     sa.Column('is_active', sa.Boolean(), nullable=False),
     sa.Column('organisation_id', sa.String(), nullable=False),
@@ -203,7 +239,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_feature_flags_pid'), 'feature_flags', ['pid'], unique=True)
     op.create_table('personalisations',
     sa.Column('name', sa.String(), nullable=False),
-    sa.Column('description', sa.String(), server_default='', nullable=False),
+    sa.Column('description', sa.String(), nullable=False),
     sa.Column('experience_id', sa.UUID(), nullable=False),
     sa.Column('is_default', sa.Boolean(), nullable=False),
     sa.Column('last_updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
@@ -218,6 +254,22 @@ def upgrade() -> None:
     op.create_index('idx_personalisations_experience_id', 'personalisations', ['experience_id'], unique=False)
     op.create_index(op.f('ix_personalisations_id'), 'personalisations', ['id'], unique=True)
     op.create_index(op.f('ix_personalisations_pid'), 'personalisations', ['pid'], unique=True)
+    op.create_table('experience_segment_metrics',
+    sa.Column('experience_segment_id', sa.UUID(), nullable=False),
+    sa.Column('metric_id', sa.UUID(), nullable=False),
+    sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
+    sa.Column('pid', sa.UUID(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('modified_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['experience_segment_id'], ['experience_segments.pid'], ),
+    sa.ForeignKeyConstraint(['metric_id'], ['metrics.pid'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('experience_segment_id', 'metric_id', name='uq_experience_segment_metrics_exp_seg_metric')
+    )
+    op.create_index(op.f('ix_experience_segment_metrics_experience_segment_id'), 'experience_segment_metrics', ['experience_segment_id'], unique=False)
+    op.create_index(op.f('ix_experience_segment_metrics_id'), 'experience_segment_metrics', ['id'], unique=True)
+    op.create_index(op.f('ix_experience_segment_metrics_metric_id'), 'experience_segment_metrics', ['metric_id'], unique=False)
+    op.create_index(op.f('ix_experience_segment_metrics_pid'), 'experience_segment_metrics', ['pid'], unique=True)
     op.create_table('experience_segment_personalisations',
     sa.Column('experience_segment_id', sa.UUID(), nullable=False),
     sa.Column('personalisation_id', sa.UUID(), nullable=False),
@@ -264,11 +316,29 @@ def upgrade() -> None:
     op.create_index('idx_feature_variants_templates_feature_id', 'feature_variants_templates', ['feature_id'], unique=False)
     op.create_index(op.f('ix_feature_variants_templates_id'), 'feature_variants_templates', ['id'], unique=True)
     op.create_index(op.f('ix_feature_variants_templates_pid'), 'feature_variants_templates', ['pid'], unique=True)
+    op.create_table('personalisation_metrics',
+    sa.Column('personalisation_id', sa.UUID(), nullable=False),
+    sa.Column('metric_id', sa.UUID(), nullable=False),
+    sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
+    sa.Column('pid', sa.UUID(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('modified_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['metric_id'], ['metrics.pid'], ),
+    sa.ForeignKeyConstraint(['personalisation_id'], ['personalisations.pid'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('personalisation_id', 'metric_id', name='uq_personalisation_metrics_pers_metric')
+    )
+    op.create_index(op.f('ix_personalisation_metrics_id'), 'personalisation_metrics', ['id'], unique=True)
+    op.create_index(op.f('ix_personalisation_metrics_metric_id'), 'personalisation_metrics', ['metric_id'], unique=False)
+    op.create_index(op.f('ix_personalisation_metrics_personalisation_id'), 'personalisation_metrics', ['personalisation_id'], unique=False)
+    op.create_index(op.f('ix_personalisation_metrics_pid'), 'personalisation_metrics', ['pid'], unique=True)
     op.create_table('user_experience_personalisation',
     sa.Column('user_id', sa.UUID(), nullable=False),
     sa.Column('experience_id', sa.UUID(), nullable=False),
     sa.Column('personalisation_id', sa.UUID(), nullable=True),
+    sa.Column('segment_name', sa.String(), nullable=True),
     sa.Column('segment_id', sa.UUID(), nullable=True),
+    sa.Column('experience_segment_id', sa.UUID(), nullable=True),
     sa.Column('experience_segment_personalisation_id', sa.UUID(), nullable=True),
     sa.Column('assigned_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('evaluation_reason', sa.String(), nullable=False),
@@ -282,7 +352,6 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['experience_id'], ['experiences.pid'], ),
     sa.ForeignKeyConstraint(['organisation_id'], ['organisations.pid'], ),
     sa.ForeignKeyConstraint(['personalisation_id'], ['personalisations.pid'], ),
-    sa.ForeignKeyConstraint(['segment_id'], ['segments.pid'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.pid'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('user_id', 'experience_id', 'organisation_id', 'app_id', name='uq_user_experience_user_exp_org_app')
@@ -322,6 +391,11 @@ def downgrade() -> None:
     op.drop_index('idx_user_experience_experience_org_app', table_name='user_experience_personalisation')
     op.drop_index('idx_user_experience_assigned_org_app', table_name='user_experience_personalisation')
     op.drop_table('user_experience_personalisation')
+    op.drop_index(op.f('ix_personalisation_metrics_pid'), table_name='personalisation_metrics')
+    op.drop_index(op.f('ix_personalisation_metrics_personalisation_id'), table_name='personalisation_metrics')
+    op.drop_index(op.f('ix_personalisation_metrics_metric_id'), table_name='personalisation_metrics')
+    op.drop_index(op.f('ix_personalisation_metrics_id'), table_name='personalisation_metrics')
+    op.drop_table('personalisation_metrics')
     op.drop_index(op.f('ix_feature_variants_templates_pid'), table_name='feature_variants_templates')
     op.drop_index(op.f('ix_feature_variants_templates_id'), table_name='feature_variants_templates')
     op.drop_index('idx_feature_variants_templates_feature_id', table_name='feature_variants_templates')
@@ -335,6 +409,11 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_experience_segment_personalisations_id'), table_name='experience_segment_personalisations')
     op.drop_index(op.f('ix_experience_segment_personalisations_experience_segment_id'), table_name='experience_segment_personalisations')
     op.drop_table('experience_segment_personalisations')
+    op.drop_index(op.f('ix_experience_segment_metrics_pid'), table_name='experience_segment_metrics')
+    op.drop_index(op.f('ix_experience_segment_metrics_metric_id'), table_name='experience_segment_metrics')
+    op.drop_index(op.f('ix_experience_segment_metrics_id'), table_name='experience_segment_metrics')
+    op.drop_index(op.f('ix_experience_segment_metrics_experience_segment_id'), table_name='experience_segment_metrics')
+    op.drop_table('experience_segment_metrics')
     op.drop_index(op.f('ix_personalisations_pid'), table_name='personalisations')
     op.drop_index(op.f('ix_personalisations_id'), table_name='personalisations')
     op.drop_index('idx_personalisations_experience_id', table_name='personalisations')
@@ -350,6 +429,11 @@ def downgrade() -> None:
     op.drop_index('idx_experience_segments_priority', table_name='experience_segments')
     op.drop_index('idx_experience_segments_experience_id', table_name='experience_segments')
     op.drop_table('experience_segments')
+    op.drop_index(op.f('ix_experience_metrics_pid'), table_name='experience_metrics')
+    op.drop_index(op.f('ix_experience_metrics_metric_id'), table_name='experience_metrics')
+    op.drop_index(op.f('ix_experience_metrics_id'), table_name='experience_metrics')
+    op.drop_index(op.f('ix_experience_metrics_experience_id'), table_name='experience_metrics')
+    op.drop_table('experience_metrics')
     op.drop_index(op.f('ix_users_pid'), table_name='users')
     op.drop_index(op.f('ix_users_id'), table_name='users')
     op.drop_index('idx_users_user_id_org_app', table_name='users')
@@ -362,6 +446,11 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_segments_id'), table_name='segments')
     op.drop_index('idx_segments_org_app', table_name='segments')
     op.drop_table('segments')
+    op.drop_index(op.f('ix_metrics_pid'), table_name='metrics')
+    op.drop_index(op.f('ix_metrics_id'), table_name='metrics')
+    op.drop_index('idx_metrics_org_app', table_name='metrics')
+    op.drop_index('idx_metrics_name_org_app', table_name='metrics')
+    op.drop_table('metrics')
     op.drop_index(op.f('ix_experiences_pid'), table_name='experiences')
     op.drop_index(op.f('ix_experiences_id'), table_name='experiences')
     op.drop_index('idx_experiences_status_org_app', table_name='experiences')
