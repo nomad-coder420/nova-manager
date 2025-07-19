@@ -372,38 +372,11 @@ class GetUserFeatureVariantFlowAsync:
             cached_data = self.experience_personalisation_map[experience_id]
             return cached_data, True
 
-        else:
-            experience_segment = self._evaluate_experience_segments(
-                user, experience_id, experience_segments
-            )
+        experience_segment = self._evaluate_experience_segments(
+            user, experience_id, experience_segments
+        )
 
-            if experience_segment:
-                segment = experience_segment.segment
-
-                selected_segment_personalisation = (
-                    self._evaluate_segment_personalisations(
-                        user,
-                        experience_id,
-                        segment,
-                        experience_segment.personalisations,
-                    )
-                )
-
-                if selected_segment_personalisation:
-                    personalisation = selected_segment_personalisation.personalisation
-
-                    cache_data = ExperiencePersonalisationCache(
-                        personalisation=personalisation,
-                        segment_id=segment.pid,
-                        segment_name=segment.name,
-                        experience_segment_id=experience_segment.pid,
-                        experience_segment_personalisation_id=selected_segment_personalisation.pid,
-                    )
-                    self.experience_personalisation_map[experience_id] = cache_data
-
-                    return cache_data, False
-
-        null_assignment = ExperiencePersonalisationCache(
+        experience_personalisation = ExperiencePersonalisationCache(
             personalisation=None,
             segment_id=None,
             segment_name=None,
@@ -411,7 +384,32 @@ class GetUserFeatureVariantFlowAsync:
             experience_segment_personalisation_id=None,
         )
 
-        return null_assignment, False
+        if experience_segment:
+            segment = experience_segment.segment
+
+            selected_segment_personalisation = (
+                self._evaluate_segment_personalisations(
+                    user,
+                    experience_id,
+                    segment,
+                    experience_segment.personalisations,
+                )
+            )
+
+            if selected_segment_personalisation:
+                personalisation = selected_segment_personalisation.personalisation
+
+                experience_personalisation = ExperiencePersonalisationCache(
+                    personalisation=personalisation,
+                    segment_id=segment.pid,
+                    segment_name=segment.name,
+                    experience_segment_id=experience_segment.pid,
+                    experience_segment_personalisation_id=selected_segment_personalisation.pid,
+                )
+
+        self.experience_personalisation_map[experience_id] = experience_personalisation
+
+        return experience_personalisation, False
 
     def _evaluate_experience_segments(
         self,
