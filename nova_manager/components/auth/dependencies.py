@@ -69,7 +69,7 @@ class RoleRequired:
 
     async def __call__(
         self,
-        app_pid: str,
+        app_pid: str = Depends(get_current_app_pid),
         payload: dict = Depends(get_token_payload),
         session: AsyncSession = Depends(get_async_session),
     ) -> None:
