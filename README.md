@@ -13,3 +13,5 @@ A FastAPI-based application for managing nova experiences and campaigns.
 ## Installation
 
 See the Docker setup for containerized deployment.
+
+uvicorn nova_manager.main:app --reload   
