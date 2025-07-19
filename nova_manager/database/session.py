@@ -31,5 +31,12 @@ def get_db():
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
-        async with session.begin():
+        try:
+            # Provide a transactional session to endpoints
             yield session
+            # Commit at the end of request processing
+            await session.commit()
+        except Exception:
+            # Rollback if any exception occurs
+            await session.rollback()
+            raise
