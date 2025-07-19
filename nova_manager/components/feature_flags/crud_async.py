@@ -8,6 +8,7 @@ from nova_manager.components.experiences.models import (
     ExperienceSegments,
     Personalisations,
     PersonalisationFeatureVariants,
+    ExperienceSegmentPersonalisations,
 )
 
 
@@ -58,7 +59,8 @@ class FeatureFlagsAsyncCRUD:
             # Load experience segment personalisations
             selectinload(FeatureFlags.experience)
             .selectinload(Experiences.experience_segments)
-            .selectinload(ExperienceSegments.personalisations),
+            .selectinload(ExperienceSegments.personalisations)
+            .selectinload(ExperienceSegmentPersonalisations.personalisation),
             # Also load personalisations directly from experience
             selectinload(FeatureFlags.experience)
             .selectinload(Experiences.personalisations)
