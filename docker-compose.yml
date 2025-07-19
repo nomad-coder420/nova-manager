@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  nova-manager:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://xg-nova-backend:xg-nova-backend@34.70.184.78:5432/nova
+      - PYTHONPATH=/app
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    networks:
+      - nova-network
+
+networks:
+  nova-network:
+    driver: bridge
