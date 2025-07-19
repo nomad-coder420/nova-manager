@@ -9,6 +9,27 @@ from nova_manager.api.auth.request_response import (
     AppResponse,
 )
 
+from datetime import datetime, timedelta  # noqa: F811
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from nova_manager.components.auth.dependencies import (
+    get_token_payload,
+    require_user_authentication,
+)
+from nova_manager.core.log import logger
+from nova_manager.components.auth.enums import OrganisationRole, AppRole
+from nova_manager.components.auth.models import (
+    UserAppMembership,
+    UserOrganisationMembership,
+    Organisation,
+    App,
+    AuthUser,
+)
+from nova_manager.components.auth.manager import get_jwt_strategy
+from nova_manager.database.session import get_async_session
+from jose import jwt, JWTError
+
 router = APIRouter()
 
 # Auth routes (login, logout)
@@ -39,24 +60,6 @@ router.include_router(
     tags=["auth"],
 )
 
-from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from nova_manager.components.auth.dependencies import (
-    get_token_payload,
-    require_user_authentication,
-)
-from nova_manager.core.log import logger
-from nova_manager.components.auth.enums import OrganisationRole, AppRole
-from nova_manager.components.auth.models import (
-    UserAppMembership,
-    UserOrganisationMembership,
-    Organisation,
-    App,
-    AuthUser,
-)
-from nova_manager.components.auth.manager import get_jwt_strategy
-from nova_manager.database.session import get_async_session
 
 
 class TokenResponse(BaseModel):
@@ -66,18 +69,29 @@ class TokenResponse(BaseModel):
 @router.post("/auth/token/app/{app_pid}", response_model=TokenResponse, tags=["auth"])
 async def switch_app(
     app_pid: str,
-    payload: dict = Depends(get_token_payload),
+    user: AuthUser = Depends(require_user_authentication),
     session: AsyncSession = Depends(get_async_session),
 ):
     """Issue a new JWT scoped to the specified app_pid if the user is a member."""
-    user_id = int(payload.get("sub"))
+    user_id = user.id
     q = select(UserAppMembership).filter_by(user_id=user_id, app_id=app_pid)
     result = await session.execute(q)
     membership = result.scalars().first()
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this app")
-    new_payload = {**payload, "app_pid": app_pid}
-    token = get_jwt_strategy().write_token(new_payload)
+    new_payload = {"sub": str(user_id), "app_pid": app_pid}
+
+    strategy = get_jwt_strategy()
+    now = datetime.utcnow()
+    # Include the `aud` claim so fastapi-users read_token recognizes this token
+    payload = {
+        "sub": str(user_id),
+        "iat": now,
+        "exp": now + timedelta(seconds=strategy.lifetime_seconds),
+        "aud": "jwt",  # Required for read_token verification; matches token_audience
+        "app_pid": app_pid,
+    }
+    token = jwt.encode(payload, strategy.secret, algorithm="HS256")
     return {"access_token": token}
 
 @router.get("/auth/apps", response_model=list[AppResponse], tags=["auth"])

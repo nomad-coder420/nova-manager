@@ -1,28 +1,34 @@
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, logger
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from nova_manager.components.auth.manager import get_jwt_strategy, current_active_user
+from nova_manager.components.auth.manager import UserManager, get_jwt_strategy, current_active_user, get_user_manager
 from nova_manager.database.session import get_async_session
 from nova_manager.components.auth.models import UserAppMembership, AppRole
 from nova_manager.components.auth.models import UserOrganisationMembership
 from nova_manager.components.auth.enums import OrganisationRole
+from jose import jwt,JWTError
 
 security = HTTPBearer()
 
 async def get_token_payload(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> dict:
-    """
-    Decode JWT and return its payload.
-    """
     token = credentials.credentials
+    strategy = get_jwt_strategy()
+
     try:
-        data = get_jwt_strategy().read_token(token)
-        return data
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid authentication token")
+        # use the same secret/alg/audience as fastapi-users
+        return jwt.decode(
+            token,
+            strategy.secret,
+            algorithms=[strategy.algorithm],
+            audience="jwt",
+        )
+    except JWTError as e:
+        logger.error(f"JWT decode failed: {e}")
+        raise HTTPException(status_code=401, detail="Invalid authentication token") from e
 
 async def get_current_app_pid(
     payload: dict = Depends(get_token_payload),
