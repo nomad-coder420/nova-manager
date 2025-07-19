@@ -14,7 +14,8 @@ from nova_manager.components.feature_flags.models import *
 from nova_manager.components.segments.models import *
 from nova_manager.components.experiences.models import *
 from nova_manager.components.user_experience.models import *
-from nova_manager.components.campaigns.models import *
+# from nova_manager.components.campaigns.models import *
+from nova_manager.components.metrics.models import *
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
