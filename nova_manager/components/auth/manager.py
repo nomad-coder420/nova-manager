@@ -9,6 +9,8 @@ from fastapi_users.authentication import (
     JWTStrategy,
 )
 from fastapi_users.db import SQLAlchemyUserDatabase
+from datetime import datetime, timedelta
+from typing import Any
 
 from nova_manager.api.auth.request_response import UserCreate, UserRead, UserUpdate
 from nova_manager.components.auth.database import get_user_db
@@ -44,8 +46,13 @@ bearer_transport = BearerTransport(tokenUrl="api/v1/auth/login")
 
 def get_jwt_strategy() -> JWTStrategy:
     if DEBUG:
-        logger.debug(f"JWTStrategy initialized with SECRET_KEY: '{SECRET_KEY[:5]}...'")
-    return JWTStrategy(secret=SECRET_KEY, lifetime_seconds=3600)
+        logger.debug(f"JWTStrategy initialized with SECRET_KEY: '{SECRET_KEY[:5]}...'" )
+    # Use the standard JWTStrategy from fastapi-users for login/register
+    return JWTStrategy(
+        secret=SECRET_KEY,
+        lifetime_seconds=3600,
+        token_audience=["jwt"]
+        )
 
 
 auth_backend = AuthenticationBackend(
