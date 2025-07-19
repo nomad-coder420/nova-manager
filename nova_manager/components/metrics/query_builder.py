@@ -365,11 +365,16 @@ class QueryBuilder:
     def _dataset_name(self) -> str:
         return f"org_{self.organisation_id}_app_{self.app_id}"
 
+    def _sanitized_string(self, s: str):
+        return re.sub(r"[^a-zA-Z0-9_]", "_", s)
+
     def _event_table_name(self, event_name: str) -> str:
-        return f"`{self.dataset_name}.events_{event_name}`"
+        safe_event_name = self._sanitized_string(event_name)
+        return f"`{self.dataset_name}.events_{safe_event_name}`"
 
     def _event_props_table_name(self, event_name: str) -> str:
-        return f"`{self.dataset_name}.event_{event_name}_props`"
+        safe_event_name = self._sanitized_string(event_name)
+        return f"`{self.dataset_name}.event_{safe_event_name}_props`"
 
     def _get_select_parts(self, metric_config: BaseMetricConfig):
         granularity = metric_config.get("granularity")
