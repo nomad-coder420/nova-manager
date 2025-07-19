@@ -24,6 +24,7 @@ class BaseCRUD:
         limit: int = 100,
         organisation_id: Optional[str] = None,
         app_id: Optional[str] = None,
+        **kwargs,
     ) -> List[Any]:
         """Get multiple records with pagination and filtering"""
         query = self.db.query(self.model)
@@ -33,6 +34,9 @@ class BaseCRUD:
             query = query.filter(self.model.organisation_id == organisation_id)
         if hasattr(self.model, "app_id") and app_id:
             query = query.filter(self.model.app_id == app_id)
+
+        for kwarg in kwargs:
+            query = query.filter(getattr(self.model, kwarg) == kwargs[kwarg])
 
         return query.offset(skip).limit(limit).all()
 

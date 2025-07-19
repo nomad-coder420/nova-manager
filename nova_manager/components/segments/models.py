@@ -9,7 +9,7 @@ class Segments(BaseOrganisationModel):
     __tablename__ = "segments"
 
     name: Mapped[str] = mapped_column(String, nullable=False)
-    description: Mapped[str] = mapped_column(String, nullable=False, server_default="")
+    description: Mapped[str] = mapped_column(String, nullable=False, default="")
 
     # TODO: Define this into proper columns later
     rule_config: Mapped[dict] = mapped_column(
