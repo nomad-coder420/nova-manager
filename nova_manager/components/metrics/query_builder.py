@@ -116,7 +116,7 @@ class QueryBuilder:
         wheres, where_joins = self._wheres_and_joins(event_name, filters)
 
         where_expression = (
-            f"WHERE e.server_ts >= '{start}' AND e.server_ts < '{end}'"
+            f"WHERE e.client_ts >= '{start}' AND e.client_ts < '{end}'"
             + (" AND " + " AND ".join(wheres) if wheres else "")
         )
 
@@ -167,7 +167,7 @@ class QueryBuilder:
         wheres, where_joins = self._wheres_and_joins(event_name, filters)
 
         where_expression = (
-            f"WHERE e.server_ts >= '{start}' AND e.server_ts < '{end}'"
+            f"WHERE e.client_ts >= '{start}' AND e.client_ts < '{end}'"
             + (" AND " + " AND ".join(wheres) if wheres else "")
         )
 
@@ -264,7 +264,7 @@ class QueryBuilder:
         end = time_range.get("end") or ""
 
         window_sql = self._interval_sql(retention_window)
-        bucket_expr = self._time_bucket("e.server_ts", granularity)
+        bucket_expr = self._time_bucket("e.client_ts", granularity)
 
         # Initial cohort CTE
         initial_event_name = initial_event.get("event_name")
@@ -282,7 +282,7 @@ class QueryBuilder:
             + g_selects
             + [
                 "e.user_id AS user_id",
-                "MIN(e.server_ts) AS first_ts",
+                "MIN(e.client_ts) AS first_ts",
             ]
         )
 
@@ -293,7 +293,7 @@ class QueryBuilder:
             + ",\n        ".join(init_select_cols)
             + f"\n    FROM {self._event_table_name(initial_event_name)} AS e\n    "
             + "\n    ".join(g_joins + f_joins_init)
-            + f"\n    WHERE e.server_ts >= '{start}' AND e.server_ts < '{end}'{' AND ' + ' AND '.join(f_where_init) if f_where_init else ''}\n"
+            + f"\n    WHERE e.client_ts >= '{start}' AND e.client_ts < '{end}'{' AND ' + ' AND '.join(f_where_init) if f_where_init else ''}\n"
             + f"    GROUP BY {init_group_clause}\n)"
         )
 
@@ -306,11 +306,11 @@ class QueryBuilder:
             return_event_name, return_filters
         )
         ret_cte = (
-            "return_events AS (\n    SELECT\n        r.user_id AS user_id,\n        r.server_ts AS ret_ts\n    FROM "
+            "return_events AS (\n    SELECT\n        r.user_id AS user_id,\n        r.client_ts AS ret_ts\n    FROM "
             + self._event_table_name(return_event_name)
             + " AS r\n    "
             + "\n    ".join(f_joins_ret)
-            + f"\n    WHERE r.server_ts >= '{start}' AND r.server_ts < '{end}'{' AND ' + ' AND '.join(f_where_ret) if f_where_ret else ''}\n)"
+            + f"\n    WHERE r.client_ts >= '{start}' AND r.client_ts < '{end}'{' AND ' + ' AND '.join(f_where_ret) if f_where_ret else ''}\n)"
         )
 
         # Final select
@@ -380,7 +380,7 @@ class QueryBuilder:
         granularity = metric_config.get("granularity")
         group_by = metric_config.get("group_by") or []
 
-        time_bucket = self._time_bucket("e.server_ts", granularity)
+        time_bucket = self._time_bucket("e.client_ts", granularity)
         group_selects = self._group_selects(group_by, "e")
 
         period_expression = f"{time_bucket} AS period"
