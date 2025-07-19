@@ -18,11 +18,17 @@ from nova_manager.api.campaigns.request_response import (
 )
 from nova_manager.components.campaigns.crud import CampaignsCRUD
 from nova_manager.database.session import get_db
+from nova_manager.components.auth.dependencies import RoleRequired
+from nova_manager.components.auth.enums import AppRole
 
 router = APIRouter()
 
 
-@router.post("/", response_model=CampaignResponse)
+@router.post("/", response_model=CampaignResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def create_campaign(campaign_data: CampaignCreate, db: Session = Depends(get_db)):
     """Create a new campaign"""
     try:
@@ -70,7 +76,11 @@ async def create_campaign(campaign_data: CampaignCreate, db: Session = Depends(g
         )
 
 
-@router.get("/", response_model=List[CampaignListResponse])
+@router.get("/", response_model=List[CampaignListResponse],
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def list_campaigns(
     organisation_id: str = Query(...),
     app_id: str = Query(...),
@@ -113,7 +123,11 @@ async def list_campaigns(
     return result
 
 
-@router.get("/{campaign_pid}/", response_model=CampaignDetailedResponse)
+@router.get("/{campaign_pid}/", response_model=CampaignDetailedResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def get_campaign(campaign_pid: UUIDType, db: Session = Depends(get_db)):
     """Get campaign by ID with detailed information"""
     campaigns_crud = CampaignsCRUD(db)
@@ -125,7 +139,11 @@ async def get_campaign(campaign_pid: UUIDType, db: Session = Depends(get_db)):
     return campaign
 
 
-@router.put("/{campaign_pid}/", response_model=CampaignResponse)
+@router.put("/{campaign_pid}/", response_model=CampaignResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def update_campaign(
     campaign_pid: UUIDType,
     campaign_update: CampaignUpdate,
@@ -167,7 +185,11 @@ async def update_campaign(
     return updated_campaign
 
 
-@router.put("/{campaign_pid}/status", response_model=CampaignResponse)
+@router.put("/{campaign_pid}/status", response_model=CampaignResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def update_campaign_status(
     campaign_pid: UUIDType,
     status_update: CampaignStatusUpdate,
@@ -192,7 +214,11 @@ async def update_campaign_status(
     return updated_campaign
 
 
-@router.post("/{campaign_pid}/clone", response_model=CampaignResponse)
+@router.post("/{campaign_pid}/clone", response_model=CampaignResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def clone_campaign(
     campaign_pid: UUIDType,
     clone_request: CampaignCloneRequest,
@@ -231,7 +257,11 @@ async def clone_campaign(
     return cloned_campaign
 
 
-@router.get("/{campaign_pid}/stats", response_model=CampaignUsageStats)
+@router.get("/{campaign_pid}/stats", response_model=CampaignUsageStats,
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def get_campaign_stats(campaign_pid: UUIDType, db: Session = Depends(get_db)):
     """Get campaign usage statistics"""
     campaigns_crud = CampaignsCRUD(db)
@@ -243,7 +273,11 @@ async def get_campaign_stats(campaign_pid: UUIDType, db: Session = Depends(get_d
     return stats
 
 
-@router.delete("/{campaign_pid}/")
+@router.delete("/{campaign_pid}/",
+    dependencies=[Depends(RoleRequired([
+        AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def delete_campaign(
     campaign_pid: UUIDType,
     force: bool = Query(False, description="Force delete even if used in experiences"),
@@ -268,7 +302,11 @@ async def delete_campaign(
     return {"message": "Campaign deleted successfully"}
 
 
-@router.get("/status/{status}", response_model=List[CampaignListResponse])
+@router.get("/status/{status}", response_model=List[CampaignListResponse],
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def get_campaigns_by_status(
     status: str,
     organisation_id: str = Query(...),
@@ -307,7 +345,11 @@ async def get_campaigns_by_status(
     return result
 
 
-@router.get("/launched-after/{date}", response_model=List[CampaignListResponse])
+@router.get("/launched-after/{date}", response_model=List[CampaignListResponse],
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def get_campaigns_launched_after(
     date: datetime,
     organisation_id: str = Query(...),

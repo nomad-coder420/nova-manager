@@ -1,6 +1,7 @@
 import logging
+from nova_manager.core.config import DEBUG
 
-LOG_LEVEL = logging.INFO
+LOG_LEVEL = logging.DEBUG if DEBUG else logging.INFO
 
 
 def configure_logging():
