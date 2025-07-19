@@ -35,7 +35,11 @@ class FeatureFlags(BaseOrganisationModel):
     __table_args__ = (
         # Unique constraint: feature flag name must be unique within organization + app
         UniqueConstraint(
-            "name", "organisation_id", "app_id", name="uq_feature_flags_name_org_app"
+            "name",
+            "experience_id",
+            "organisation_id",
+            "app_id",
+            name="uq_feature_flags_name_experience_org_app",
         ),
         # Index for common queries
         Index(

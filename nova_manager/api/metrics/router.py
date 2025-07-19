@@ -38,17 +38,8 @@ async def compute_metric(compute_request: ComputeMetricRequest):
     app_id = compute_request.app_id
     type = compute_request.type
     config = compute_request.config
-    time_range = compute_request.time_range
-    granularity = compute_request.granularity
-
-    start = time_range.start
-    end = time_range.end
 
     query_builder = QueryBuilder(organisation_id, app_id)
-
-    config.update(
-        {"time_range": {"start": start, "end": end}, "granularity": granularity}
-    )
     query = query_builder.build_query(type, config)
 
     big_query_service = BigQueryService()

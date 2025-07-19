@@ -1,5 +1,5 @@
-from datetime import date
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Literal, TypedDict
 
 
@@ -14,7 +14,7 @@ class EventFilter(TypedDict):
 
 
 class BaseMetricConfig(TypedDict):
-    time_range: TimeRange
+    time_range: TimeRange | str
     granularity: str
     group_by: list[str]
     filters: dict
@@ -54,6 +54,8 @@ UNIT_SQL_MAP = {
     "h": "HOUR",
     "d": "DAY",
     "w": "WEEK",
+    "m": "MONTH",
+    "y": "YEAR",
 }
 
 CORE_FIELDS = {"event_name", "user_id", "org_id", "app_id"}
@@ -90,7 +92,7 @@ class QueryBuilder:
         raise Exception(f"Unsupported metric_type: {metric_type}")
 
     def _build_count_query(self, metric_config: CountMetricConfig):
-        granularity = metric_config.get("granularity")
+        granularity = metric_config.get("granularity") or "none"
         time_range = metric_config.get("time_range")
         group_by = metric_config.get("group_by") or []
         filters = metric_config.get("filters") or {}
@@ -98,8 +100,7 @@ class QueryBuilder:
         event_name = metric_config.get("event_name") or ""
         distinct = metric_config.get("distinct") or False
 
-        start = time_range.get("start") or ""
-        end = time_range.get("end") or ""
+        start, end = self._get_start_end(time_range)
 
         select_parts = self._get_select_parts(metric_config)
 
@@ -140,7 +141,7 @@ class QueryBuilder:
         )
 
     def _build_aggregation_query(self, metric_config: AggregationMetricConfig):
-        granularity = metric_config.get("granularity")
+        granularity = metric_config.get("granularity") or "none"
         time_range = metric_config.get("time_range")
         group_by = metric_config.get("group_by") or []
         filters = metric_config.get("filters") or {}
@@ -149,8 +150,7 @@ class QueryBuilder:
         aggregation = metric_config.get("aggregation")
         property = metric_config.get("property")
 
-        start = time_range.get("start") or ""
-        end = time_range.get("end") or ""
+        start, end = self._get_start_end(time_range)
 
         select_parts = self._get_select_parts(metric_config)
 
@@ -164,6 +164,10 @@ class QueryBuilder:
         table_name = self._event_table_name(event_name)
         from_expression = f"FROM {table_name} AS e"
 
+        property_join_expression = self._props_join_expression(
+            event_name, "p_val", property
+        )
+
         wheres, where_joins = self._wheres_and_joins(event_name, filters)
 
         where_expression = (
@@ -175,7 +179,9 @@ class QueryBuilder:
             event_name, group_by
         )
 
-        join_expression = "\n".join(where_joins + group_props_join_expression)
+        join_expression = "\n".join(
+            where_joins + group_props_join_expression + property_join_expression
+        )
 
         group_by_expression = "GROUP BY " + ", ".join(["period"] + group_by)
 
@@ -188,7 +194,7 @@ class QueryBuilder:
         )
 
     def _build_ratio_query(self, metric_config: RatioMetricConfig):
-        granularity = metric_config.get("granularity")
+        granularity = metric_config.get("granularity") or "none"
         time_range = metric_config.get("time_range")
         group_by = metric_config.get("group_by") or []
         filters = metric_config.get("filters") or {}
@@ -251,7 +257,7 @@ class QueryBuilder:
 
     # TODO: Review this query
     def _build_retention_query(self, metric_config: RetentionMetricConfig):
-        granularity = metric_config.get("granularity")
+        granularity = metric_config.get("granularity") or "none"
         time_range = metric_config.get("time_range")
         group_by = metric_config.get("group_by") or []
         filters = metric_config.get("filters") or {}
@@ -260,8 +266,7 @@ class QueryBuilder:
         return_event = metric_config.get("return_event")
         retention_window = metric_config.get("retention_window")
 
-        start = time_range.get("start") or ""
-        end = time_range.get("end") or ""
+        start, end = self._get_start_end(time_range)
 
         window_sql = self._interval_sql(retention_window)
         bucket_expr = self._time_bucket("e.client_ts", granularity)
@@ -377,7 +382,7 @@ class QueryBuilder:
         return f"`{self.dataset_name}.event_{safe_event_name}_props`"
 
     def _get_select_parts(self, metric_config: BaseMetricConfig):
-        granularity = metric_config.get("granularity")
+        granularity = metric_config.get("granularity") or "none"
         group_by = metric_config.get("group_by") or []
 
         time_bucket = self._time_bucket("e.client_ts", granularity)
@@ -436,16 +441,46 @@ class QueryBuilder:
 
         return wheres, joins
 
-    def _interval_sql(self, interval_str: str) -> str:
-        """Convert a simple interval string (e.g. '7d', '24h', '1w') to BigQuery INTERVAL SQL."""
-        m = re.fullmatch(r"(\d+)([hdw])", interval_str.strip().lower())
+    def _get_start_end(self, time_range: TimeRange | str) -> tuple[str, str]:
+        if isinstance(time_range, str):
+            qty, unit = self._parse_interval_string(time_range)
+
+            # Get current UTC time
+            end_time = datetime.now(timezone.utc)
+
+            # Calculate start time by subtracting the interval
+            if unit == "h":
+                start_time = end_time - timedelta(hours=qty)
+            elif unit == "d":
+                start_time = end_time - timedelta(days=qty)
+            elif unit == "w":
+                start_time = end_time - timedelta(weeks=qty)
+            elif unit == "m":
+                # Approximate months as 30 days
+                start_time = end_time - timedelta(days=qty * 30)
+            elif unit == "y":
+                # Approximate years as 365 days
+                start_time = end_time - timedelta(days=qty * 365)
+            else:
+                raise ValueError(f"Unsupported time unit: {unit}")
+
+            return start_time.isoformat(), end_time.isoformat()
+        else:
+            return time_range.get("start"), time_range.get("end")
+
+    def _parse_interval_string(self, interval_str: str) -> tuple[int, str]:
+        m = re.fullmatch(r"(\d+)([hdwmy])", interval_str.strip().lower())
 
         if not m:
             raise ValueError(
                 f"Invalid interval format: {interval_str}. Use forms like '7d', '24h', '1w'"
             )
 
-        qty, unit = m.groups()
+        return int(m.group(1)), m.group(2)
+
+    def _interval_sql(self, interval_str: str) -> str:
+        """Convert a simple interval string (e.g. '7d', '24h', '1w') to BigQuery INTERVAL SQL."""
+        qty, unit = self._parse_interval_string(interval_str)
 
         unit_sql = UNIT_SQL_MAP[unit]
 
