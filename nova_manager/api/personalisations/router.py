@@ -118,8 +118,6 @@ async def create_personalisation(
     else:
         next_priority = 1
 
-    print(max_priority_personalisation.priority, next_priority)
-
     # Create personalisation with variants
     personalisation = personalisations_crud.create_personalisation(
         experience_id=experience_id,
