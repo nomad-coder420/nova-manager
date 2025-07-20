@@ -1,3 +1,4 @@
+from nova_manager.components.personalisations.crud import PersonalisationsCRUD
 from typing import List, Optional, Dict, Any
 from uuid import UUID as UUIDType
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -7,95 +8,21 @@ from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 
 from nova_manager.api.experiences.request_response import (
-    ExperienceClone,
-    ExperienceCreate,
     ExperienceDetailedResponse,
+    ExperienceFeatureResponse,
     ExperienceListResponse,
-    ExperienceResponse,
-    ExperienceStatusUpdate,
-    ExperienceUpdate,
+    ExperienceTargetingRuleCreate,
+    GetExperienceResponse,
     MessageResponse,
-    PersonalisationCreate,
-    PersonalisationUpdate,
-    PersonalisationDetailedResponse,
-    PersonalisationListResponse,
-    ExperienceSegmentCreate,
 )
 from nova_manager.components.experiences.crud import (
+    ExperienceFeaturesCRUD,
     ExperiencesCRUD,
-    PersonalisationsCRUD,
+    TargetingRulesCRUD,
 )
-from nova_manager.components.campaigns.crud import CampaignsCRUD
-from nova_manager.components.segments.crud import SegmentsCRUD
 from nova_manager.database.session import get_db
 
 router = APIRouter()
-
-
-@router.post("/", response_model=ExperienceResponse)
-async def create_experience(
-    experience_data: ExperienceCreate, db: Session = Depends(get_db)
-):
-    """Create a new experience with selected feature flags"""
-    experiences_crud = ExperiencesCRUD(db)
-    feature_flags_crud = FeatureFlagsCRUD(db)
-
-    # Check if name already exists
-    existing = experiences_crud.get_by_name(
-        name=experience_data.name,
-        organisation_id=experience_data.organisation_id,
-        app_id=experience_data.app_id,
-    )
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Experience '{experience_data.name}' already exists",
-        )
-
-        # Validate selected objects exist
-    if not experience_data.selected_objects:
-        raise HTTPException(
-            status_code=400, detail="At least one object must be selected"
-        )
-
-    # Get feature flags for validation using CRUD method
-    feature_flags = feature_flags_crud.get_flags_by_pids(
-        experience_data.selected_objects
-    )
-
-    # Check if all requested feature flags exist
-    found_flag_ids = {flag.pid: flag for flag in feature_flags}
-
-    for flag_id in experience_data.selected_objects:
-        flag = found_flag_ids.get(flag_id)
-
-        if not flag:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Feature flag not found: {flag_id}",
-            )
-
-        if flag.experience_id:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Feature flag already assigned to other experience: {flag.pid}",
-            )
-
-    # Create experience using CRUD method
-    experience = experiences_crud.create(
-        {
-            "name": experience_data.name,
-            "description": experience_data.description,
-            "status": experience_data.status,
-            "organisation_id": experience_data.organisation_id,
-            "app_id": experience_data.app_id,
-        }
-    )
-
-    # Bulk assign feature flags to experience using CRUD method
-    feature_flags_crud.bulk_assign_experience(experience.pid, feature_flags)
-
-    return experience
 
 
 @router.get("/", response_model=List[ExperienceListResponse])
@@ -116,7 +43,6 @@ async def list_experiences(
 ):
     """List experiences with filtering, search, and pagination"""
     experiences_crud = ExperiencesCRUD(db)
-    feature_flags_crud = FeatureFlagsCRUD(db)
 
     if search:
         experiences = experiences_crud.search_experiences(
@@ -137,445 +63,74 @@ async def list_experiences(
             order_direction=order_direction,
         )
 
-    # Transform experiences to response format
-    result = []
-    for experience in experiences:
-        # Get feature flags count for this experience
-        feature_flags_count = feature_flags_crud.get_feature_flags_count(experience.pid)
-
-        # Get segments count for this experience
-        segment_count = experiences_crud.count_experience_segments(experience.pid)
-
-        result.append(
-            ExperienceListResponse(
-                pid=experience.pid,
-                name=experience.name,
-                description=experience.description,
-                status=experience.status,
-                created_at=experience.created_at,
-                modified_at=experience.modified_at,
-                segment_count=segment_count,
-                feature_flags_count=feature_flags_count,
-            )
-        )
-
-    return result
+    return experiences
 
 
-@router.get("/{experience_pid}/", response_model=ExperienceDetailedResponse)
+@router.get("/{experience_pid}/", response_model=GetExperienceResponse)
 async def get_experience(experience_pid: UUIDType, db: Session = Depends(get_db)):
     """Get experience by ID with full details"""
     experiences_crud = ExperiencesCRUD(db)
-    experience = experiences_crud.get_with_full_details(experience_pid)
-
-    if not experience:
-        raise HTTPException(status_code=404, detail="Experience not found")
-
-    feature_flags = experience.feature_flags
-    personalisations = experience.personalisations
-    experience_segments = experience.experience_segments
-
-    return ExperienceDetailedResponse(
-        pid=experience.pid,
-        name=experience.name,
-        description=experience.description,
-        status=experience.status,
-        created_at=experience.created_at,
-        modified_at=experience.modified_at,
-        feature_flags=feature_flags,
-        personalisations=personalisations,
-        experience_segments=experience_segments,
-        feature_flags_count=len(feature_flags),
-        personalisations_count=len(personalisations),
-        segments_count=len(experience_segments),
-    )
-
-
-@router.put("/{experience_pid}/", response_model=ExperienceResponse)
-async def update_experience(
-    experience_pid: UUIDType,
-    experience_update: ExperienceUpdate,
-    db: Session = Depends(get_db),
-):
-    """Update experience"""
-    experiences_crud = ExperiencesCRUD(db)
-    experience = experiences_crud.get_by_pid(experience_pid)
-
-    if not experience:
-        raise HTTPException(status_code=404, detail="Experience not found")
-
-    # Check name uniqueness if name is being updated
-    if experience_update.name and experience_update.name != experience.name:
-        existing = experiences_crud.get_by_name(
-            name=experience_update.name,
-            organisation_id=experience.organisation_id,
-            app_id=experience.app_id,
-        )
-        if existing:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Experience '{experience_update.name}' already exists",
-            )
-
-    # Update other fields
-    update_data = experience_update.model_dump(exclude_unset=True)
-    if update_data:
-        experience = experiences_crud.update(db_obj=experience, obj_in=update_data)
-
-    return experience
-
-
-@router.put("/{experience_pid}/status/", response_model=ExperienceResponse)
-async def update_experience_status(
-    experience_pid: UUIDType,
-    status_update: ExperienceStatusUpdate,
-    db: Session = Depends(get_db),
-):
-    """Update experience status"""
-    experiences_crud = ExperiencesCRUD(db)
-    experience = experiences_crud.update_status(experience_pid, status_update.status)
+    experience = experiences_crud.get_with_feature_flag_variants(experience_pid)
 
     if not experience:
         raise HTTPException(status_code=404, detail="Experience not found")
 
     return experience
-
-
-@router.post("/{experience_pid}/clone/", response_model=ExperienceResponse)
-async def clone_experience(
-    experience_pid: UUIDType,
-    clone_data: ExperienceClone,
-    db: Session = Depends(get_db),
-):
-    """Clone an existing experience"""
-    experiences_crud = ExperiencesCRUD(db)
-
-    # Check if new name already exists
-    if clone_data.name:
-        # Get original experience to check org/app context
-        original = experiences_crud.get_by_pid(experience_pid)
-        if not original:
-            raise HTTPException(status_code=404, detail="Source experience not found")
-
-        existing = experiences_crud.get_by_name(
-            name=clone_data.name,
-            organisation_id=original.organisation_id,
-            app_id=original.app_id,
-        )
-        if existing:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Experience '{clone_data.name}' already exists",
-            )
-
-    cloned_experience = experiences_crud.clone_experience(
-        source_pid=experience_pid,
-        new_name=clone_data.name,
-        new_description=clone_data.description,
-    )
-
-    if not cloned_experience:
-        raise HTTPException(status_code=404, detail="Source experience not found")
-
-    return cloned_experience
-
-
-# Personalisation endpoints
-@router.post(
-    "/{experience_pid}/personalisations/",
-    response_model=PersonalisationDetailedResponse,
-)
-async def create_personalisation(
-    experience_pid: UUIDType,
-    personalisation_data: PersonalisationCreate,
-    db: Session = Depends(get_db),
-):
-    """Create a new personalisation for an experience"""
-    experiences_crud = ExperiencesCRUD(db)
-    personalisations_crud = PersonalisationsCRUD(db)
-    feature_flags_crud = FeatureFlagsCRUD(db)
-
-    # Validate experience exists
-    experience = experiences_crud.get_by_pid(experience_pid)
-    if not experience:
-        raise HTTPException(status_code=404, detail="Experience not found")
-
-    # Check if personalisation name already exists in this experience
-    existing = personalisations_crud.get_by_name(
-        name=personalisation_data.name,
-        experience_id=experience_pid,
-    )
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Personalisation '{personalisation_data.name}' already exists in this experience",
-        )
-
-    # Validate that all feature flags exist and belong to this experience
-    feature_flag_ids = {variant.feature_id for variant in personalisation_data.variants}
-    feature_flags = feature_flags_crud.get_flags_by_pids(list(feature_flag_ids))
-
-    # Check if all feature flags exist and belong to this experience
-    found_flags = {flag.pid: flag for flag in feature_flags}
-    for variant in personalisation_data.variants:
-        if variant.feature_id not in found_flags:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Feature flag not found: {variant.feature_id}",
-            )
-
-        flag = found_flags[variant.feature_id]
-        if flag.experience_id != experience_pid:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Feature flag {variant.feature_id} does not belong to this experience",
-            )
-
-    # Create personalisation with variants
-    personalisation = personalisations_crud.create_personalisation_with_variants(
-        personalisation_data
-    )
-
-    return personalisation
 
 
 @router.get(
-    "/{experience_pid}/personalisations/",
-    response_model=List[PersonalisationListResponse],
+    "/{experience_pid}/features/", response_model=List[ExperienceFeatureResponse]
+)
+async def get_experience_features(
+    experience_pid: UUIDType, db: Session = Depends(get_db)
+):
+    """Get features for a specific experience"""
+    experience_features_crud = ExperienceFeaturesCRUD(db)
+
+    # Get experience with feature flags
+    experience_features = experience_features_crud.get_experience_features(
+        experience_pid
+    )
+
+    return experience_features
+
+
+@router.get(
+    "/{experience_pid}/personalisations/", response_model=ExperienceDetailedResponse
 )
 async def get_experience_personalisations(
+    experience_pid: UUIDType, db: Session = Depends(get_db)
+):
+    """Get experience by ID with full details"""
+    experiences_crud = ExperiencesCRUD(db)
+    experience = experiences_crud.get_with_personalisations_data(experience_pid)
+
+    if not experience:
+        raise HTTPException(status_code=404, detail="Experience not found")
+
+    return experience
+
+
+# Create experience targeting rule
+@router.post("/{experience_pid}/targeting-rules/", response_model=MessageResponse)
+async def create_experience_targeting_rule(
     experience_pid: UUIDType,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    targeting_rule_data: ExperienceTargetingRuleCreate,
     db: Session = Depends(get_db),
 ):
-    """Get all personalisations for an experience"""
+    """Create experience targeting rule with personalisation distribution"""
     experiences_crud = ExperiencesCRUD(db)
     personalisations_crud = PersonalisationsCRUD(db)
+    targeting_rules_crud = TargetingRulesCRUD(db)
 
     # Validate experience exists
     experience = experiences_crud.get_by_pid(experience_pid)
     if not experience:
         raise HTTPException(status_code=404, detail="Experience not found")
-
-    personalisations = personalisations_crud.get_by_experience(
-        experience_id=experience_pid,
-        skip=skip,
-        limit=limit,
-    )
-
-    # Transform to response format with variants count
-    response_personalisations = []
-    for personalisation in personalisations:
-        response_personalisations.append(
-            PersonalisationListResponse(
-                pid=personalisation.pid,
-                name=personalisation.name,
-                description=personalisation.description,
-                experience_id=personalisation.experience_id,
-                last_updated_at=personalisation.last_updated_at,
-                created_at=personalisation.created_at,
-                variants_count=len(personalisation.feature_variants),
-            )
-        )
-
-    return response_personalisations
-
-
-@router.get(
-    "/{experience_pid}/personalisations/{personalisation_pid}/",
-    response_model=PersonalisationDetailedResponse,
-)
-async def get_personalisation(
-    experience_pid: UUIDType,
-    personalisation_pid: UUIDType,
-    db: Session = Depends(get_db),
-):
-    """Get a specific personalisation with variants"""
-    experiences_crud = ExperiencesCRUD(db)
-    personalisations_crud = PersonalisationsCRUD(db)
-
-    # Validate experience exists
-    experience = experiences_crud.get_by_pid(experience_pid)
-    if not experience:
-        raise HTTPException(status_code=404, detail="Experience not found")
-
-    # Get personalisation with variants
-    personalisation = personalisations_crud.get_with_variants(personalisation_pid)
-    if not personalisation:
-        raise HTTPException(status_code=404, detail="Personalisation not found")
-
-    # Validate personalisation belongs to this experience
-    if personalisation.experience_id != experience_pid:
-        raise HTTPException(
-            status_code=400,
-            detail="Personalisation does not belong to this experience",
-        )
-
-    return personalisation
-
-
-@router.put(
-    "/{experience_pid}/personalisations/{personalisation_pid}/",
-    response_model=PersonalisationDetailedResponse,
-)
-async def update_personalisation(
-    experience_pid: UUIDType,
-    personalisation_pid: UUIDType,
-    personalisation_data: PersonalisationUpdate,
-    db: Session = Depends(get_db),
-):
-    """Update a personalisation and its variants"""
-    experiences_crud = ExperiencesCRUD(db)
-    personalisations_crud = PersonalisationsCRUD(db)
-    feature_flags_crud = FeatureFlagsCRUD(db)
-
-    # Validate experience exists
-    experience = experiences_crud.get_by_pid(experience_pid)
-    if not experience:
-        raise HTTPException(status_code=404, detail="Experience not found")
-
-    # Get existing personalisation
-    existing_personalisation = personalisations_crud.get_by_pid(personalisation_pid)
-    if not existing_personalisation:
-        raise HTTPException(status_code=404, detail="Personalisation not found")
-
-    # Validate personalisation belongs to this experience
-    if existing_personalisation.experience_id != experience_pid:
-        raise HTTPException(
-            status_code=400,
-            detail="Personalisation does not belong to this experience",
-        )
-
-    # Check if new name already exists (if name is being updated)
-    if (
-        personalisation_data.name
-        and personalisation_data.name != existing_personalisation.name
-    ):
-        existing = personalisations_crud.get_by_name(
-            name=personalisation_data.name,
-            experience_id=experience_pid,
-        )
-        if existing:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Personalisation '{personalisation_data.name}' already exists in this experience",
-            )
-
-    # If variants are being updated, validate them
-    if personalisation_data.variants:
-        feature_flag_ids = {
-            variant.feature_id for variant in personalisation_data.variants
-        }
-        feature_flags = feature_flags_crud.get_flags_by_pids(list(feature_flag_ids))
-
-        # Check if all feature flags exist and belong to this experience
-        found_flags = {flag.pid: flag for flag in feature_flags}
-        for variant in personalisation_data.variants:
-            if variant.feature_id not in found_flags:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Feature flag not found: {variant.feature_id}",
-                )
-
-            flag = found_flags[variant.feature_id]
-            if flag.experience_id != experience_pid:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Feature flag {variant.feature_id} does not belong to this experience",
-                )
-
-    # Update personalisation
-    update_data = personalisation_data.model_dump(exclude_unset=True)
-    variants_data = []
-    if personalisation_data.variants:
-        variants_data = [
-            {
-                "feature_id": variant.feature_id,
-                "name": variant.name,
-                "config": variant.config,
-            }
-            for variant in personalisation_data.variants
-        ]
-
-    personalisation = personalisations_crud.update_personalisation_with_variants(
-        pid=personalisation_pid,
-        personalisation_data=update_data,
-        variants_data=variants_data,
-    )
-
-    if not personalisation:
-        raise HTTPException(status_code=404, detail="Personalisation not found")
-
-    # Load the personalisation with variants for response
-    personalisation_with_variants = personalisations_crud.get_with_variants(
-        personalisation.pid
-    )
-    return personalisation_with_variants
-
-
-@router.delete("/{experience_pid}/personalisations/{personalisation_pid}/")
-async def delete_personalisation(
-    experience_pid: UUIDType,
-    personalisation_pid: UUIDType,
-    db: Session = Depends(get_db),
-):
-    """Delete a personalisation and its variants"""
-    experiences_crud = ExperiencesCRUD(db)
-    personalisations_crud = PersonalisationsCRUD(db)
-
-    # Validate experience exists
-    experience = experiences_crud.get_by_pid(experience_pid)
-    if not experience:
-        raise HTTPException(status_code=404, detail="Experience not found")
-
-    # Get existing personalisation
-    existing_personalisation = personalisations_crud.get_by_pid(personalisation_pid)
-    if not existing_personalisation:
-        raise HTTPException(status_code=404, detail="Personalisation not found")
-
-    # Validate personalisation belongs to this experience
-    if existing_personalisation.experience_id != experience_pid:
-        raise HTTPException(
-            status_code=400,
-            detail="Personalisation does not belong to this experience",
-        )
-
-    # Delete personalisation and its variants
-    success = personalisations_crud.delete_personalisation_with_variants(
-        personalisation_pid
-    )
-    if not success:
-        raise HTTPException(status_code=500, detail="Failed to delete personalisation")
-
-    return MessageResponse(message="Personalisation deleted successfully")
-
-
-# Create experience segment assignment
-@router.post("/{experience_pid}/segments/", response_model=MessageResponse)
-async def create_experience_segment(
-    experience_pid: UUIDType,
-    segment_data: ExperienceSegmentCreate,
-    db: Session = Depends(get_db),
-):
-    """Create experience segment assignment with personalisation distribution"""
-    experiences_crud = ExperiencesCRUD(db)
-    segments_crud = SegmentsCRUD(db)
-    personalisations_crud = PersonalisationsCRUD(db)
-
-    # Validate experience exists
-    experience = experiences_crud.get_by_pid(experience_pid)
-    if not experience:
-        raise HTTPException(status_code=404, detail="Experience not found")
-
-    # Validate segment exists
-    segment = segments_crud.get_by_pid(segment_data.segment_id)
-    if not segment:
-        raise HTTPException(status_code=404, detail="Segment not found")
 
     # Validate personalisation percentages sum to 100
     total_percentage = sum(
-        item.target_percentage for item in segment_data.personalisation_distribution
+        item.target_percentage for item in targeting_rule_data.personalisations
     )
     if total_percentage != 100:
         raise HTTPException(
@@ -587,7 +142,7 @@ async def create_experience_segment(
     seen_personalisation_ids = set()
     default_count = 0
 
-    for personalisation_item in segment_data.personalisation_distribution:
+    for personalisation_item in targeting_rule_data.personalisations:
         if personalisation_item.use_default:
             default_count += 1
             if default_count > 1:
@@ -622,24 +177,22 @@ async def create_experience_segment(
                 detail=f"Default personalisations cannot be assigned as regular personalisations: {', '.join(default_names)}. Use 'use_default=True' instead.",
             )
 
-    # Find optimal priority for this experience segment
-    existing_segments = experiences_crud.get_experience_segments(experience_pid)
-    next_priority = len(existing_segments) + 1
+    # Find priority for this experience targeting rule
+    existing_targeting_rules = targeting_rules_crud.get_experience_targeting_rules(
+        experience_pid
+    )
+    next_priority = len(existing_targeting_rules) + 1
 
-    # Create experience segment
-    experience_segment_data = {
-        "experience_id": experience_pid,
-        "segment_id": segment_data.segment_id,
-        "target_percentage": segment_data.target_percentage,
-        "priority": next_priority,
-    }
-
-    experience_segment = experiences_crud.create_experience_segment(
-        experience_segment_data
+    # Create targeting rule
+    targeting_rule = targeting_rules_crud.create_targeting_rule(
+        experience_pid,
+        next_priority,
+        targeting_rule_data.rule_config,
+        targeting_rule_data.rollout_percentage,
     )
 
     # Process personalisation distribution
-    for personalisation_item in segment_data.personalisation_distribution:
+    for personalisation_item in targeting_rule_data.personalisations:
         personalisation_id = personalisation_item.personalisation_id
 
         # Handle default personalisation
@@ -652,13 +205,18 @@ async def create_experience_segment(
             )
             personalisation_id = default_personalisation.pid
 
-        # Create experience segment personalisation
-        experiences_crud.create_experience_segment_personalisation(
-            {
-                "experience_segment_id": experience_segment.pid,
-                "personalisation_id": personalisation_id,
-                "target_percentage": personalisation_item.target_percentage,
-            }
+        # Create targeting rule personalisation
+        targeting_rules_crud.create_targeting_rule_personalisation(
+            targeting_rule_id=targeting_rule.pid,
+            personalisation_id=personalisation_id,
+            target_percentage=personalisation_item.target_percentage,
         )
 
-    return MessageResponse(message="Experience segment created successfully")
+    for segment_item in targeting_rule_data.segments:
+        targeting_rules_crud.create_targeting_rule_segment(
+            targeting_rule_id=targeting_rule.pid,
+            segment_id=segment_item.segment_id,
+            rule_config=segment_item.rule_config,
+        )
+
+    return {"message": "Experience targeting rule created successfully"}

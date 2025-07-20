@@ -1,19 +1,18 @@
 from datetime import datetime, timezone
+from nova_manager.components.personalisations.models import (
+    ExperienceFeatureVariants,
+    Personalisations,
+    TargetingRulePersonalisations,
+    TargetingRuleSegments,
+    TargetingRules,
+)
 from typing import Optional, List, Dict, Any
 from uuid import UUID as UUIDType
-from nova_manager.api.experiences.request_response import PersonalisationCreate
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_, or_, desc, asc
 
-from nova_manager.components.experiences.models import (
-    Experiences,
-    ExperienceSegments,
-    Personalisations,
-    PersonalisationFeatureVariants,
-    ExperienceSegmentPersonalisations,
-)
-from nova_manager.components.feature_flags.models import FeatureFlags, FeatureVariants
-from nova_manager.components.feature_flags.crud import FeatureVariantsCRUD
+from nova_manager.components.experiences.models import ExperienceFeatures, Experiences
+from nova_manager.components.feature_flags.models import FeatureFlags
 from nova_manager.core.base_crud import BaseCRUD
 
 
@@ -50,10 +49,14 @@ class ExperiencesCRUD(BaseCRUD):
         order_direction: str = "desc",
     ) -> List[Experiences]:
         """Get experiences for organization/app with pagination and filtering"""
-        query = self.db.query(Experiences).filter(
-            and_(
-                Experiences.organisation_id == organisation_id,
-                Experiences.app_id == app_id,
+        query = (
+            self.db.query(Experiences)
+            .options(selectinload(Experiences.features))
+            .filter(
+                and_(
+                    Experiences.organisation_id == organisation_id,
+                    Experiences.app_id == app_id,
+                )
             )
         )
 
@@ -70,27 +73,48 @@ class ExperiencesCRUD(BaseCRUD):
 
         return query.offset(skip).limit(limit).all()
 
-    def get_with_full_details(self, pid: UUIDType) -> Optional[Experiences]:
+    def get_with_features(self, pid: UUIDType) -> Optional[Experiences]:
+        """Get experience with all experience features loaded"""
+        return (
+            self.db.query(Experiences)
+            .options(selectinload(Experiences.features))
+            .filter(Experiences.pid == pid)
+            .first()
+        )
+
+    def get_with_feature_flag_variants(self, pid: UUIDType) -> Optional[Experiences]:
         """Get experience with all related data loaded"""
         return (
             self.db.query(Experiences)
             .options(
                 # Load feature flags with their variants
-                selectinload(Experiences.feature_flags).selectinload(
-                    FeatureFlags.variants
+                selectinload(Experiences.features).selectinload(
+                    ExperienceFeatures.feature_flag
                 ),
-                # Load personalisations with their feature variants through junction table
+                # Load feature flags with their variants
+                selectinload(Experiences.features).selectinload(
+                    ExperienceFeatures.variants
+                ),
+            )
+            .filter(Experiences.pid == pid)
+            .first()
+        )
+
+    def get_with_personalisations_data(self, pid: UUIDType) -> Optional[Experiences]:
+        """Get experience with all personalisations loaded"""
+        return (
+            self.db.query(Experiences)
+            .options(
                 selectinload(Experiences.personalisations)
-                .selectinload(Personalisations.feature_variants)
-                .selectinload(PersonalisationFeatureVariants.feature_variant),
-                # Load experience segments with their segments and personalisations
-                selectinload(Experiences.experience_segments).selectinload(
-                    ExperienceSegments.segment
-                ),
-                # Load experience segments with their personalisations
-                selectinload(Experiences.experience_segments).selectinload(
-                    ExperienceSegments.personalisations
-                ),
+                .selectinload(Personalisations.variants)
+                .selectinload(ExperienceFeatureVariants.experience_feature)
+                .selectinload(ExperienceFeatures.feature_flag),
+                selectinload(Experiences.targeting_rules)
+                .selectinload(TargetingRules.personalisations)
+                .selectinload(TargetingRulePersonalisations.personalisation),
+                selectinload(Experiences.targeting_rules)
+                .selectinload(TargetingRules.segments)
+                .selectinload(TargetingRuleSegments.segment),
             )
             .filter(Experiences.pid == pid)
             .first()
@@ -173,318 +197,106 @@ class ExperiencesCRUD(BaseCRUD):
         self.db.flush()
         return True
 
-    def get_experience_segments(
+
+class ExperienceFeaturesCRUD(BaseCRUD):
+    def __init__(self, db: Session):
+        super().__init__(ExperienceFeatures, db)
+
+    def get_experience_features(self, experience_id: UUIDType):
+        return (
+            self.db.query(ExperienceFeatures)
+            .options(selectinload(ExperienceFeatures.feature_flag))
+            .filter(ExperienceFeatures.experience_id == experience_id)
+            .all()
+        )
+
+    def get_by_experience_and_feature(
+        self, experience_id: UUIDType, feature_id: UUIDType
+    ) -> Optional[ExperienceFeatures]:
+        """Get ExperienceFeature by experience_id and feature_id"""
+        return (
+            self.db.query(ExperienceFeatures)
+            .filter(
+                ExperienceFeatures.experience_id == experience_id,
+                ExperienceFeatures.feature_id == feature_id,
+            )
+            .first()
+        )
+
+
+class ExperienceFeatureVariantsCRUD(BaseCRUD):
+    def __init__(self, db: Session):
+        super().__init__(ExperienceFeatureVariants, db)
+
+
+class TargetingRulesCRUD(BaseCRUD):
+    def __init__(self, db: Session):
+        super().__init__(TargetingRules, db)
+
+    def get_experience_targeting_rules(
         self, experience_id: UUIDType
-    ) -> List[ExperienceSegments]:
+    ) -> List[TargetingRules]:
         """Get all experience segments for an experience"""
         return (
-            self.db.query(ExperienceSegments)
-            .filter(ExperienceSegments.experience_id == experience_id)
-            .order_by(ExperienceSegments.priority)
+            self.db.query(TargetingRules)
+            .filter(TargetingRules.experience_id == experience_id)
+            .order_by(TargetingRules.priority)
             .all()
         )
 
-    def count_experience_segments(self, experience_id: UUIDType) -> int:
-        """Count experience segments for a given experience"""
-        return (
-            self.db.query(ExperienceSegments)
-            .filter(ExperienceSegments.experience_id == experience_id)
-            .count()
-        )
-
-    def create_experience_segment(
-        self, segment_data: Dict[str, Any]
-    ) -> ExperienceSegments:
-        """Create a new experience segment"""
-        experience_segment = ExperienceSegments(
-            experience_id=segment_data["experience_id"],
-            segment_id=segment_data["segment_id"],
-            target_percentage=segment_data.get("target_percentage", 100),
-            priority=segment_data.get("priority", 0),
-        )
-        self.db.add(experience_segment)
-        self.db.flush()
-        self.db.refresh(experience_segment)
-        return experience_segment
-
-    def create_experience_segment_personalisation(
-        self, personalisation_data: Dict[str, Any]
-    ) -> ExperienceSegmentPersonalisations:
-        """Create a new experience segment personalisation"""
-        experience_segment_personalisation = ExperienceSegmentPersonalisations(
-            experience_segment_id=personalisation_data["experience_segment_id"],
-            personalisation_id=personalisation_data["personalisation_id"],
-            target_percentage=personalisation_data.get("target_percentage", 100),
-        )
-        self.db.add(experience_segment_personalisation)
-        self.db.flush()
-        self.db.refresh(experience_segment_personalisation)
-        return experience_segment_personalisation
-
-
-class PersonalisationsCRUD(BaseCRUD):
-    """CRUD operations for Personalisations"""
-
-    def __init__(self, db: Session):
-        super().__init__(Personalisations, db)
-
-    def get_by_name(
-        self, name: str, experience_id: UUIDType
-    ) -> Optional[Personalisations]:
-        """Get personalisation by name within an experience"""
-        return (
-            self.db.query(Personalisations)
-            .filter(
-                and_(
-                    Personalisations.name == name,
-                    Personalisations.experience_id == experience_id,
-                )
-            )
-            .first()
-        )
-
-    def get_by_experience(
-        self, experience_id: UUIDType, skip: int = 0, limit: int = 100
-    ) -> List[Personalisations]:
-        """Get personalisations for a specific experience"""
-        return (
-            self.db.query(Personalisations)
-            .filter(Personalisations.experience_id == experience_id)
-            .options(
-                selectinload(Personalisations.feature_variants).selectinload(
-                    PersonalisationFeatureVariants.feature_variant
-                )
-            )
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-
-    def get_with_variants(self, pid: UUIDType) -> Optional[Personalisations]:
-        """Get personalisation with all its variants"""
-        return (
-            self.db.query(Personalisations)
-            .options(
-                selectinload(Personalisations.feature_variants).selectinload(
-                    PersonalisationFeatureVariants.feature_variant
-                )
-            )
-            .filter(Personalisations.pid == pid)
-            .first()
-        )
-
-    def get_default_personalisations_by_ids(
-        self, personalisation_ids: List[UUIDType]
-    ) -> List[Personalisations]:
-        """Get personalisations by IDs that are marked as default"""
-        return (
-            self.db.query(Personalisations)
-            .filter(
-                and_(
-                    Personalisations.pid.in_(personalisation_ids),
-                    Personalisations.is_default == True,
-                )
-            )
-            .all()
-        )
-
-    def create_personalisation_with_variants(
-        self, personalisation_data: PersonalisationCreate
-    ) -> Personalisations:
-        """Create a personalisation with its variants"""
-        # Create personalisation
-        personalisation = Personalisations(
-            name=personalisation_data.name,
-            description=personalisation_data.description or "",
-            experience_id=personalisation_data.experience_id or "",
-            last_updated_at=datetime.now(timezone.utc),
-        )
-        self.db.add(personalisation)
-        self.db.flush()
-        self.db.refresh(personalisation)
-
-        # Initialize feature variants CRUD
-        feature_variants_crud = FeatureVariantsCRUD(self.db)
-
-        # Handle variants - either create new or use existing
-        for variant_data in personalisation_data.variants:
-            variant = None
-
-            # Check if variant_id is provided (selecting existing variant)
-            if variant_data.variant_id:
-                variant = feature_variants_crud.get_by_pid(variant_data.variant_id)
-                if not variant:
-                    raise ValueError(
-                        f"Variant with ID {variant_data.variant_id} not found"
-                    )
-            else:
-                # Create new variant
-                feature_variants_crud = FeatureVariantsCRUD(self.db)
-                variant = feature_variants_crud.create_variant(
-                    feature_pid=variant_data.feature_id,
-                    variant_data=variant_data.model_dump(
-                        exclude={"feature_id", "variant_id"}
-                    ),
-                )
-
-            # Create junction table entry
-            junction_entry = PersonalisationFeatureVariants(
-                personalisation_id=personalisation.pid,
-                feature_variant_id=variant.pid,
-            )
-            self.db.add(junction_entry)
-
-        self.db.flush()
-        return personalisation
-
-    def update_personalisation_with_variants(
+    def create_targeting_rule(
         self,
-        pid: UUIDType,
-        personalisation_data: Dict[str, Any],
-        variants_data: List[Dict[str, Any]],
-    ) -> Optional[Personalisations]:
-        """Update a personalisation and its variants using ManyToMany relationship"""
-        personalisation = self.get_by_pid(pid)
-        if not personalisation:
-            return None
-
-        # Update personalisation
-        personalisation.name = personalisation_data.get("name", personalisation.name)
-        personalisation.description = personalisation_data.get(
-            "description", personalisation.description
-        )
-        personalisation.last_updated_at = datetime.now(timezone.utc)
-
-        # Delete existing junction table entries
-        self.db.query(PersonalisationFeatureVariants).filter(
-            PersonalisationFeatureVariants.personalisation_id == pid
-        ).delete()
-
-        # Initialize feature variants CRUD
-        feature_variants_crud = FeatureVariantsCRUD(self.db)
-
-        # Handle variants - either create new or use existing
-        for variant_data in variants_data:
-            variant = None
-
-            # Check if variant_id is provided (selecting existing variant)
-            if "variant_id" in variant_data and variant_data["variant_id"]:
-                variant = feature_variants_crud.get_by_pid(variant_data["variant_id"])
-                if not variant:
-                    raise ValueError(
-                        f"Variant with ID {variant_data['variant_id']} not found"
-                    )
-            else:
-                # Create new variant
-                variant = FeatureVariants(
-                    feature_id=variant_data["feature_id"],
-                    name=variant_data["name"],
-                    config=variant_data["config"],
-                )
-                self.db.add(variant)
-                self.db.flush()
-                self.db.refresh(variant)
-
-            # Create junction table entry
-            junction_entry = PersonalisationFeatureVariants(
-                personalisation_id=personalisation.pid,
-                feature_variant_id=variant.pid,
-            )
-            self.db.add(junction_entry)
-
-        self.db.flush()
-        self.db.refresh(personalisation)
-        return personalisation
-
-    def delete_personalisation_with_variants(self, pid: UUIDType) -> bool:
-        """Delete a personalisation and all its variants"""
-        personalisation = self.get_by_pid(pid)
-        if not personalisation:
-            return False
-
-        # Delete junction table entries first
-        self.db.query(PersonalisationFeatureVariants).filter(
-            PersonalisationFeatureVariants.personalisation_id == pid
-        ).delete()
-
-        # Delete personalisation
-        self.db.delete(personalisation)
-        self.db.flush()
-        return True
-
-    def create_default_personalisation(
-        self, experience_id: UUIDType
-    ) -> Personalisations:
-        """Create a default personalisation with all default variants for an experience"""
-        from nova_manager.components.feature_flags.crud import FeatureVariantsCRUD
-
-        # Get experience to find its feature flags
-        experience = (
-            self.db.query(Experiences).filter(Experiences.pid == experience_id).first()
-        )
-        if not experience:
-            raise ValueError("Experience not found")
-
-        # Generate unique name
-        # Get all existing personalisation names in this experience
-        existing_names = set()
-        existing_personalisations = (
-            self.db.query(Personalisations)
-            .filter(Personalisations.experience_id == experience_id)
-            .all()
-        )
-
-        for personalisation in existing_personalisations:
-            existing_names.add(personalisation.name.lower())
-
-        # Find the next available default personalisation number
-        counter = 1
-        while True:
-            candidate_name = f"Default Experience {counter}"
-            if candidate_name.lower() not in existing_names:
-                name = candidate_name
-                break
-            counter += 1
-
-        # Generate description
-        description = "Auto-generated default experience"
-
-        # Create personalisation
-        personalisation = Personalisations(
-            name=name,
-            description=description,
+        experience_id: UUIDType,
+        priority: int,
+        rule_config: dict,
+        rollout_percentage: int,
+    ) -> TargetingRules:
+        """Create a new experience targeting rule"""
+        targeting_rule = TargetingRules(
             experience_id=experience_id,
-            is_default=True,
-            last_updated_at=datetime.now(timezone.utc),
+            priority=priority,
+            rule_config=rule_config,
+            rollout_percentage=rollout_percentage,
         )
-        self.db.add(personalisation)
+
+        self.db.add(targeting_rule)
         self.db.flush()
-        self.db.refresh(personalisation)
+        self.db.refresh(targeting_rule)
 
-        # Create variants with default values for each feature flag
-        feature_variants_crud = FeatureVariantsCRUD(self.db)
+        return targeting_rule
 
-        for feature_flag in experience.feature_flags:
-            # Find or create default variant for this feature flag
-            default_variant = feature_variants_crud.get_by_name(
-                name="default", feature_pid=feature_flag.pid
-            )
-
-            if default_variant:
-                # Create junction table entry
-                junction_entry = PersonalisationFeatureVariants(
-                    personalisation_id=personalisation.pid,
-                    feature_variant_id=default_variant.pid,
-                )
-                self.db.add(junction_entry)
-
-        self.db.flush()
-        return personalisation
-
-    def count_by_experience(self, experience_id: UUIDType) -> int:
-        """Count personalisations for a specific experience"""
-        return (
-            self.db.query(Personalisations)
-            .filter(Personalisations.experience_id == experience_id)
-            .count()
+    def create_targeting_rule_personalisation(
+        self,
+        targeting_rule_id: UUIDType,
+        personalisation_id: UUIDType,
+        target_percentage: int,
+    ) -> TargetingRulePersonalisations:
+        targeting_rule_personalisation = TargetingRulePersonalisations(
+            targeting_rule_id=targeting_rule_id,
+            personalisation_id=personalisation_id,
+            target_percentage=target_percentage,
         )
+
+        self.db.add(targeting_rule_personalisation)
+        self.db.flush()
+        self.db.refresh(targeting_rule_personalisation)
+
+        return targeting_rule_personalisation
+
+    def create_targeting_rule_segment(
+        self,
+        targeting_rule_id: UUIDType,
+        segment_id: UUIDType,
+        rule_config: dict,
+    ) -> TargetingRuleSegments:
+        targeting_rule_segment = TargetingRuleSegments(
+            targeting_rule_id=targeting_rule_id,
+            segment_id=segment_id,
+            rule_config=rule_config,
+        )
+
+        self.db.add(targeting_rule_segment)
+        self.db.flush()
+        self.db.refresh(targeting_rule_segment)
+
+        return targeting_rule_segment

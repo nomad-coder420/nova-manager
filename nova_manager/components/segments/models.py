@@ -26,13 +26,9 @@ class Segments(BaseOrganisationModel):
     )
 
     # Relationships
-    experience_segments = relationship(
-        "ExperienceSegments",
-        foreign_keys="ExperienceSegments.segment_id",
+    targeting_rules = relationship(
+        "TargetingRuleSegments",
+        foreign_keys="TargetingRuleSegments.segment_id",
         back_populates="segment",
         cascade="all, delete-orphan",
     )
-
-    @property
-    def experience_count(self):
-        return len(self.experience_segments)

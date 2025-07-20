@@ -56,19 +56,6 @@ class ExperiencePersonalisationResponse(BaseModel):
         from_attributes = True
 
 
-class SegmentExperienceResponse(BaseModel):
-    pid: UUIDType
-    target_percentage: int
-    experience: ExperienceResponse
-    personalisations: List[ExperiencePersonalisationResponse]
-    priority: int
-    created_at: datetime
-    modified_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
 class SegmentResponse(BaseModel):
     pid: UUIDType
     name: str
@@ -107,7 +94,6 @@ class SegmentDetailedResponse(BaseModel):
     rule_config: Dict[str, Any]
     created_at: datetime
     modified_at: datetime
-    experience_segments: List[SegmentExperienceResponse] = []
 
     class Config:
         from_attributes = True

@@ -3,7 +3,6 @@ from typing import Dict, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 
 
 from nova_manager.api.feature_flags.request_response import (
@@ -12,16 +11,15 @@ from nova_manager.api.feature_flags.request_response import (
     FeatureFlagResponse,
     FeatureFlagDetailedResponse,
     FeatureFlagUpdate,
-    IndividualTargetingCreate,
     NovaObjectSyncRequest,
     NovaObjectSyncResponse,
-    TargetingRuleCreate,
-    VariantCreate,
-    VariantResponse,
 )
 from nova_manager.components.feature_flags.crud import (
     FeatureFlagsCRUD,
-    FeatureVariantsCRUD,
+)
+from nova_manager.components.experiences.crud import (
+    ExperiencesCRUD,
+    ExperienceFeaturesCRUD,
 )
 from nova_manager.database.session import get_db
 
@@ -45,7 +43,8 @@ async def sync_nova_objects(
 
     # Initialize CRUD instances
     flags_crud = FeatureFlagsCRUD(db)
-    variants_crud = FeatureVariantsCRUD(db)
+    experiences_crud = ExperiencesCRUD(db)
+    experience_features_crud = ExperienceFeaturesCRUD(db)
 
     # Track statistics
     stats = {
@@ -53,6 +52,11 @@ async def sync_nova_objects(
         "objects_created": 0,
         "objects_updated": 0,
         "objects_skipped": 0,
+        "experiences_processed": 0,
+        "experiences_created": 0,
+        "experiences_updated": 0,
+        "experiences_skipped": 0,
+        "experience_features_created": 0,
         "details": [],
     }
 
@@ -73,60 +77,24 @@ async def sync_nova_objects(
             # TODO: Add keys_config validation here
             # Update existing flag
             if existing_flag:
-                # Check if config has actually changed
-                if existing_flag.keys_config != keys_config:
-                    # Update the feature flag
-                    updated_flag = flags_crud.update(
-                        db_obj=existing_flag,
-                        obj_in={
-                            "keys_config": keys_config,
-                            "type": object_props.type,
-                        },
-                    )
+                updated_flag = flags_crud.update(
+                    db_obj=existing_flag,
+                    obj_in={
+                        "keys_config": keys_config,
+                        "type": object_props.type,
+                    },
+                )
 
-                    # Update or create default variant
-                    default_variant_name = "default"
-                    default_variant = variants_crud.get_by_name(
-                        name=default_variant_name, feature_pid=existing_flag.pid
-                    )
-                    if default_variant:
-                        # Update existing default variant
-                        variants_crud.update(
-                            db_obj=default_variant,
-                            obj_in={
-                                "config": updated_flag.default_variant,
-                            },
-                        )
-                    else:
-                        # Create new default variant
-                        variants_crud.create(
-                            obj_in={
-                                "feature_id": existing_flag.pid,
-                                "name": default_variant_name,
-                                "config": updated_flag.default_variant,
-                            }
-                        )
+                stats["objects_updated"] += 1
 
-                    stats["objects_updated"] += 1
-                    stats["details"].append(
-                        {
-                            "object_name": object_name,
-                            "action": "updated",
-                            "flag_id": str(existing_flag.pid),
-                            "message": "Updated feature flag and default variant",
-                        }
-                    )
-                else:
-                    # No changes needed
-                    stats["objects_skipped"] += 1
-                    stats["details"].append(
-                        {
-                            "object_name": object_name,
-                            "action": "skipped",
-                            "message": "No changes detected",
-                        }
-                    )
-
+                stats["details"].append(
+                    {
+                        "object_name": object_name,
+                        "action": "updated",
+                        "flag_id": str(existing_flag.pid),
+                        "message": "Updated feature flag and default variant",
+                    }
+                )
             else:
                 # Create new feature flag with default variant
                 flag_data = {
@@ -140,15 +108,6 @@ async def sync_nova_objects(
                 }
 
                 new_flag = flags_crud.create(obj_in=flag_data)
-
-                # Create default feature variant for the flag
-                variants_crud.create(
-                    obj_in={
-                        "feature_id": new_flag.pid,
-                        "name": "default",
-                        "config": new_flag.default_variant,
-                    }
-                )
 
                 stats["objects_created"] += 1
                 stats["details"].append(
@@ -173,6 +132,97 @@ async def sync_nova_objects(
             traceback.print_exc()
             continue
 
+    # Process each experience from the sync request
+    for experience_name, experience_props in sync_request.experiences.items():
+        try:
+            stats["experiences_processed"] += 1
+
+            # Check if experience already exists
+            existing_experience = experiences_crud.get_by_name(
+                name=experience_name,
+                organisation_id=sync_request.organisation_id,
+                app_id=sync_request.app_id,
+            )
+
+            # Update or create experience
+            if existing_experience:
+                updated_experience = experiences_crud.update(
+                    db_obj=existing_experience,
+                    obj_in={
+                        "description": experience_props.description,
+                        "status": "active",  # Default status for synced experiences
+                    },
+                )
+                stats["experiences_updated"] += 1
+                experience_action = "updated"
+                experience_id = existing_experience.pid
+            else:
+                # Create new experience
+                experience_data = {
+                    "name": experience_name,
+                    "description": experience_props.description,
+                    "status": "active",  # Default status for synced experiences
+                    "organisation_id": sync_request.organisation_id,
+                    "app_id": sync_request.app_id,
+                }
+
+                new_experience = experiences_crud.create(obj_in=experience_data)
+                stats["experiences_created"] += 1
+                experience_action = "created"
+                experience_id = new_experience.pid
+
+            # Process experience objects (create ExperienceFeatures)
+            experience_features_created = 0
+            for object_name in experience_props.objects.keys():
+                # Find the feature flag by name
+                feature_flag = flags_crud.get_by_name(
+                    name=object_name,
+                    organisation_id=sync_request.organisation_id,
+                    app_id=sync_request.app_id,
+                )
+
+                if feature_flag:
+                    # Check if ExperienceFeature already exists
+                    existing_experience_feature = (
+                        experience_features_crud.get_by_experience_and_feature(
+                            experience_id=experience_id,
+                            feature_id=feature_flag.pid,
+                        )
+                    )
+
+                    if not existing_experience_feature:
+                        # Create ExperienceFeature
+                        experience_feature_data = {
+                            "experience_id": experience_id,
+                            "feature_id": feature_flag.pid,
+                        }
+                        experience_features_crud.create(obj_in=experience_feature_data)
+                        experience_features_created += 1
+                        stats["experience_features_created"] += 1
+
+            stats["details"].append(
+                {
+                    "experience_name": experience_name,
+                    "action": experience_action,
+                    "experience_id": str(experience_id),
+                    "experience_features_created": experience_features_created,
+                    "message": f"{experience_action.capitalize()} experience with {experience_features_created} feature connections",
+                }
+            )
+
+        except Exception as exp_error:
+            # Log error but continue with other experiences
+            stats["experiences_skipped"] += 1
+            stats["details"].append(
+                {
+                    "experience_name": experience_name,
+                    "action": "error",
+                    "message": f"Failed to process experience: {str(exp_error)}",
+                }
+            )
+            traceback.print_exc()
+            continue
+
     dashboard_url = f"https://dashboard.nova.com/apps/{sync_request.app_id}/objects"
 
     return NovaObjectSyncResponse(
@@ -181,8 +231,13 @@ async def sync_nova_objects(
         objects_created=stats["objects_created"],
         objects_updated=stats["objects_updated"],
         objects_skipped=stats["objects_skipped"],
+        experiences_processed=stats["experiences_processed"],
+        experiences_created=stats["experiences_created"],
+        experiences_updated=stats["experiences_updated"],
+        experiences_skipped=stats["experiences_skipped"],
+        experience_features_created=stats["experience_features_created"],
         dashboard_url=dashboard_url,
-        message=f"Processed {stats['objects_processed']} objects successfully",
+        message=f"Processed {stats['objects_processed']} objects and {stats['experiences_processed']} experiences successfully",
         details=stats["details"],
     )
 
@@ -241,23 +296,6 @@ async def list_feature_flags(
             skip=skip, limit=limit, organisation_id=organisation_id, app_id=app_id
         )
 
-    # Add variant count to each flag
-    result = []
-    for flag in flags:
-        result.append(
-            {
-                "pid": flag.pid,
-                "name": flag.name,
-                "description": flag.description,
-                "is_active": flag.is_active,
-                "created_at": flag.created_at.isoformat(),
-                "keys_config": flag.keys_config,
-                "default_variant": flag.default_variant,
-                "variants": flag.variants,
-                "experience": flag.experience,
-            }
-        )
-
     return flags
 
 
@@ -299,79 +337,3 @@ async def get_feature_flag_details(flag_pid: UUID, db: Session = Depends(get_db)
         raise HTTPException(status_code=404, detail="Feature flag not found")
 
     return feature_flag
-
-
-@router.post("/{flag_pid}/variants/", response_model=VariantResponse)
-async def create_variant(
-    flag_pid: UUID, variant_data: VariantCreate, db: Session = Depends(get_db)
-):
-    """Create a new variant for a feature flag"""
-    feature_flags_crud = FeatureFlagsCRUD(db)
-    feature_variants_crud = FeatureVariantsCRUD(db)
-
-    # Check if feature flag exists
-    feature_flag = feature_flags_crud.get_by_pid(flag_pid)
-    if not feature_flag:
-        raise HTTPException(status_code=404, detail="Feature flag not found")
-
-    # TODO: Add validation for variant_data based on keys_config
-
-    # Check if variant name already exists
-    existing_variant = feature_variants_crud.get_by_name(
-        name=variant_data.name, feature_pid=flag_pid
-    )
-    if existing_variant:
-        raise HTTPException(
-            status_code=400, detail=f"Variant '{variant_data.name}' already exists"
-        )
-
-    # Create variant
-    variant = feature_variants_crud.create_variant(
-        feature_pid=flag_pid, variant_data=variant_data.model_dump()
-    )
-    return variant
-
-
-@router.get("/{flag_pid}/variants/", response_model=List[VariantResponse])
-async def get_feature_variants(flag_pid: UUID, db: Session = Depends(get_db)):
-    """Get all variants for a feature flag"""
-    feature_flags_crud = FeatureFlagsCRUD(db)
-    feature_variants_crud = FeatureVariantsCRUD(db)
-
-    # Check if feature flag exists
-    feature_flag = feature_flags_crud.get_by_pid(flag_pid)
-    if not feature_flag:
-        raise HTTPException(status_code=404, detail="Feature flag not found")
-
-    variants = feature_variants_crud.get_feature_variants(feature_pid=flag_pid)
-    return variants
-
-
-@router.put("/variants/{variant_pid}/", response_model=VariantResponse)
-async def update_variant(
-    variant_pid: UUID, variant_data: VariantCreate, db: Session = Depends(get_db)
-):
-    """Update a variant"""
-    feature_variants_crud = FeatureVariantsCRUD(db)
-
-    variant = feature_variants_crud.get_by_pid(variant_pid)
-    if not variant:
-        raise HTTPException(status_code=404, detail="Variant not found")
-
-    # TODO: Add validation for variant_data based on keys_config
-
-    # Check if new name conflicts with existing variants in the same feature
-    if variant_data.name != variant.name:
-        existing = feature_variants_crud.get_by_name(
-            name=variant_data.name, feature_pid=variant.feature_id
-        )
-        if existing:
-            raise HTTPException(
-                status_code=400, detail=f"Variant '{variant_data.name}' already exists"
-            )
-
-    # Update variant
-    updated_variant = feature_variants_crud.update(
-        db_obj=variant, obj_in=variant_data.model_dump()
-    )
-    return updated_variant

@@ -47,12 +47,12 @@ class ExperienceMetrics(BaseModel):
     )
 
 
-class ExperienceSegmentMetrics(BaseModel):
-    __tablename__ = "experience_segment_metrics"
+class TargetingRuleMetrics(BaseModel):
+    __tablename__ = "targeting_rule_metrics"
 
-    experience_segment_id: Mapped[UUIDType] = mapped_column(
+    targeting_rule_id: Mapped[UUIDType] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("experience_segments.pid"),
+        ForeignKey("targeting_rules.pid"),
         nullable=False,
         index=True,
     )
@@ -67,9 +67,9 @@ class ExperienceSegmentMetrics(BaseModel):
     __table_args__ = (
         # Unique constraint: one experience segment metric pair
         UniqueConstraint(
-            "experience_segment_id",
+            "targeting_rule_id",
             "metric_id",
-            name="uq_experience_segment_metrics_exp_seg_metric",
+            name="uq_experience_segment_metrics_tr_metric",
         ),
     )
 

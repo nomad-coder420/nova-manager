@@ -7,11 +7,6 @@ from pydantic import BaseModel
 from nova_manager.api.experiences.request_response import ExperienceResponse
 
 
-class VariantCreate(BaseModel):
-    name: str
-    config: Dict[str, Any] = {}
-
-
 class NovaObjectKeyDefinition(TypedDict):
     type: str
     description: str
@@ -23,10 +18,20 @@ class NovaObjectDefinition(BaseModel):
     keys: Dict[str, NovaObjectKeyDefinition]
 
 
+class NovaExperienceObjectDefinition(TypedDict):
+    pass
+
+
+class NovaExperienceDefinition(BaseModel):
+    description: str
+    objects: Dict[str, NovaExperienceObjectDefinition]
+
+
 class NovaObjectSyncRequest(BaseModel):
     organisation_id: str
     app_id: str
     objects: Dict[str, NovaObjectDefinition]
+    experiences: Dict[str, NovaExperienceDefinition]
 
 
 class NovaObjectSyncResponse(BaseModel):
@@ -35,6 +40,11 @@ class NovaObjectSyncResponse(BaseModel):
     objects_created: int
     objects_updated: int
     objects_skipped: int
+    experiences_processed: int = 0
+    experiences_created: int = 0
+    experiences_updated: int = 0
+    experiences_skipped: int = 0
+    experience_features_created: int = 0
     dashboard_url: Optional[str] = None
     message: str
     details: List[Dict[str, Any]] = []
@@ -55,38 +65,21 @@ class FeatureFlagUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class TargetingRuleCreate(BaseModel):
-    priority: int
-    rule_config: Dict[str, Any]
-
-
-class IndividualTargetingCreate(BaseModel):
-    rule_config: Dict[str, Any]
-
-
-class VariantResponse(BaseModel):
-    pid: UUID
-    name: str
-    config: Dict[str, Any]
-
-    class Config:
-        from_attributes = True
-
-
 class FeatureFlagResponse(BaseModel):
     pid: UUID
     name: str
     description: str
     type: str
     is_active: bool
-    created_at: datetime
-    modified_at: datetime
-    variants: List[VariantResponse] = []
     keys_config: Dict[str, Any]
     default_variant: Dict[str, Any]
 
     class Config:
         from_attributes = True
+
+
+class FeatureFlagExperienceResponse(BaseModel):
+    experience_id: UUID
 
 
 class FeatureFlagListItem(BaseModel):
@@ -97,12 +90,14 @@ class FeatureFlagListItem(BaseModel):
     is_active: bool
     keys_config: Dict[str, NovaObjectKeyDefinition]
     default_variant: Dict[str, Any]
-    variants: List[VariantResponse]
-    experience: ExperienceResponse | None
-    created_at: datetime
+    experiences: List[FeatureFlagExperienceResponse]
 
     class Config:
         from_attributes = True
+
+
+class FeatureFlagExperienceDetailedResponse(FeatureFlagExperienceResponse):
+    experience: ExperienceResponse
 
 
 class FeatureFlagDetailedResponse(BaseModel):
@@ -113,10 +108,7 @@ class FeatureFlagDetailedResponse(BaseModel):
     is_active: bool
     keys_config: Dict[str, Any]
     default_variant: Dict[str, Any]
-    created_at: datetime
-    modified_at: datetime
-    variants: List[VariantResponse] = []
-    experience: ExperienceResponse | None
+    experiences: List[FeatureFlagExperienceDetailedResponse]
 
     class Config:
         from_attributes = True

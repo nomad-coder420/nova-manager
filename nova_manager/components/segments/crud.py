@@ -1,7 +1,3 @@
-from nova_manager.components.experiences.models import (
-    ExperienceSegmentPersonalisations,
-    ExperienceSegments,
-)
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_, or_
 from typing import List, Optional, Dict, Any
@@ -136,27 +132,11 @@ class SegmentsCRUD(BaseCRUD):
         self.db.refresh(cloned_segment)
         return cloned_segment
 
-    def get_with_experience_segments(self, pid: UUIDType) -> Optional[Segments]:
-        """Get segment with experience segments loaded"""
-        return (
-            self.db.query(Segments)
-            # .options(
-            #     selectinload(Segments.experience_segments).selectinload(
-            #         ExperienceSegments.experience
-            #     )
-            # )
-            .filter(Segments.pid == pid).first()
-        )
-
     def get_segment_with_details(self, pid: UUIDType) -> Optional[Segments]:
         """Get segment with full details including experience relationships"""
         return (
             self.db.query(Segments)
-            .options(
-                selectinload(Segments.experience_segments)
-                .selectinload(ExperienceSegments.personalisations)
-                .selectinload(ExperienceSegmentPersonalisations.personalisation)
-            )
+            .options(selectinload(Segments.targeting_rules))
             .filter(Segments.pid == pid)
             .first()
         )
