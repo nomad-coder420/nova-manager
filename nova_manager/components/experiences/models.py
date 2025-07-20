@@ -45,18 +45,18 @@ class Experiences(BaseOrganisationModel):
         back_populates="experience",
     )
 
-    personalisations = relationship(
-        "Personalisations",
-        foreign_keys="Personalisations.experience_id",
+    variants = relationship(
+        "ExperienceVariants",
+        foreign_keys="ExperienceVariants.experience_id",
         back_populates="experience",
         cascade="all, delete-orphan",
     )
 
-    targeting_rules = relationship(
-        "TargetingRules",
-        foreign_keys="TargetingRules.experience_id",
+    personalisations = relationship(
+        "Personalisations",
+        foreign_keys="Personalisations.experience_id",
         back_populates="experience",
-        order_by="TargetingRules.priority.asc()",
+        order_by="Personalisations.priority.desc()",
         cascade="all, delete-orphan",
     )
 

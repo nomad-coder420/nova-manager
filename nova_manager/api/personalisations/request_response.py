@@ -1,26 +1,38 @@
 from datetime import datetime
-from nova_manager.api.experiences.request_response import ExperienceResponse
-from typing import Optional, Dict, Any
+from nova_manager.components.experiences.schemas import ExperienceResponse
+from typing import List, Optional, Dict, Any
 from uuid import UUID as UUIDType
 from pydantic import BaseModel
 
 
-class PersonalisationVariantCreate(BaseModel):
+class ExperienceFeatureVariantCreate(BaseModel):
+    experience_feature_id: UUIDType
     name: str
-    config: Dict[str, Any]
+    config: dict
+
+
+class ExperienceVariantCreate(BaseModel):
+    name: str
+    description: str
+    is_default: bool
+
+    feature_variants: List[ExperienceFeatureVariantCreate] | None = None
+
+
+class PersonalisationCreateExperienceVariant(BaseModel):
+    experience_variant: ExperienceVariantCreate
+    target_percentage: int
 
 
 class PersonalisationCreate(BaseModel):
     name: str
     description: str
-    experience_pid: UUIDType
-    variants: Dict[UUIDType, PersonalisationVariantCreate]
+    experience_id: UUIDType
+    priority: int | None = None
+    rule_config: dict
+    rollout_percentage: int
 
-
-class PersonalisationUpdate(BaseModel):
-    name: Optional[str]
-    description: Optional[str]
-    variants: Optional[Dict[UUIDType, PersonalisationVariantCreate]] = None
+    experience_variants: List[PersonalisationCreateExperienceVariant]
 
 
 class PersonalisationListResponse(BaseModel):
@@ -28,6 +40,26 @@ class PersonalisationListResponse(BaseModel):
     name: str
     description: str
     experience_id: UUIDType
-    is_default: bool
-    last_updated_at: datetime
     experience: ExperienceResponse
+
+
+class ExperienceVariantResponse(BaseModel):
+    name: str
+    description: str
+    is_default: bool
+
+
+class PersonalisationExperienceVariantResponse(BaseModel):
+    target_percentage: int
+    experience_variant: ExperienceVariantResponse
+
+
+class PersonalisationDetailedResponse(BaseModel):
+    pid: UUIDType
+    name: str
+    description: str
+    experience_id: UUIDType
+    priority: int
+    rollout_percentage: int
+    rule_config: dict
+    experience_variants: List[PersonalisationExperienceVariantResponse]

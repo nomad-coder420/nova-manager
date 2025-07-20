@@ -2,12 +2,13 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from uuid import UUID as UUIDType
 from sqlalchemy.orm import Session, selectinload
-from sqlalchemy import and_, or_, desc, asc
+from sqlalchemy import and_, asc, desc
 
 from nova_manager.core.base_crud import BaseCRUD
 from nova_manager.components.experiences.models import Experiences
 from nova_manager.components.personalisations.models import (
-    ExperienceFeatureVariants,
+    ExperienceVariants,
+    PersonalisationExperienceVariants,
     Personalisations,
 )
 
@@ -17,6 +18,34 @@ class PersonalisationsCRUD(BaseCRUD):
 
     def __init__(self, db: Session):
         super().__init__(Personalisations, db)
+
+    def create_personalisation(
+        self,
+        experience_id: UUIDType,
+        organisation_id: str,
+        app_id: str,
+        name: str,
+        description: str,
+        priority: int,
+        rule_config: dict,
+        rollout_percentage: int,
+    ) -> Personalisations:
+        personalisation = Personalisations(
+            experience_id=experience_id,
+            organisation_id=organisation_id,
+            app_id=app_id,
+            name=name,
+            description=description,
+            priority=priority,
+            rule_config=rule_config,
+            rollout_percentage=rollout_percentage,
+        )
+
+        self.db.add(personalisation)
+        self.db.flush()
+        self.db.refresh(personalisation)
+
+        return personalisation
 
     def get_by_name(
         self, name: str, experience_id: UUIDType
@@ -33,77 +62,36 @@ class PersonalisationsCRUD(BaseCRUD):
             .first()
         )
 
-    def get_by_experience(
-        self, experience_id: UUIDType, skip: int = 0, limit: int = 100
-    ) -> List[Personalisations]:
-        """Get personalisations for a specific experience"""
-        return (
-            self.db.query(Personalisations)
-            .filter(Personalisations.experience_id == experience_id)
-            .options(
-                selectinload(Personalisations.variants).selectinload(
-                    ExperienceFeatureVariants.personalisation
-                )
-            )
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-
-    def get_with_variants(self, pid: UUIDType) -> Optional[Personalisations]:
-        """Get personalisation with all its variants"""
-        return (
-            self.db.query(Personalisations)
-            .options(
-                selectinload(Personalisations.variants).selectinload(
-                    ExperienceFeatureVariants.personalisation
-                )
-            )
-            .filter(Personalisations.pid == pid)
-            .first()
-        )
-
-    def get_default_personalisations_by_ids(
-        self, personalisation_ids: List[UUIDType]
-    ) -> List[Personalisations]:
-        """Get personalisations by IDs that are marked as default"""
-        return (
-            self.db.query(Personalisations)
-            .filter(
-                and_(
-                    Personalisations.pid.in_(personalisation_ids),
-                    Personalisations.is_default == True,
-                )
-            )
-            .all()
-        )
-
-    def create_personalisation(
+    def search_personalisations(
         self,
-        experience_id: UUIDType,
         organisation_id: str,
-        app_id: str,
-        name: str,
-        description: str,
-        is_default: bool = False,
-    ) -> Personalisations:
-        """Create a personalisation with its variants"""
-        # Create personalisation
-        personalisation = Personalisations(
-            name=name,
-            description=description or "",
-            experience_id=experience_id or "",
-            last_updated_at=datetime.now(timezone.utc),
-            organisation_id=organisation_id,
-            app_id=app_id,
-            is_default=is_default,
+        app_id: Optional[str] = None,
+        experience_id: Optional[UUIDType] = None,
+        search_term: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> List[Personalisations]:
+        """Search personalisations with filters"""
+        query = (
+            self.db.query(Personalisations)
+            .options(selectinload(Personalisations.experience))
+            .filter(Personalisations.organisation_id == organisation_id)
         )
 
-        self.db.add(personalisation)
-        self.db.flush()
-        self.db.refresh(personalisation)
+        if app_id:
+            query = query.filter(Personalisations.app_id == app_id)
 
-        return personalisation
+        if experience_id:
+            query = query.filter(Personalisations.experience_id == experience_id)
+
+        if search_term:
+            search_pattern = f"%{search_term}%"
+            query = query.filter(
+                Personalisations.name.ilike(search_pattern)
+                | Personalisations.description.ilike(search_pattern)
+            )
+
+        return query.offset(offset).limit(limit).all()
 
     def get_multi_by_org(
         self,
@@ -114,21 +102,18 @@ class PersonalisationsCRUD(BaseCRUD):
         order_by: str = "created_at",
         order_direction: str = "desc",
     ) -> List[Personalisations]:
-        """Get personalisations for organization/app with pagination and filtering"""
+        """Get multiple personalisations by organisation and optionally app"""
         query = (
             self.db.query(Personalisations)
             .options(selectinload(Personalisations.experience))
             .filter(
-                and_(
-                    Personalisations.organisation_id == organisation_id,
-                    Personalisations.app_id == app_id,
-                )
+                Personalisations.organisation_id == organisation_id,
+                Personalisations.app_id == app_id,
             )
         )
 
         # Apply ordering
         order_column = getattr(Personalisations, order_by, Personalisations.created_at)
-
         if order_direction.lower() == "desc":
             query = query.order_by(desc(order_column))
         else:
@@ -136,54 +121,99 @@ class PersonalisationsCRUD(BaseCRUD):
 
         return query.offset(skip).limit(limit).all()
 
-    def search_personalisations(
-        self,
-        organisation_id: str,
-        app_id: str,
-        search_term: str,
-        skip: int = 0,
-        limit: int = 100,
+    def get_experience_personalisations(
+        self, experience_id: UUIDType
     ) -> List[Personalisations]:
-        """Search personalisations by name or description"""
-        search_pattern = f"%{search_term}%"
-
+        """Get all personalisations for an experience"""
         return (
             self.db.query(Personalisations)
-            .filter(
-                and_(
-                    Personalisations.organisation_id == organisation_id,
-                    Personalisations.app_id == app_id,
-                    or_(
-                        Personalisations.name.ilike(search_pattern),
-                        Personalisations.description.ilike(search_pattern),
-                    ),
+            .options(
+                selectinload(Personalisations.experience_variants).selectinload(
+                    PersonalisationExperienceVariants.experience_variant
                 )
             )
-            .offset(skip)
-            .limit(limit)
+            .filter(Personalisations.experience_id == experience_id)
             .all()
         )
 
-    def delete_personalisation_with_variants(self, pid: UUIDType) -> bool:
-        """Delete a personalisation and all its variants"""
-        personalisation = self.get_by_pid(pid)
-        if not personalisation:
-            return False
-
-        # Delete junction table entries first
-        self.db.query(ExperienceFeatureVariants).filter(
-            ExperienceFeatureVariants.personalisation_id == pid
-        ).delete()
-
-        # Delete personalisation
-        self.db.delete(personalisation)
-        self.db.flush()
-        return True
-
-    def create_default_personalisation(
+    def get_experience_max_priority_personalisation(
         self, experience_id: UUIDType
-    ) -> Personalisations:
-        """Create a default personalisation with all default variants for an experience"""
+    ) -> List[Personalisations]:
+        """Get the max priority personalisation for an experience"""
+        return (
+            self.db.query(Personalisations)
+            .filter(Personalisations.experience_id == experience_id)
+            .order_by(desc(Personalisations.priority))
+            .first()
+        )
+
+
+class PersonalisationExperienceVariantsCRUD(BaseCRUD):
+    def __init__(self, db: Session):
+        super().__init__(PersonalisationExperienceVariants, db)
+
+
+class ExperienceVariantsCRUD(BaseCRUD):
+    """CRUD operations for Personalisations"""
+
+    def __init__(self, db: Session):
+        super().__init__(ExperienceVariants, db)
+
+    def get_by_name(
+        self, name: str, experience_id: UUIDType
+    ) -> Optional[ExperienceVariants]:
+        """Get experience variant by name within an experience"""
+        return (
+            self.db.query(ExperienceVariants)
+            .filter(
+                and_(
+                    ExperienceVariants.name == name,
+                    ExperienceVariants.experience_id == experience_id,
+                )
+            )
+            .first()
+        )
+
+    def get_default_for_ids(
+        self, variant_ids: List[UUIDType]
+    ) -> List[ExperienceVariants]:
+        """Get Experience Variants by IDs that are marked as default"""
+        return (
+            self.db.query(ExperienceVariants)
+            .filter(
+                and_(
+                    ExperienceVariants.pid.in_(variant_ids),
+                    ExperienceVariants.is_default == True,
+                )
+            )
+            .all()
+        )
+
+    def create_experience_variant(
+        self,
+        experience_id: UUIDType,
+        name: str,
+        description: str,
+        is_default: bool = False,
+    ) -> ExperienceVariants:
+        """Create an Experience Variant"""
+
+        variant = ExperienceVariants(
+            name=name,
+            description=description or "",
+            experience_id=experience_id or "",
+            last_updated_at=datetime.now(timezone.utc),
+            is_default=is_default,
+        )
+
+        self.db.add(variant)
+        self.db.flush()
+        self.db.refresh(variant)
+
+        return variant
+
+    def create_default_variant(self, experience_id: UUIDType) -> ExperienceVariants:
+        """Create a default variant with all default variants for an experience"""
         # Get experience to find its feature flags
         experience = (
             self.db.query(Experiences).filter(Experiences.pid == experience_id).first()
@@ -192,16 +222,16 @@ class PersonalisationsCRUD(BaseCRUD):
             raise ValueError("Experience not found")
 
         # Generate unique name
-        # Get all existing personalisation names in this experience
+        # Get all existing variant names in this experience
         existing_names = set()
-        existing_personalisations = (
-            self.db.query(Personalisations)
-            .filter(Personalisations.experience_id == experience_id)
+        existing_variants = (
+            self.db.query(ExperienceVariants)
+            .filter(ExperienceVariants.experience_id == experience_id)
             .all()
         )
 
-        for personalisation in existing_personalisations:
-            existing_names.add(personalisation.name.lower())
+        for variant in existing_variants:
+            existing_names.add(variant.name.lower())
 
         # Find the next available default personalisation number
         counter = 1
@@ -215,22 +245,12 @@ class PersonalisationsCRUD(BaseCRUD):
         # Generate description
         description = "Auto-generated default experience"
 
-        # Create personalisation
-        self.create_personalisation(
+        # Create variant
+        self.create_experience_variant(
             experience_id=experience_id,
-            organisation_id=experience.organisation_id,
-            app_id=experience.app_id,
             name=name,
             description=description,
             is_default=True,
         )
 
-        return personalisation
-
-    def count_by_experience(self, experience_id: UUIDType) -> int:
-        """Count personalisations for a specific experience"""
-        return (
-            self.db.query(Personalisations)
-            .filter(Personalisations.experience_id == experience_id)
-            .count()
-        )
+        return variant

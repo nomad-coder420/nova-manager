@@ -99,11 +99,11 @@ class UserExperiencePersonalisation(BaseOrganisationModel):
         foreign_keys=[experience_id],
         back_populates="user_experience_personalisations",
     )
-    personalisation = relationship(
-        "Personalisations",
-        foreign_keys=[personalisation_id],
-        back_populates="user_experience_personalisations",
-    )
+    # personalisation = relationship(
+    #     "ExperienceFeatureVariants",
+    #     foreign_keys=[personalisation_id],
+    #     back_populates="user_experience_personalisations",
+    # )
 
 
 # class UserFeatureVariants(BaseOrganisationModel):

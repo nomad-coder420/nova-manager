@@ -26,9 +26,9 @@ class Segments(BaseOrganisationModel):
     )
 
     # Relationships
-    targeting_rules = relationship(
-        "TargetingRuleSegments",
-        foreign_keys="TargetingRuleSegments.segment_id",
+    personalisations = relationship(
+        "PersonalisationSegmentRules",
+        foreign_keys="PersonalisationSegmentRules.segment_id",
         back_populates="segment",
         cascade="all, delete-orphan",
     )

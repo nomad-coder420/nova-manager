@@ -1,16 +1,13 @@
 import traceback
-from typing import Dict, List
+from typing import List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 
 from nova_manager.api.feature_flags.request_response import (
-    FeatureFlagCreate,
     FeatureFlagListItem,
-    FeatureFlagResponse,
     FeatureFlagDetailedResponse,
-    FeatureFlagUpdate,
     NovaObjectSyncRequest,
     NovaObjectSyncResponse,
 )
@@ -242,39 +239,6 @@ async def sync_nova_objects(
     )
 
 
-# @router.post("/", response_model=FeatureFlagResponse)
-# async def create_feature_flag(
-#     flag_data: FeatureFlagCreate, db: Session = Depends(get_db)
-# ):
-#     """Create a new feature flag with default variant"""
-#     try:
-#         feature_flags_crud = FeatureFlagsCRUD(db)
-
-#         # Check if name already exists
-#         existing = feature_flags_crud.get_by_name(
-#             name=flag_data.name,
-#             organisation_id=flag_data.organisation_id,
-#             app_id=flag_data.app_id,
-#         )
-#         if existing:
-#             raise HTTPException(
-#                 status_code=400,
-#                 detail=f"Feature flag '{flag_data.name}' already exists",
-#             )
-
-#         # Create feature flag with default variant
-#         feature_flag = feature_flags_crud.create(obj_in=flag_data.model_dump())
-
-#         # Load with variants for response
-#         feature_flag = feature_flags_crud.get_with_variants(pid=feature_flag.pid)
-#         return feature_flag
-
-#     except IntegrityError:
-#         raise HTTPException(
-#             status_code=400, detail="Feature flag with this name already exists"
-#         )
-
-
 @router.get("/", response_model=List[FeatureFlagListItem])
 async def list_feature_flags(
     organisation_id: str = Query(...),
@@ -315,21 +279,9 @@ async def list_available_feature_flags(
     return flags
 
 
-@router.get("/{flag_pid}/", response_model=FeatureFlagResponse)
+@router.get("/{flag_pid}/", response_model=FeatureFlagDetailedResponse)
 async def get_feature_flag(flag_pid: UUID, db: Session = Depends(get_db)):
     """Get feature flag by ID with all variants"""
-    feature_flags_crud = FeatureFlagsCRUD(db)
-
-    feature_flag = feature_flags_crud.get_with_variants(pid=flag_pid)
-    if not feature_flag:
-        raise HTTPException(status_code=404, detail="Feature flag not found")
-
-    return feature_flag
-
-
-@router.get("/{flag_pid}/details/", response_model=FeatureFlagDetailedResponse)
-async def get_feature_flag_details(flag_pid: UUID, db: Session = Depends(get_db)):
-    """Get feature flag with detailed information including usage statistics and experiences"""
     feature_flags_crud = FeatureFlagsCRUD(db)
 
     feature_flag = feature_flags_crud.get_with_full_details(pid=flag_pid)

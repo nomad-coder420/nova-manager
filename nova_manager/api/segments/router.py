@@ -1,7 +1,6 @@
 from typing import List, Optional
 from uuid import UUID as UUIDType
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from nova_manager.components.rule_evaluator.controller import RuleEvaluator
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -9,10 +8,11 @@ from nova_manager.api.segments.request_response import (
     SegmentCreate,
     SegmentDetailedResponse,
     SegmentListResponse,
-    SegmentResponse,
     SegmentUpdate,
 )
+from nova_manager.components.segments.schemas import SegmentResponse
 from nova_manager.components.segments.crud import SegmentsCRUD
+from nova_manager.components.rule_evaluator.controller import RuleEvaluator
 from nova_manager.database.session import get_db
 
 router = APIRouter()
@@ -95,7 +95,7 @@ async def get_segment(segment_pid: UUIDType, db: Session = Depends(get_db)):
     """Get segment by ID"""
     segments_crud = SegmentsCRUD(db)
 
-    segment = segments_crud.get_segment_with_details(segment_pid)
+    segment = segments_crud.get_with_full_details(segment_pid)
     if not segment:
         raise HTTPException(status_code=404, detail="Segment not found")
 

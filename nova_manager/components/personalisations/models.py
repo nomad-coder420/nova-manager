@@ -28,39 +28,86 @@ class Personalisations(BaseOrganisationModel):
         ForeignKey("experiences.pid"),
         nullable=False,
     )
-    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    rule_config: Mapped[dict] = mapped_column(
+        JSON, server_default=func.json("{}"), nullable=False
+    )
+    rollout_percentage: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=100
+    )
     last_updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     __table_args__ = (
         UniqueConstraint("name", "experience_id", name="uq_personalisations_name_exp"),
+        UniqueConstraint(
+            "experience_id", "priority", name="uq_personalisations_exp_prio"
+        ),
         Index("idx_personalisations_experience_id", "experience_id"),
+        Index("idx_personalisations_priority", "priority"),
     )
 
     # Relationships
     experience = relationship(
-        "Experiences", foreign_keys=[experience_id], back_populates="personalisations"
+        "Experiences",
+        foreign_keys=[experience_id],
+        back_populates="personalisations",
     )
 
-    variants = relationship(
+    experience_variants = relationship(
+        "PersonalisationExperienceVariants",
+        foreign_keys="PersonalisationExperienceVariants.personalisation_id",
+        back_populates="personalisation",
+        cascade="all, delete-orphan",
+    )
+
+    segment_rules = relationship(
+        "PersonalisationSegmentRules",
+        foreign_keys="PersonalisationSegmentRules.personalisation_id",
+        back_populates="personalisation",
+        cascade="all, delete-orphan",
+    )
+
+
+class ExperienceVariants(BaseModel):
+    __tablename__ = "experience_variants"
+
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str] = mapped_column(String, nullable=False, default="")
+    experience_id: Mapped[UUIDType] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("experiences.pid"),
+        nullable=False,
+    )
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    last_updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "name", "experience_id", name="uq_experience_variants_name_exp"
+        ),
+        Index("idx_experience_variants_experience_id", "experience_id"),
+    )
+
+    # Relationships
+    experience = relationship(
+        "Experiences", foreign_keys=[experience_id], back_populates="variants"
+    )
+
+    feature_variants = relationship(
         "ExperienceFeatureVariants",
-        foreign_keys="ExperienceFeatureVariants.personalisation_id",
-        back_populates="personalisation",
+        foreign_keys="ExperienceFeatureVariants.experience_variant_id",
+        back_populates="experience_variant",
         cascade="all, delete-orphan",
     )
 
-    targeting_rules = relationship(
-        "TargetingRulePersonalisations",
-        foreign_keys="TargetingRulePersonalisations.personalisation_id",
-        back_populates="personalisation",
-        cascade="all, delete-orphan",
-    )
-
-    user_experience_personalisations = relationship(
-        "UserExperiencePersonalisation",
-        foreign_keys="UserExperiencePersonalisation.personalisation_id",
-        back_populates="personalisation",
+    personalisations = relationship(
+        "PersonalisationExperienceVariants",
+        foreign_keys="PersonalisationExperienceVariants.experience_variant_id",
+        back_populates="experience_variant",
         cascade="all, delete-orphan",
     )
 
@@ -68,9 +115,9 @@ class Personalisations(BaseOrganisationModel):
 class ExperienceFeatureVariants(BaseModel):
     __tablename__ = "experience_feature_variants"
 
-    personalisation_id: Mapped[UUIDType] = mapped_column(
+    experience_variant_id: Mapped[UUIDType] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("personalisations.pid"),
+        ForeignKey("experience_variants.pid"),
         nullable=False,
     )
     experience_feature_id: Mapped[UUIDType] = mapped_column(
@@ -83,11 +130,18 @@ class ExperienceFeatureVariants(BaseModel):
         JSON, server_default=func.json("{}"), nullable=False
     )
 
+    __table_args__ = (
+        Index(
+            "idx_experience_feature_variants_experience_feature_id",
+            "experience_feature_id",
+        ),
+    )
+
     # Relationships
-    personalisation = relationship(
-        "Personalisations",
-        foreign_keys=[personalisation_id],
-        back_populates="variants",
+    experience_variant = relationship(
+        "ExperienceVariants",
+        foreign_keys=[experience_variant_id],
+        back_populates="feature_variants",
     )
 
     experience_feature = relationship(
@@ -97,95 +151,60 @@ class ExperienceFeatureVariants(BaseModel):
     )
 
 
-class TargetingRules(BaseModel):
-    __tablename__ = "targeting_rules"
+class PersonalisationExperienceVariants(BaseModel):
+    __tablename__ = "personalisation_experience_variants"
 
-    experience_id: Mapped[UUIDType] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("experiences.pid"),
-        nullable=False,
-    )
-    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    rule_config: Mapped[dict] = mapped_column(
-        JSON, server_default=func.json("{}"), nullable=False
-    )
-    rollout_percentage: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
-    last_updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-
-    __table_args__ = (
-        UniqueConstraint(
-            "experience_id", "priority", name="uq_targeting_rules_exp_prio"
-        ),
-        Index("idx_targeting_rules_experience_id", "experience_id"),
-        Index("idx_targeting_rules_priority", "priority"),
-    )
-
-    # Relationships
-    experience = relationship(
-        "Experiences",
-        foreign_keys=[experience_id],
-        back_populates="targeting_rules",
-    )
-
-    personalisations = relationship(
-        "TargetingRulePersonalisations",
-        foreign_keys="TargetingRulePersonalisations.targeting_rule_id",
-        back_populates="targeting_rule",
-        cascade="all, delete-orphan",
-    )
-
-    segments = relationship(
-        "TargetingRuleSegments",
-        foreign_keys="TargetingRuleSegments.targeting_rule_id",
-        back_populates="targeting_rule",
-        cascade="all, delete-orphan",
-    )
-
-
-class TargetingRulePersonalisations(BaseModel):
-    __tablename__ = "targeting_rule_personalisations"
-
-    targeting_rule_id: Mapped[UUIDType] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("targeting_rules.pid"),
-        nullable=False,
-    )
     personalisation_id: Mapped[UUIDType] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("personalisations.pid"),
         nullable=False,
         index=True,
     )
+    experience_variant_id: Mapped[UUIDType] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("experience_variants.pid"),
+        nullable=False,
+        index=True,
+    )
     target_percentage: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
 
-    # Relationships
-    targeting_rule = relationship(
-        "TargetingRules",
-        foreign_keys=[targeting_rule_id],
-        back_populates="personalisations",
+    __table_args__ = (
+        # Unique constraint: one relationship per personalisation-experience variant pair
+        UniqueConstraint(
+            "personalisation_id",
+            "experience_variant_id",
+            name="uq_personalisation_experience_variants_per_exp_var",
+        ),
     )
 
+    # Relationships
     personalisation = relationship(
         "Personalisations",
         foreign_keys=[personalisation_id],
-        back_populates="targeting_rules",
+        back_populates="experience_variants",
+    )
+
+    experience_variant = relationship(
+        "ExperienceVariants",
+        foreign_keys=[experience_variant_id],
+        back_populates="personalisations",
     )
 
 
-class TargetingRuleSegments(BaseModel):
-    __tablename__ = "targeting_rule_segments"
+class PersonalisationSegmentRules(BaseModel):
+    __tablename__ = "personalisation_segment_rules"
 
-    targeting_rule_id: Mapped[UUIDType] = mapped_column(
+    personalisation_id: Mapped[UUIDType] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("targeting_rules.pid"),
+        ForeignKey("personalisations.pid"),
         nullable=False,
+        index=True,
     )
     segment_id: Mapped[UUIDType] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("segments.pid"),
         nullable=False,
+        index=True,
     )
     rule_config: Mapped[dict] = mapped_column(
         JSON, server_default=func.json("{}"), nullable=False
@@ -194,22 +213,21 @@ class TargetingRuleSegments(BaseModel):
     __table_args__ = (
         # Unique constraint: one relationship per experience-segment pair
         UniqueConstraint(
-            "targeting_rule_id", "segment_id", name="uq_targeting_rule_segments_tr_seg"
+            "personalisation_id",
+            "segment_id",
+            name="uq_personalisation_segment_rules_tr_seg",
         ),
-        # Index for common queries
-        Index("idx_targeting_rule_segments_targeting_rule_id", "targeting_rule_id"),
-        Index("idx_targeting_rule_segments_segment_id", "segment_id"),
     )
 
     # Relationships
-    targeting_rule = relationship(
-        "TargetingRules",
-        foreign_keys=[targeting_rule_id],
-        back_populates="segments",
+    personalisation = relationship(
+        "Personalisations",
+        foreign_keys=[personalisation_id],
+        back_populates="segment_rules",
     )
 
     segment = relationship(
         "Segments",
         foreign_keys=[segment_id],
-        back_populates="targeting_rules",
+        back_populates="personalisations",
     )

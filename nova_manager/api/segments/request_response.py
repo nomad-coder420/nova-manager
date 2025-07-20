@@ -1,7 +1,7 @@
 from datetime import datetime
+from nova_manager.components.personalisations.schemas import PersonalisationResponse
 from typing import List, Optional, Dict, Any
 from uuid import UUID as UUIDType
-from nova_manager.api.experiences.request_response import ExperienceResponse
 from pydantic import BaseModel, Field
 
 
@@ -34,40 +34,8 @@ class SegmentUpdate(BaseModel):
     rule_config: Optional[Dict[str, Any]] = None
 
 
-class PersonalisationResponse(BaseModel):
-    pid: UUIDType
-    name: str
-    description: str
-    is_default: bool
-    last_updated_at: datetime
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class ExperiencePersonalisationResponse(BaseModel):
-    pid: UUIDType
-    personalisation_id: UUIDType
-    target_percentage: int
+class SegmentPersonalisationResponse(BaseModel):
     personalisation: PersonalisationResponse
-
-    class Config:
-        from_attributes = True
-
-
-class SegmentResponse(BaseModel):
-    pid: UUIDType
-    name: str
-    description: str
-    rule_config: Dict[str, Any]
-    organisation_id: str
-    app_id: str
-    created_at: datetime
-    modified_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class SegmentListResponse(BaseModel):
@@ -75,11 +43,6 @@ class SegmentListResponse(BaseModel):
     name: str
     description: str
     rule_config: Dict[str, Any]
-    organisation_id: str
-    app_id: str
-    created_at: datetime
-    modified_at: datetime
-    experience_count: int = 0
 
     class Config:
         from_attributes = True
@@ -92,8 +55,8 @@ class SegmentDetailedResponse(BaseModel):
     name: str
     description: str
     rule_config: Dict[str, Any]
-    created_at: datetime
-    modified_at: datetime
+
+    personalisations: List[SegmentPersonalisationResponse]
 
     class Config:
         from_attributes = True

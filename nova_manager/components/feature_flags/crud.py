@@ -70,17 +70,6 @@ class FeatureFlagsCRUD(BaseCRUD):
             .all()
         )
 
-    def get_with_variants(self, pid: UUIDType) -> Optional[FeatureFlags]:
-        """Get feature flag with all variants loaded"""
-        return (
-            self.db.query(FeatureFlags)
-            .options(
-                selectinload(FeatureFlags.variants),
-            )
-            .filter(FeatureFlags.pid == pid)
-            .first()
-        )
-
     def toggle_active(self, pid: UUIDType) -> Optional[FeatureFlags]:
         """Toggle active status of feature flag"""
         flag = self.get_by_pid(pid)

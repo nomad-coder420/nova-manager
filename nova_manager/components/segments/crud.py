@@ -1,3 +1,4 @@
+from nova_manager.components.personalisations.models import PersonalisationSegmentRules
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_, or_
 from typing import List, Optional, Dict, Any
@@ -132,11 +133,15 @@ class SegmentsCRUD(BaseCRUD):
         self.db.refresh(cloned_segment)
         return cloned_segment
 
-    def get_segment_with_details(self, pid: UUIDType) -> Optional[Segments]:
-        """Get segment with full details including experience relationships"""
+    def get_with_full_details(self, pid: UUIDType) -> Optional[Segments]:
+        """Get segment with full details"""
         return (
             self.db.query(Segments)
-            .options(selectinload(Segments.targeting_rules))
+            .options(
+                selectinload(Segments.personalisations).selectinload(
+                    PersonalisationSegmentRules.personalisation
+                )
+            )
             .filter(Segments.pid == pid)
             .first()
         )
