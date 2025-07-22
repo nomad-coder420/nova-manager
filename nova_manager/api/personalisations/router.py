@@ -10,11 +10,11 @@ from nova_manager.api.personalisations.request_response import (
     PersonalisationListResponse,
 )
 from nova_manager.components.experiences.crud import (
-    ExperienceFeatureVariantsCRUD,
     ExperiencesCRUD,
+    ExperienceVariantsCRUD,
+    ExperienceFeatureVariantsCRUD,
 )
 from nova_manager.components.personalisations.crud import (
-    ExperienceVariantsCRUD,
     PersonalisationExperienceVariantsCRUD,
     PersonalisationsCRUD,
 )

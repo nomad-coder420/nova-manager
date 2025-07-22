@@ -5,31 +5,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from nova_manager.database.async_session import get_async_db
 from nova_manager.api.user_experience.request_response import (
-    GetVariantRequest,
-    GetVariantResponse,
-    GetVariantsRequest,
+    GetExperienceRequest,
+    GetExperienceResponse,
+    GetExperiencesRequest,
 )
-from nova_manager.flows.get_user_feature_variant_flow_async import (
-    GetUserFeatureVariantFlowAsync,
+from nova_manager.flows.get_user_experience_variant_flow_async import (
+    GetUserExperienceVariantFlowAsync,
 )
 
 router = APIRouter()
 
 
-@router.post("/get-variant/", response_model=GetVariantResponse)
-async def get_user_feature_variant(
-    request: GetVariantRequest,
+@router.post("/get-experience/", response_model=GetExperienceResponse)
+async def get_user_experience_variant(
+    request: GetExperienceRequest,
     db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get variant for a single feature/object for a user.
     """
     try:
-        flow = GetUserFeatureVariantFlowAsync(db)
+        flow = GetUserExperienceVariantFlowAsync(db)
 
-        result = await flow.get_user_feature_variant(
+        result = await flow.get_user_experience_variant(
             user_id=request.user_id,
-            feature_name=request.feature_name,
+            experience_name=request.experience_name,
             organisation_id=request.organisation_id,
             app_id=request.app_id,
             payload=request.payload,
@@ -41,23 +41,23 @@ async def get_user_feature_variant(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/get-variants-batch/", response_model=Dict[str, GetVariantResponse])
-async def get_user_feature_variants_batch(
-    request: GetVariantsRequest,
+@router.post("/get-experiences/", response_model=Dict[str, GetExperienceResponse])
+async def get_user_experiences(
+    request: GetExperiencesRequest,
     db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get variants for multiple specific features/objects for a user.
     """
     try:
-        flow = GetUserFeatureVariantFlowAsync(db)
+        flow = GetUserExperienceVariantFlowAsync(db)
 
-        results = await flow.get_variants_for_objects(
+        results = await flow.get_user_experience_variants(
             user_id=request.user_id,
             organisation_id=request.organisation_id,
             app_id=request.app_id,
             payload=request.payload,
-            feature_names=request.feature_names,
+            experience_names=request.experience_names,
         )
 
         return results
@@ -66,24 +66,24 @@ async def get_user_feature_variants_batch(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/get-all-variants/", response_model=Dict[str, GetVariantResponse])
-async def get_all_user_feature_variants(
-    request: GetVariantsRequest,
+@router.post("/get-all-experiences/", response_model=Dict[str, GetExperienceResponse])
+async def get_all_user_experiences(
+    request: GetExperiencesRequest,
     db: AsyncSession = Depends(get_async_db),
 ):
     """
-    Get variants for all active features/objects for a user.
+    Get experiences for all active features/objects for a user.
     """
     try:
-        flow = GetUserFeatureVariantFlowAsync(db)
+        flow = GetUserExperienceVariantFlowAsync(db)
 
         # Call without feature_names to get all variants
-        results = await flow.get_variants_for_objects(
+        results = await flow.get_user_experience_variants(
             user_id=request.user_id,
             organisation_id=request.organisation_id,
             app_id=request.app_id,
             payload=request.payload,
-            feature_names=None,  # None means get all
+            experience_names=None,  # None means get all
         )
 
         return results

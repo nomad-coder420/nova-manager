@@ -1,38 +1,15 @@
 from typing import List
 from uuid import UUID as UUIDType
+from nova_manager.components.user_experience.schemas import UserExperienceAssignment
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, insert
 from sqlalchemy.orm import selectinload
 
-from nova_manager.components.user_experience.models import UserExperiencePersonalisation
+from nova_manager.components.user_experience.models import UserExperience
 
 
-class PersonalisationAssignment:
-    """Data structure for personalisation assignments"""
-
-    def __init__(
-        self,
-        experience_id: UUIDType,
-        personalisation_id: UUIDType | None,
-        segment_id: UUIDType | None,
-        segment_name: str | None,
-        experience_segment_id: UUIDType | None,
-        experience_segment_personalisation_id: UUIDType | None,
-        evaluation_reason: str,
-    ):
-        self.experience_id = experience_id
-        self.personalisation_id = personalisation_id
-        self.segment_id = segment_id
-        self.segment_name = segment_name
-        self.experience_segment_id = experience_segment_id
-        self.experience_segment_personalisation_id = (
-            experience_segment_personalisation_id
-        )
-        self.evaluation_reason = evaluation_reason
-
-
-class UserExperiencePersonalisationAsyncCRUD:
-    """Async CRUD operations for UserExperiencePersonalisation"""
+class UserExperienceAsyncCRUD:
+    """Async CRUD operations for UserExperience"""
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -42,20 +19,20 @@ class UserExperiencePersonalisationAsyncCRUD:
         user_id: UUIDType,
         organisation_id: str,
         app_id: str,
-        experience_ids: List[UUIDType],
-    ) -> List[UserExperiencePersonalisation]:
-        stmt = (
-            select(UserExperiencePersonalisation)
-            .where(
-                UserExperiencePersonalisation.user_id == user_id,
-                UserExperiencePersonalisation.organisation_id == organisation_id,
-                UserExperiencePersonalisation.app_id == app_id,
-                UserExperiencePersonalisation.experience_id.in_(experience_ids),
-            )
-            .options(
-                selectinload(UserExperiencePersonalisation.personalisation),
-            )
+        experience_ids: List[UUIDType] | None = None,
+    ) -> List[UserExperience]:
+        stmt = select(UserExperience).where(
+            UserExperience.user_id == user_id,
+            UserExperience.organisation_id == organisation_id,
+            UserExperience.app_id == app_id,
         )
+
+        if experience_ids:
+            stmt = stmt.where(
+                UserExperience.experience_id.in_(experience_ids),
+            )
+
+        stmt = stmt.options(selectinload(UserExperience.personalisation))
 
         result = await self.db.execute(stmt)
 
@@ -66,7 +43,7 @@ class UserExperiencePersonalisationAsyncCRUD:
         user_id: UUIDType,
         organisation_id: str,
         app_id: str,
-        personalisation_assignments: List[PersonalisationAssignment],
+        personalisation_assignments: List[UserExperienceAssignment],
     ) -> None:
         """
         Bulk create user experience personalisation records.
@@ -89,18 +66,14 @@ class UserExperiencePersonalisationAsyncCRUD:
                 "app_id": app_id,
                 "experience_id": assignment.experience_id,
                 "personalisation_id": assignment.personalisation_id,
-                "segment_id": assignment.segment_id,
-                "segment_name": assignment.segment_name,
-                "experience_segment_id": assignment.experience_segment_id,
-                "experience_segment_personalisation_id": (
-                    assignment.experience_segment_personalisation_id
-                ),
+                "personalisation_name": assignment.personalisation_name,
+                "feature_variants": assignment.feature_variants,
                 "evaluation_reason": assignment.evaluation_reason,
             }
             inserts_data.append(record_data)
 
         # Single bulk insert - very efficient
-        stmt = insert(UserExperiencePersonalisation).values(inserts_data)
+        stmt = insert(UserExperience).values(inserts_data)
 
         await self.db.execute(stmt)
         await self.db.commit()

@@ -5,16 +5,16 @@ from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import insert
 
 from nova_manager.components.user_experience.models import (
-    UserExperiencePersonalisation,
+    UserExperience,
 )
 from nova_manager.core.base_crud import BaseCRUD
 
 
-class UserExperiencePersonalisationCRUD(BaseCRUD):
-    """CRUD operations for UserExperiencePersonalisation"""
+class UserExperienceCRUD(BaseCRUD):
+    """CRUD operations for UserExperience"""
 
     def __init__(self, db: Session):
-        super().__init__(UserExperiencePersonalisation, db)
+        super().__init__(UserExperience, db)
 
     def get_user_experiences_personalisations(
         self,
@@ -24,15 +24,15 @@ class UserExperiencePersonalisationCRUD(BaseCRUD):
         experience_ids: List[UUIDType],
     ):
         return (
-            self.db.query(UserExperiencePersonalisation)
+            self.db.query(UserExperience)
             .filter(
-                UserExperiencePersonalisation.user_id == user_id,
-                UserExperiencePersonalisation.organisation_id == organisation_id,
-                UserExperiencePersonalisation.app_id == app_id,
-                UserExperiencePersonalisation.experience_id.in_(experience_ids),
+                UserExperience.user_id == user_id,
+                UserExperience.organisation_id == organisation_id,
+                UserExperience.app_id == app_id,
+                UserExperience.experience_id.in_(experience_ids),
             )
             .options(
-                selectinload(UserExperiencePersonalisation.personalisation),
+                selectinload(UserExperience.personalisation),
             )
             .all()
         )
@@ -73,6 +73,6 @@ class UserExperiencePersonalisationCRUD(BaseCRUD):
             inserts_data.append(record_data)
 
         # Single bulk insert - very efficient
-        stmt = insert(UserExperiencePersonalisation).values(inserts_data)
+        stmt = insert(UserExperience).values(inserts_data)
         self.db.execute(stmt)
         self.db.flush()

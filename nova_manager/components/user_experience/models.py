@@ -1,6 +1,9 @@
 from datetime import datetime
 from typing import Optional
 from uuid import UUID as UUIDType
+from nova_manager.components.user_experience.schemas import (
+    ExperienceFeatureAssignment,
+)
 from sqlalchemy import (
     JSON,
     UUID,
@@ -17,8 +20,8 @@ from nova_manager.core.models import BaseOrganisationModel
 from nova_manager.components.users.models import Users
 
 
-class UserExperiencePersonalisation(BaseOrganisationModel):
-    __tablename__ = "user_experience_personalisation"
+class UserExperience(BaseOrganisationModel):
+    __tablename__ = "user_experience"
 
     user_id: Mapped[UUIDType] = mapped_column(
         UUID(as_uuid=True),
@@ -35,15 +38,9 @@ class UserExperiencePersonalisation(BaseOrganisationModel):
         ForeignKey("personalisations.pid"),
         nullable=True,
     )
-    segment_name: Mapped[str | None] = mapped_column(String, nullable=True)
-    segment_id: Mapped[UUIDType | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
-    experience_segment_id: Mapped[UUIDType | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
-    experience_segment_personalisation_id: Mapped[UUIDType | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True
+    personalisation_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    features: Mapped[dict[str, ExperienceFeatureAssignment]] = mapped_column(
+        JSON, server_default=func.json("{}"), nullable=False
     )
     assigned_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -99,57 +96,8 @@ class UserExperiencePersonalisation(BaseOrganisationModel):
         foreign_keys=[experience_id],
         back_populates="user_experience_personalisations",
     )
-    # personalisation = relationship(
-    #     "ExperienceFeatureVariants",
-    #     foreign_keys=[personalisation_id],
-    #     back_populates="user_experience_personalisations",
-    # )
-
-
-# class UserFeatureVariants(BaseOrganisationModel):
-#     __tablename__ = "user_feature_variants"
-
-#     user_id: Mapped[UUIDType] = mapped_column(UUID(as_uuid=True), nullable=False)
-#     feature_id: Mapped[UUIDType] = mapped_column(UUID(as_uuid=True), nullable=False)
-#     experience_id: Mapped[UUIDType | None] = mapped_column(
-#         UUID(as_uuid=True), nullable=True
-#     )
-#     variant_id: Mapped[UUIDType | None] = mapped_column(
-#         UUID(as_uuid=True), nullable=True
-#     )
-#     variant_name: Mapped[str] = mapped_column(String, nullable=False)
-#     variant_config: Mapped[dict] = mapped_column(
-#         JSON, server_default=func.json("{}"), nullable=False
-#     )
-#     personalisation_id: Mapped[UUIDType | None] = mapped_column(
-#         UUID(as_uuid=True), nullable=True
-#     )
-#     segment_id: Mapped[UUIDType | None] = mapped_column(
-#         UUID(as_uuid=True), nullable=True
-#     )
-#     experience_segment_personalisation_id: Mapped[UUIDType | None] = mapped_column(
-#         UUID(as_uuid=True), nullable=True
-#     )
-#     experience_segment_id: Mapped[UUIDType | None] = mapped_column(
-#         UUID(as_uuid=True), nullable=True
-#     )
-#     personalisation_feature_variant_id: Mapped[UUIDType | None] = mapped_column(
-#         UUID(as_uuid=True), nullable=True
-#     )
-#     evaluation_reason: Mapped[str] = mapped_column(String, nullable=False)
-#     variant_assigned_at: Mapped[datetime] = mapped_column(
-#         DateTime(timezone=True),
-#         nullable=False,
-#         server_default=func.now(),
-#     )
-
-#     __table_args__ = (
-#         # BUSINESS RULE: One variant per user per feature per org/app
-#         UniqueConstraint(
-#             "user_id",
-#             "feature_id",
-#             "organisation_id",
-#             "app_id",
-#             name="uq_user_feature_variants_user_feature_org_app",
-#         ),
-#     )
+    personalisation = relationship(
+        "Personalisations",
+        foreign_keys=[personalisation_id],
+        back_populates="user_experience_personalisations",
+    )

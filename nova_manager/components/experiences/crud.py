@@ -1,14 +1,16 @@
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from uuid import UUID as UUIDType
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_, or_, desc, asc
 
-from nova_manager.components.experiences.models import ExperienceFeatures, Experiences
-from nova_manager.core.base_crud import BaseCRUD
-from nova_manager.components.personalisations.models import (
+from nova_manager.components.experiences.models import (
+    ExperienceFeatures,
+    Experiences,
     ExperienceFeatureVariants,
     ExperienceVariants,
 )
+from nova_manager.core.base_crud import BaseCRUD
 
 
 class ExperiencesCRUD(BaseCRUD):
@@ -155,6 +157,109 @@ class ExperienceFeaturesCRUD(BaseCRUD):
             )
             .first()
         )
+
+
+class ExperienceVariantsCRUD(BaseCRUD):
+    """CRUD operations for Personalisations"""
+
+    def __init__(self, db: Session):
+        super().__init__(ExperienceVariants, db)
+
+    def get_by_name(
+        self, name: str, experience_id: UUIDType
+    ) -> Optional[ExperienceVariants]:
+        """Get experience variant by name within an experience"""
+        return (
+            self.db.query(ExperienceVariants)
+            .filter(
+                and_(
+                    ExperienceVariants.name == name,
+                    ExperienceVariants.experience_id == experience_id,
+                )
+            )
+            .first()
+        )
+
+    def get_default_for_ids(
+        self, variant_ids: List[UUIDType]
+    ) -> List[ExperienceVariants]:
+        """Get Experience Variants by IDs that are marked as default"""
+        return (
+            self.db.query(ExperienceVariants)
+            .filter(
+                and_(
+                    ExperienceVariants.pid.in_(variant_ids),
+                    ExperienceVariants.is_default == True,
+                )
+            )
+            .all()
+        )
+
+    def create_experience_variant(
+        self,
+        experience_id: UUIDType,
+        name: str,
+        description: str,
+        is_default: bool = False,
+    ) -> ExperienceVariants:
+        """Create an Experience Variant"""
+
+        variant = ExperienceVariants(
+            name=name,
+            description=description or "",
+            experience_id=experience_id or "",
+            last_updated_at=datetime.now(timezone.utc),
+            is_default=is_default,
+        )
+
+        self.db.add(variant)
+        self.db.flush()
+        self.db.refresh(variant)
+
+        return variant
+
+    def create_default_variant(self, experience_id: UUIDType) -> ExperienceVariants:
+        """Create a default variant with all default variants for an experience"""
+        # Get experience to find its feature flags
+        experience = (
+            self.db.query(Experiences).filter(Experiences.pid == experience_id).first()
+        )
+        if not experience:
+            raise ValueError("Experience not found")
+
+        # Generate unique name
+        # Get all existing variant names in this experience
+        existing_names = set()
+        existing_variants = (
+            self.db.query(ExperienceVariants)
+            .filter(ExperienceVariants.experience_id == experience_id)
+            .all()
+        )
+
+        for variant in existing_variants:
+            existing_names.add(variant.name.lower())
+
+        # Find the next available default personalisation number
+        counter = 1
+        while True:
+            candidate_name = f"Default Experience {counter}"
+            if candidate_name.lower() not in existing_names:
+                name = candidate_name
+                break
+            counter += 1
+
+        # Generate description
+        description = "Auto-generated default experience"
+
+        # Create variant
+        self.create_experience_variant(
+            experience_id=experience_id,
+            name=name,
+            description=description,
+            is_default=True,
+        )
+
+        return variant
 
 
 class ExperienceFeatureVariantsCRUD(BaseCRUD):

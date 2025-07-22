@@ -4,6 +4,7 @@ from sqlalchemy import (
     JSON,
     UUID,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -69,85 +70,11 @@ class Personalisations(BaseOrganisationModel):
         cascade="all, delete-orphan",
     )
 
-
-class ExperienceVariants(BaseModel):
-    __tablename__ = "experience_variants"
-
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    description: Mapped[str] = mapped_column(String, nullable=False, default="")
-    experience_id: Mapped[UUIDType] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("experiences.pid"),
-        nullable=False,
-    )
-    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    last_updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-
-    __table_args__ = (
-        UniqueConstraint(
-            "name", "experience_id", name="uq_experience_variants_name_exp"
-        ),
-        Index("idx_experience_variants_experience_id", "experience_id"),
-    )
-
-    # Relationships
-    experience = relationship(
-        "Experiences", foreign_keys=[experience_id], back_populates="variants"
-    )
-
-    feature_variants = relationship(
-        "ExperienceFeatureVariants",
-        foreign_keys="ExperienceFeatureVariants.experience_variant_id",
-        back_populates="experience_variant",
+    user_experience_personalisations = relationship(
+        "UserExperience",
+        foreign_keys="UserExperience.personalisation_id",
+        back_populates="personalisation",
         cascade="all, delete-orphan",
-    )
-
-    personalisations = relationship(
-        "PersonalisationExperienceVariants",
-        foreign_keys="PersonalisationExperienceVariants.experience_variant_id",
-        back_populates="experience_variant",
-        cascade="all, delete-orphan",
-    )
-
-
-class ExperienceFeatureVariants(BaseModel):
-    __tablename__ = "experience_feature_variants"
-
-    experience_variant_id: Mapped[UUIDType] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("experience_variants.pid"),
-        nullable=False,
-    )
-    experience_feature_id: Mapped[UUIDType] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("experience_features.pid"),
-        nullable=False,
-    )
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    config: Mapped[dict] = mapped_column(
-        JSON, server_default=func.json("{}"), nullable=False
-    )
-
-    __table_args__ = (
-        Index(
-            "idx_experience_feature_variants_experience_feature_id",
-            "experience_feature_id",
-        ),
-    )
-
-    # Relationships
-    experience_variant = relationship(
-        "ExperienceVariants",
-        foreign_keys=[experience_variant_id],
-        back_populates="feature_variants",
-    )
-
-    experience_feature = relationship(
-        "ExperienceFeatures",
-        foreign_keys=[experience_feature_id],
-        back_populates="variants",
     )
 
 
@@ -174,6 +101,22 @@ class PersonalisationExperienceVariants(BaseModel):
             "personalisation_id",
             "experience_variant_id",
             name="uq_personalisation_experience_variants_per_exp_var",
+        ),
+        # Check constraint to ensure percentage is between 0 and 100
+        CheckConstraint(
+            "target_percentage >= 0 AND target_percentage <= 100",
+            name="ck_target_percentage_range",
+        ),
+        # Check constraint to ensure sum equals 100% per experience variant
+        CheckConstraint(
+            """
+            100 = (
+                SELECT SUM(target_percentage) 
+                FROM personalisation_experience_variants pev2 
+                WHERE pev2.experience_variant_id = personalisation_experience_variants.experience_variant_id
+            )
+            """,
+            name="ck_experience_variant_percentages_sum_100",
         ),
     )
 
