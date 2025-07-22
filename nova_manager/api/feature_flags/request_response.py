@@ -18,13 +18,9 @@ class NovaObjectDefinition(BaseModel):
     keys: Dict[str, NovaObjectKeyDefinition]
 
 
-class NovaExperienceObjectDefinition(TypedDict):
-    pass
-
-
 class NovaExperienceDefinition(BaseModel):
     description: str
-    objects: Dict[str, NovaExperienceObjectDefinition]
+    objects: Dict[str, bool]
 
 
 class NovaObjectSyncRequest(BaseModel):
