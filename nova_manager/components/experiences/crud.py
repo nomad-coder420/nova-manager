@@ -132,6 +132,23 @@ class ExperiencesCRUD(BaseCRUD):
             .first()
         )
 
+    def get_with_feature_details(self, organisation_id: str, app_id: str):
+        return (
+            self.db.query(Experiences)
+            .filter(
+                and_(
+                    Experiences.organisation_id == organisation_id,
+                    Experiences.app_id == app_id,
+                )
+            )
+            .options(
+                selectinload(Experiences.features).selectinload(
+                    ExperienceFeatures.feature_flag
+                )
+            )
+            .all()
+        )
+
 
 class ExperienceFeaturesCRUD(BaseCRUD):
     def __init__(self, db: Session):
