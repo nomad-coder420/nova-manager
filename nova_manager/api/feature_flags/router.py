@@ -171,6 +171,9 @@ async def sync_nova_objects(
             # Process experience objects (create ExperienceFeatures)
             experience_features_created = 0
             for object_name in experience_props.objects.keys():
+                if not experience_props.objects[object_name]:
+                    continue
+
                 # Find the feature flag by name
                 feature_flag = flags_crud.get_by_name(
                     name=object_name,
