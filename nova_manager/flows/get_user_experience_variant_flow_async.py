@@ -163,6 +163,16 @@ class GetUserExperienceVariantFlowAsync:
 
                 # If no variant found, skip this personalisation
                 if not selected_experience_variant:
+                    features = self._get_experience_default_features(experience)
+
+                    experience_variant_assignment = UserExperienceAssignment(
+                        experience_id=experience_id,
+                        personalisation_id=None,
+                        personalisation_name=None,
+                        features=features,
+                        evaluation_reason="no_personalisation_match_error",
+                    )
+
                     continue
 
                 selected_experience_variant_features_map = {
@@ -221,7 +231,7 @@ class GetUserExperienceVariantFlowAsync:
                     personalisation_id=None,
                     personalisation_name=None,
                     features=features,
-                    evaluation_reason="no_personalisation_match_error",
+                    evaluation_reason="no_experience_assignment_error",
                 )
 
             results[experience_name] = experience_variant_assignment
