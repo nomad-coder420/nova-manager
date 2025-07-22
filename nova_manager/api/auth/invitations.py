@@ -72,7 +72,7 @@ async def invite_to_organisation(
         email=inv.email,
         role=inv.role,
         token=inv.token,
-        status=inv.status.value,
+        status=inv.status,
         created_at=inv.created_at,
         expires_at=inv.expires_at,
     )
@@ -393,7 +393,7 @@ async def invite_to_app(
         email=inv.email,
         role=inv.role,
         token=inv.token,
-        status=inv.status.value,
+        status=inv.status,
         created_at=inv.created_at,
         expires_at=inv.expires_at,
     )
@@ -402,7 +402,6 @@ async def invite_to_app(
 async def respond_to_invitation(
     invitation_pid: str,
     action: InvitationAction,
-    user=Depends(require_user_authentication),
     session: AsyncSession = Depends(get_async_session),
 ):
     """
@@ -424,44 +423,44 @@ async def respond_to_invitation(
 
     # Process action
     if action.action == "accept":
-        # Find or require user by email
+        # Try to lookup an existing user by invited email
         q2 = select(AuthUser).filter_by(email=inv.email)
         res2 = await session.execute(q2)
         auth_user = res2.scalars().first()
-        if not auth_user or auth_user.id != user.id:
-            raise HTTPException(status_code=403, detail="Invitation email does not match authenticated user")
-        # Add membership
-        if inv.target_type == InvitationTargetType.ORG:
-            membership = UserOrganisationMembership(
-                user_id=user.id,
-                organisation_id=inv.target_id,
-                role=inv.role,
-            )
-            session.add(membership)
-        else:
-            # APP invite: ensure org membership exists
-            from nova_manager.components.auth.models import App
-            # Load the App to get its parent organisation
-            res_app = await session.execute(select(App).filter_by(pid=inv.target_id))
-            app_obj = res_app.scalars().first()
-            if not app_obj:
-                raise HTTPException(status_code=404, detail="Application not found")
-            org_pid = app_obj.organisation_id
-            # Check or add org membership
-            q3 = select(UserOrganisationMembership).filter_by(user_id=user.id, organisation_id=org_pid)
-            has_org = (await session.execute(q3)).scalars().first()
-            if not has_org:
-                session.add(UserOrganisationMembership(
-                    user_id=user.id,
-                    organisation_id=org_pid,
-                    role=OrganisationRole.MEMBER.value,
+        if auth_user:
+            # Add membership only for registered users
+            if inv.target_type == InvitationTargetType.ORG:
+                membership = UserOrganisationMembership(
+                    user_id=auth_user.id,
+                    organisation_id=inv.target_id,
+                    role=inv.role,
+                )
+                session.add(membership)
+            else:
+                # APP invite: ensure org membership exists first
+                from nova_manager.components.auth.models import App
+                res_app = await session.execute(select(App).filter_by(pid=inv.target_id))
+                app_obj = res_app.scalars().first()
+                if not app_obj:
+                    raise HTTPException(status_code=404, detail="Application not found")
+                org_pid = app_obj.organisation_id
+                # Check or add org membership
+                q3 = select(UserOrganisationMembership).filter_by(
+                    user_id=auth_user.id, organisation_id=org_pid
+                )
+                has_org = (await session.execute(q3)).scalars().first()
+                if not has_org:
+                    session.add(UserOrganisationMembership(
+                        user_id=auth_user.id,
+                        organisation_id=org_pid,
+                        role=OrganisationRole.MEMBER.value,
+                    ))
+                # Add app membership
+                session.add(UserAppMembership(
+                    user_id=auth_user.id,
+                    app_id=inv.target_id,
+                    role=inv.role,
                 ))
-            # Add app membership
-            session.add(UserAppMembership(
-                user_id=user.id,
-                app_id=inv.target_id,
-                role=inv.role,
-            ))
     else:
         inv.status = InvitationStatus.DECLINED
 
@@ -477,7 +476,7 @@ async def respond_to_invitation(
         email=inv.email,
         role=inv.role,
         token=inv.token,
-        status=inv.status.value,
+        status=inv.status,
         created_at=inv.created_at,
         expires_at=inv.expires_at,
     )
