@@ -2,19 +2,19 @@ from typing import List
 from fastapi import APIRouter, Depends, Query
 from nova_manager.api.recommendations.request_response import (
     GetAiRecommendationsRequest,
-    AiRecommendationResponse,
     RecommendationResponse,
 )
 from nova_manager.components.experiences.crud import ExperiencesCRUD
 from nova_manager.components.recommendations.controller import RecommendationsController
 from nova_manager.components.recommendations.crud import RecommendationsCRUD
+from nova_manager.components.recommendations.schemas import AiRecommendationResponse
 from nova_manager.database.session import get_db
 from sqlalchemy.orm import Session
 
 router = APIRouter()
 
 
-@router.post("/get-ai-recommendations/", response_model=List[AiRecommendationResponse])
+@router.post("/get-ai-recommendations/", response_model=AiRecommendationResponse)
 async def get_ai_recommendations(
     validated_data: GetAiRecommendationsRequest, db: Session = Depends(get_db)
 ):
@@ -49,27 +49,27 @@ async def get_ai_recommendations(
 
     recommendations_controller = RecommendationsController()
 
-    recommendations = recommendations_controller.get_recommendations(
+    recommendation = await recommendations_controller.get_recommendation(
         user_prompt=user_prompt, experiences_context=experiences_context
     )
 
     recommendations_crud = RecommendationsCRUD(db)
 
-    for recommendation in recommendations:
-        experience_name = recommendation.get("experience_name")
+    experience_name = recommendation.experience_name
 
-        experience = experiences_crud.get_by_name(
-            experience_name, organisation_id, app_id
-        )
+    experience = experiences_crud.get_by_name(experience_name, organisation_id, app_id)
 
-        recommendations_crud.create(
-            {
-                "experience_id": experience.pid,
-                "personalisation_data": recommendation,
-            }
-        )
+    recommendations_crud.create(
+        {
+            
+            "organisation_id": organisation_id,
+            "app_id": app_id,
+            "experience_id": experience.pid,
+            "personalisation_data": recommendation.model_dump(),
+        }
+    )
 
-    return {"message": "Hello, World!"}
+    return recommendation
 
 
 @router.get("/", response_model=List[RecommendationResponse])
