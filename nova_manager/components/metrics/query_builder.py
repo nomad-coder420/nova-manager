@@ -109,7 +109,7 @@ class QueryBuilder(EventsArtefacts):
         select_expression = "SELECT " + ",\n    ".join(select_parts)
 
         table_name = self._event_table_name(event_name)
-        from_expression = f"FROM {table_name} AS e"
+        from_expression = f"FROM `{table_name}` AS e"
 
         wheres, where_joins = self._wheres_and_joins(event_name, filters)
 
@@ -159,7 +159,7 @@ class QueryBuilder(EventsArtefacts):
         select_expression = "SELECT " + ",\n    ".join(select_parts)
 
         table_name = self._event_table_name(event_name)
-        from_expression = f"FROM {table_name} AS e"
+        from_expression = f"FROM `{table_name}` AS e"
 
         property_join_expression = self._props_join_expression(
             event_name, "p_val", property
@@ -293,7 +293,7 @@ class QueryBuilder(EventsArtefacts):
         init_cte = (
             "initial_cohort AS (\n    SELECT\n        "
             + ",\n        ".join(init_select_cols)
-            + f"\n    FROM {self._event_table_name(initial_event_name)} AS e\n    "
+            + f"\n    FROM `{self._event_table_name(initial_event_name)}` AS e\n    "
             + "\n    ".join(g_joins + f_joins_init)
             + f"\n    WHERE e.client_ts >= '{start}' AND e.client_ts < '{end}'{' AND ' + ' AND '.join(f_where_init) if f_where_init else ''}\n"
             + f"    GROUP BY {init_group_clause}\n)"
@@ -309,7 +309,7 @@ class QueryBuilder(EventsArtefacts):
         )
         ret_cte = (
             "return_events AS (\n    SELECT\n        r.user_id AS user_id,\n        r.client_ts AS ret_ts\n    FROM "
-            + self._event_table_name(return_event_name)
+            + f"`{self._event_table_name(return_event_name)}`"
             + " AS r\n    "
             + "\n    ".join(f_joins_ret)
             + f"\n    WHERE r.client_ts >= '{start}' AND r.client_ts < '{end}'{' AND ' + ' AND '.join(f_where_ret) if f_where_ret else ''}\n)"
@@ -390,7 +390,7 @@ class QueryBuilder(EventsArtefacts):
         """Return LEFT JOIN clause for a specific property key."""
 
         return (
-            f"LEFT JOIN {self._event_props_table_name(event_name)} AS {alias} "
+            f"LEFT JOIN `{self._event_props_table_name(event_name)}` AS {alias} "
             f"ON e.event_id = {alias}.event_id AND {alias}.key = '{key}'"
         )
 

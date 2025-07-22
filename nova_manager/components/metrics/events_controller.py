@@ -23,15 +23,13 @@ from nova_manager.service.bigquery import BigQueryService
 
 class TrackEvent(TypedDict):
     event_name: str
-    event_data: dict | None
+    event_data: dict | None = None
 
 
 class EventsController(EventsArtefacts):
     def track_events(
         self,
         user_id: UUID,
-        organisation_id: str,
-        app_id: str,
         timestamp: datetime,
         events: list[TrackEvent],
     ):
@@ -54,8 +52,8 @@ class EventsController(EventsArtefacts):
                 {
                     "event_id": event_id,
                     "user_id": str(user_id),
-                    "org_id": str(organisation_id),
-                    "app_id": str(app_id),
+                    "org_id": str(self.organisation_id),
+                    "app_id": str(self.app_id),
                     "client_ts": timestamp.isoformat(),
                     "server_ts": time_now.isoformat(),
                     "event_name": event_name,
@@ -63,14 +61,16 @@ class EventsController(EventsArtefacts):
                 }
             )
 
+            # TODO: Create table if not exists
+
             event_table_name = self._event_table_name(event_name)
             event_props_table_name = self._event_props_table_name(event_name)
 
             event_table_rows[event_table_name] = {
                 "event_id": event_id,
                 "user_id": str(user_id),
-                "org_id": str(organisation_id),
-                "app_id": str(app_id),
+                "org_id": str(self.organisation_id),
+                "app_id": str(self.app_id),
                 "event_name": event_name,
                 "client_ts": timestamp.isoformat(),
                 "server_ts": time_now.isoformat(),
@@ -80,8 +80,8 @@ class EventsController(EventsArtefacts):
                 {
                     "event_id": event_id,
                     "user_id": str(user_id),
-                    "org_id": str(organisation_id),
-                    "app_id": str(app_id),
+                    "org_id": str(self.organisation_id),
+                    "app_id": str(self.app_id),
                     "event_name": event_name,
                     "key": key,
                     "value": event_data[key],
@@ -114,21 +114,15 @@ class EventsController(EventsArtefacts):
     def track_event(
         self,
         user_id: UUID,
-        organisation_id: str,
-        app_id: str,
         timestamp: datetime,
         event_name: str,
-        event_data: dict | None,
+        event_data: dict | None = None,
     ):
         if not event_data:
             event_data = {}
 
         return self.track_events(
-            user_id,
-            organisation_id,
-            app_id,
-            timestamp,
-            [{"event_name": event_name, "event_data": event_data}],
+            user_id, timestamp, [{"event_name": event_name, "event_data": event_data}]
         )
 
     def track_user_experience(self, user_experience: UserExperience):

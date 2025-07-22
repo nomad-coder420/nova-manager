@@ -230,6 +230,7 @@ class GetUserExperienceVariantFlowAsync:
                 experience_variant_assignment
             )
 
+        # TODO: Add this in task in queue
         # Bulk upsert user experience personalisation assignments
         if new_assignments:
             await self.user_experience_personalisation_crud.bulk_create_user_experience_personalisations(
