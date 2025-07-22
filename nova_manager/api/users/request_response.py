@@ -11,3 +11,10 @@ class UserCreate(BaseModel):
 
 class UserResponse(BaseModel):
     nova_user_id: UUIDType
+
+
+class UpdateUserProfile(BaseModel):
+    user_id: str
+    organisation_id: str
+    app_id: str
+    user_profile: dict | None
