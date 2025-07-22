@@ -269,14 +269,14 @@ class ExperienceVariantsCRUD(BaseCRUD):
         description = "Auto-generated default experience"
 
         # Create variant
-        self.create_experience_variant(
+        default_variant = self.create_experience_variant(
             experience_id=experience_id,
             name=name,
             description=description,
             is_default=True,
         )
 
-        return variant
+        return default_variant
 
 
 class ExperienceFeatureVariantsCRUD(BaseCRUD):
