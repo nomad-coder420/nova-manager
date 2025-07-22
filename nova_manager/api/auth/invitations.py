@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Literal
@@ -418,7 +418,8 @@ async def respond_to_invitation(
         raise HTTPException(status_code=403, detail="Invalid token")
     if inv.status != InvitationStatus.PENDING:
         raise HTTPException(status_code=400, detail="Invitation already responded to")
-    if inv.expires_at < datetime.utcnow():
+    # Compare with timezone-aware now
+    if inv.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Invitation expired")
 
     # Process action
