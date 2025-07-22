@@ -30,7 +30,7 @@ class ExperiencesAsyncCRUD:
             )
         )
 
-        if experience_names:
+        if experience_names is not None:
             stmt = stmt.where(Experiences.name.in_(experience_names))
 
         stmt = stmt.options(

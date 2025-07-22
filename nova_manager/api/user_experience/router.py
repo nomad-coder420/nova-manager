@@ -6,9 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from nova_manager.database.async_session import get_async_db
 from nova_manager.api.user_experience.request_response import (
     GetExperienceRequest,
-    GetExperienceResponse,
     GetExperiencesRequest,
 )
+from nova_manager.components.user_experience.schemas import UserExperienceAssignment
 from nova_manager.flows.get_user_experience_variant_flow_async import (
     GetUserExperienceVariantFlowAsync,
 )
@@ -16,7 +16,7 @@ from nova_manager.flows.get_user_experience_variant_flow_async import (
 router = APIRouter()
 
 
-@router.post("/get-experience/", response_model=GetExperienceResponse)
+@router.post("/get-experience/", response_model=UserExperienceAssignment)
 async def get_user_experience_variant(
     request: GetExperienceRequest,
     db: AsyncSession = Depends(get_async_db),
@@ -41,7 +41,7 @@ async def get_user_experience_variant(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/get-experiences/", response_model=Dict[str, GetExperienceResponse])
+@router.post("/get-experiences/", response_model=Dict[str, UserExperienceAssignment])
 async def get_user_experiences(
     request: GetExperiencesRequest,
     db: AsyncSession = Depends(get_async_db),
@@ -66,7 +66,9 @@ async def get_user_experiences(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/get-all-experiences/", response_model=Dict[str, GetExperienceResponse])
+@router.post(
+    "/get-all-experiences/", response_model=Dict[str, UserExperienceAssignment]
+)
 async def get_all_user_experiences(
     request: GetExperiencesRequest,
     db: AsyncSession = Depends(get_async_db),

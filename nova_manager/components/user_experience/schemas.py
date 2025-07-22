@@ -5,9 +5,9 @@ from pydantic import BaseModel
 
 
 class ExperienceFeatureAssignment(TypedDict):
-    feature_id: UUID
+    feature_id: str
     feature_name: str
-    variant_id: UUID | None
+    variant_id: str | None
     variant_name: str | None
     config: Dict[str, Any]
 

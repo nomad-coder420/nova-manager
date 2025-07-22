@@ -1,6 +1,8 @@
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 from fastapi import HTTPException
+
+from nova_manager.core.log import logger
 from nova_manager.components.experiences.models import ExperienceVariants, Experiences
 from nova_manager.components.user_experience.schemas import (
     ExperienceFeatureAssignment,
@@ -76,16 +78,14 @@ class GetUserExperienceVariantFlowAsync:
             organisation_id, app_id, experience_names
         )
 
-        experience_name_map = {
-            experience.name: experience for experience in experiences
-        }
+        experience_ids = [experience.pid for experience in experiences]
 
         # Step 3: Load existing user experience personalisation cache
         await self._load_experience_personalisation_cache(
             user=user,
             organisation_id=organisation_id,
             app_id=app_id,
-            experiences=experiences,
+            experience_ids=experience_ids,
         )
 
         # Process each experience
@@ -94,19 +94,14 @@ class GetUserExperienceVariantFlowAsync:
         # Collect user experience personalisation assignments for bulk upsert
         new_assignments: List[UserExperienceAssignment] = []
 
-        for experience_name in experience_names:
-            experience = experience_name_map[experience_name]
-
-            if not experience:
-                continue
-
+        for experience in experiences:
             experience_id = experience.pid
+            experience_name = experience.name
 
             if experience_id in self.experience_personalisation_map:
                 user_experience = self.experience_personalisation_map[experience_id]
-                features = user_experience.features
 
-                results[experience_name] = features
+                results[experience_name] = user_experience
 
                 continue
 
@@ -196,9 +191,9 @@ class GetUserExperienceVariantFlowAsync:
                     if feature_variant:
                         experience_feature_variants[feature_name] = (
                             ExperienceFeatureAssignment(
-                                feature_id=feature_id,
+                                feature_id=str(feature_id),
                                 feature_name=feature_name,
-                                variant_id=feature_variant.pid,
+                                variant_id=str(feature_variant.pid),
                                 variant_name=feature_variant.name,
                                 config=feature_variant.config,
                             )
@@ -206,7 +201,7 @@ class GetUserExperienceVariantFlowAsync:
                     else:
                         experience_feature_variants[feature_name] = (
                             ExperienceFeatureAssignment(
-                                feature_id=feature_id,
+                                feature_id=str(feature_id),
                                 feature_name=feature_name,
                                 variant_id=None,
                                 variant_name="default",
@@ -243,14 +238,37 @@ class GetUserExperienceVariantFlowAsync:
         # TODO: Add this in task in queue
         # Bulk upsert user experience personalisation assignments
         if new_assignments:
-            await self.user_experience_personalisation_crud.bulk_create_user_experience_personalisations(
-                user_id=user.pid,
-                organisation_id=organisation_id,
-                app_id=app_id,
-                new_assignments=new_assignments,
-            )
+            try:
+                await self.user_experience_personalisation_crud.bulk_create_user_experience_personalisations(
+                    user_id=user.pid,
+                    organisation_id=organisation_id,
+                    app_id=app_id,
+                    personalisation_assignments=new_assignments,
+                )
+            except Exception as e:
+                logger.error(
+                    f"Error bulk creating user experience personalisations: {e}"
+                )
 
         return results
+
+    async def _update_or_create_user(
+        self, user_id: str, organisation_id: str, app_id: str, payload: Dict[str, Any]
+    ):
+        existing_user = await self.users_crud.get_by_user_id(
+            user_id=user_id, organisation_id=organisation_id, app_id=app_id
+        )
+
+        if existing_user:
+            # User exists, update user profile with new payload
+            user = await self.users_crud.update_user_profile(existing_user, payload)
+        else:
+            # User doesn't exist, create new user with user profile
+            user = await self.users_crud.create_user(
+                user_id, organisation_id, app_id, payload
+            )
+
+        return user
 
     def _select_experience_variant_by_target_percentage(
         self,
@@ -328,7 +346,7 @@ class GetUserExperienceVariantFlowAsync:
             feature_flag = feature.feature_flag
 
             default_features[feature_flag.name] = ExperienceFeatureAssignment(
-                feature_id=feature.pid,
+                feature_id=str(feature.pid),
                 feature_name=feature_flag.name,
                 variant_id=None,
                 variant_name="default",
