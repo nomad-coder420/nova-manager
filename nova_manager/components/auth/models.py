@@ -12,6 +12,9 @@ from nova_manager.core.models import Base, BaseModel
 class AuthUser(Base, SQLAlchemyBaseUserTable[int]):
     __tablename__ = "auth_user"
     id: Mapped[int] = mapped_column(primary_key=True)
+    # User's full name and company name
+    full_name: Mapped[str] = mapped_column(String, nullable=False)
+    company_name: Mapped[str] = mapped_column(String, nullable=False)
     organisation_memberships = relationship(
         "UserOrganisationMembership", back_populates="user", cascade="all, delete-orphan"
     )

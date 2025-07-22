@@ -6,11 +6,13 @@ from datetime import datetime
 
 
 class UserRead(schemas.BaseUser[int]):
-    pass
+    full_name: str = Field(..., description="User's full name")
+    company_name: str = Field(..., description="User's company name")
 
 
 class UserCreate(schemas.BaseUserCreate):
-    pass
+    full_name: str = Field(..., min_length=1, max_length=100, description="User's full name")
+    company_name: str = Field(..., min_length=1, max_length=100, description="User's company name")
 
 
 class UserUpdate(schemas.BaseUserUpdate):
@@ -50,6 +52,7 @@ class InvitationResponse(BaseModel):
 class MemberResponse(BaseModel):
     user_id: int
     email: EmailStr
+    full_name: str = Field(..., description="User's full name")
     role: str
 
 class RoleChangeRequest(BaseModel):

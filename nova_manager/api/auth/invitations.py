@@ -151,9 +151,14 @@ async def list_org_members(
     memberships = result.scalars().all()
     members = []
     for m in memberships:
-        # load user email
-        email = (await session.get(AuthUser, m.user_id)).email
-        members.append(MemberResponse(user_id=m.user_id, email=email, role=m.role))
+        # load user details
+        user_obj = await session.get(AuthUser, m.user_id)
+        members.append(MemberResponse(
+            user_id=m.user_id,
+            email=user_obj.email,
+            full_name=user_obj.full_name,
+            role=m.role
+        ))
     return members
 
 @router.get("/apps/{app_pid}/members", response_model=list[MemberResponse], tags=["members"])
@@ -169,8 +174,13 @@ async def list_app_members(
     memberships = result.scalars().all()
     members = []
     for m in memberships:
-        email = (await session.get(AuthUser, m.user_id)).email
-        members.append(MemberResponse(user_id=m.user_id, email=email, role=m.role))
+        user_obj = await session.get(AuthUser, m.user_id)
+        members.append(MemberResponse(
+            user_id=m.user_id,
+            email=user_obj.email,
+            full_name=user_obj.full_name,
+            role=m.role
+        ))
     return members
 
 @router.patch("/orgs/{org_pid}/members/{user_id}/role", response_model=MemberResponse, tags=["members"])
