@@ -24,7 +24,52 @@ class UserManager(IntegerIDMixin, BaseUserManager[AuthUser, int]):
     verification_token_secret = SECRET_KEY
 
     async def on_after_register(self, user: AuthUser, request: Optional[Request] = None):
-        print(f"User {user.id} has registered.")
+        # After a new user registers, attach any previously accepted invitations
+        from nova_manager.database.session import SessionLocal
+        from sqlalchemy import select
+        from nova_manager.components.auth.invitation import Invitation
+        from nova_manager.components.auth.enums import InvitationTargetType, InvitationStatus
+        from nova_manager.components.auth.models import UserOrganisationMembership, UserAppMembership, App
+
+        db = SessionLocal()
+        try:
+            # find all accepted invites for this email
+            stmt = select(Invitation).filter_by(email=user.email, status=InvitationStatus.ACCEPTED.value)
+            accepted = db.execute(stmt).scalars().all()
+            for inv in accepted:
+                if inv.target_type == InvitationTargetType.ORG.value:
+                    mem = UserOrganisationMembership(
+                        user_id=user.id,
+                        organisation_id=inv.target_id,
+                        role=inv.role,
+                    )
+                    db.add(mem)
+                else:
+                    # ensure org membership first
+                    app_obj = db.execute(select(App).filter_by(pid=inv.target_id)).scalars().first()
+                    if app_obj:
+                        org_id = app_obj.organisation_id
+                        existing = db.query(UserOrganisationMembership).filter_by(
+                            user_id=user.id, organisation_id=org_id
+                        ).first()
+                        if not existing:
+                            db.add(UserOrganisationMembership(
+                                user_id=user.id,
+                                organisation_id=org_id,
+                                role=InvitationTargetType.MEMBER.value
+                            ))
+                        # add app membership
+                        db.add(UserAppMembership(
+                            user_id=user.id,
+                            app_id=inv.target_id,
+                            role=inv.role,
+                        ))
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
     async def on_after_forgot_password(
         self, user: AuthUser, token: str, request: Optional[Request] = None
