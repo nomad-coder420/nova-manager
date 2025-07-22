@@ -9,9 +9,9 @@ from nova_manager.api.metrics.request_response import (
     TrackEventRequest,
 )
 from nova_manager.components.metrics.crud import MetricsCRUD
+from nova_manager.components.metrics.events_controller import EventsController
 from nova_manager.components.metrics.query_builder import QueryBuilder
 from nova_manager.database.session import get_db
-from nova_manager.service.bigquery import BigQueryService
 from sqlalchemy.orm import Session
 
 
@@ -20,7 +20,7 @@ router = APIRouter()
 
 @router.post("/track-event/")
 async def track_event(event: TrackEventRequest):
-    BigQueryService().track_event(
+    EventsController().track_event(
         event.user_id,
         event.organisation_id,
         event.app_id,
@@ -42,7 +42,7 @@ async def compute_metric(compute_request: ComputeMetricRequest):
     query_builder = QueryBuilder(organisation_id, app_id)
     query = query_builder.build_query(type, config)
 
-    big_query_service = BigQueryService()
+    big_query_service = EventsController()
     result = big_query_service.run_query(query)
 
     return result
