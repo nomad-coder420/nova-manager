@@ -5,6 +5,7 @@ from nova_manager.components.users.models import Users
 from nova_manager.queues.controller import QueueController
 
 
+@event.listens_for(Users, "after_update")
 @event.listens_for(Users, "after_insert")
 def after_insert(mapper, connection, target: Users):
     QueueController().add_task(
