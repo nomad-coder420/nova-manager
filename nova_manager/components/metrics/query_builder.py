@@ -102,7 +102,7 @@ class QueryBuilder(EventsArtefacts):
         select_parts = self._get_select_parts(metric_config)
 
         count_expression = (
-            "COUNT(DISTINCT e.user_id) AS count" if distinct else "COUNT(*) AS count"
+            "COUNT(DISTINCT e.user_id) AS value" if distinct else "COUNT(*) AS value"
         )
         select_parts.append(count_expression)
 
@@ -152,7 +152,7 @@ class QueryBuilder(EventsArtefacts):
         select_parts = self._get_select_parts(metric_config)
 
         aggregation_expression = (
-            f"{aggregation.upper()}(CAST(p_val.value AS FLOAT64)) AS aggregation"
+            f"{aggregation.upper()}(CAST(p_val.value AS FLOAT64)) AS value"
         )
         select_parts.append(aggregation_expression)
 
@@ -230,7 +230,7 @@ class QueryBuilder(EventsArtefacts):
 
         select_parts = [
             "num.period AS period",
-            f"SAFE_DIVIDE(num.num_val, den.den_val) AS ratio",
+            f"SAFE_DIVIDE(num.num_val, den.den_val) AS value",
         ] + [f"num.{c}" for c in group_by]
         select_expression = "SELECT " + ",\n    ".join(select_parts)
 
@@ -323,7 +323,7 @@ class QueryBuilder(EventsArtefacts):
         final_sql = (
             "SELECT\n    "
             + select_list
-            + ",\n    COUNT(DISTINCT i.user_id) AS cohort_users,\n    COUNT(DISTINCT IF(r.ret_ts IS NOT NULL, i.user_id, NULL)) AS retained_users,\n    SAFE_DIVIDE(COUNT(DISTINCT IF(r.ret_ts IS NOT NULL, i.user_id, NULL)), COUNT(DISTINCT i.user_id)) AS retention"
+            + ",\n    COUNT(DISTINCT i.user_id) AS cohort_users,\n    COUNT(DISTINCT IF(r.ret_ts IS NOT NULL, i.user_id, NULL)) AS retained_users,\n    SAFE_DIVIDE(COUNT(DISTINCT IF(r.ret_ts IS NOT NULL, i.user_id, NULL)), COUNT(DISTINCT i.user_id)) AS value"
             + f"\nFROM initial_cohort i\nLEFT JOIN return_events r\n  ON r.user_id = i.user_id\n  AND r.ret_ts > i.first_ts\n  AND r.ret_ts < TIMESTAMP_ADD(i.first_ts, {window_sql})\nGROUP BY {group_clause}\nORDER BY i.cohort_period"
         )
 

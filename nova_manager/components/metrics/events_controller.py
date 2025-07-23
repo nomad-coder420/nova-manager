@@ -23,28 +23,6 @@ class TrackEvent(TypedDict):
 
 
 class EventsController(EventsArtefacts):
-    def _create_raw_events_table(self):
-        raw_events_table_name = f"{GCP_PROJECT_ID}.{self._raw_events_table_name()}"
-
-        # Create raw events table if not exists
-        raw_events_table_schema = [
-            {"name": "event_id", "type": "STRING"},
-            {"name": "user_id", "type": "STRING"},
-            {"name": "client_ts", "type": "TIMESTAMP"},
-            {"name": "server_ts", "type": "TIMESTAMP"},
-            {"name": "event_name", "type": "STRING"},
-            {"name": "event_data", "type": "STRING"},
-        ]
-
-        BigQueryService().create_table_if_not_exists(
-            raw_events_table_name,
-            raw_events_table_schema,
-            partition_field="client_ts",
-            clustering_fields=["event_name", "user_id"],
-        )
-
-        return raw_events_table_name
-
     def _create_event_table(self, event_name: str):
         event_table_name = f"{GCP_PROJECT_ID}.{self._event_table_name(event_name)}"
 
