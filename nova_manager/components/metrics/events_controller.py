@@ -135,7 +135,8 @@ class EventsController(EventsArtefacts):
             "experience_id": str(user_experience.experience_id),
             "personalisation_id": str(user_experience.personalisation_id),
             "personalisation_name": user_experience.personalisation_name,
-            "feature_variants": json.dumps(user_experience.feature_variants),
+            "experience_variant_id": str(user_experience.experience_variant_id),
+            "features": json.dumps(user_experience.features),
             "evaluation_reason": user_experience.evaluation_reason,
             "assigned_at": user_experience.assigned_at.isoformat(),
         }

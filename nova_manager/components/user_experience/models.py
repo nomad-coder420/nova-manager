@@ -39,6 +39,9 @@ class UserExperience(BaseOrganisationModel):
         nullable=True,
     )
     personalisation_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    experience_variant_id: Mapped[UUIDType | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
     features: Mapped[dict[str, ExperienceFeatureAssignment]] = mapped_column(
         JSON, server_default=func.json("{}"), nullable=False
     )

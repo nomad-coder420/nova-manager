@@ -67,6 +67,7 @@ class UserExperienceAsyncCRUD:
                 "experience_id": assignment.experience_id,
                 "personalisation_id": assignment.personalisation_id,
                 "personalisation_name": assignment.personalisation_name,
+                "experience_variant_id": assignment.experience_variant_id,
                 "features": assignment.features,
                 "evaluation_reason": assignment.evaluation_reason,
             }

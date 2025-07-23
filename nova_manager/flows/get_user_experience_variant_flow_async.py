@@ -116,6 +116,7 @@ class GetUserExperienceVariantFlowAsync:
                     experience_id=experience_id,
                     personalisation_id=None,
                     personalisation_name=None,
+                    experience_variant_id=None,
                     features=features,
                     evaluation_reason="default_experience",
                 )
@@ -164,6 +165,7 @@ class GetUserExperienceVariantFlowAsync:
                         experience_id=experience_id,
                         personalisation_id=None,
                         personalisation_name=None,
+                        experience_variant_id=None,
                         features=features,
                         evaluation_reason="no_personalisation_match_error",
                     )
@@ -213,6 +215,7 @@ class GetUserExperienceVariantFlowAsync:
                     experience_id=experience_id,
                     personalisation_id=personalisation.pid,
                     personalisation_name=personalisation.name,
+                    experience_variant_id=selected_experience_variant.pid,
                     features=experience_feature_variants,
                     evaluation_reason="personalisation_match",
                 )
@@ -225,6 +228,7 @@ class GetUserExperienceVariantFlowAsync:
                     experience_id=experience_id,
                     personalisation_id=None,
                     personalisation_name=None,
+                    experience_variant_id=None,
                     features=features,
                     evaluation_reason="no_experience_assignment_error",
                 )
@@ -332,6 +336,7 @@ class GetUserExperienceVariantFlowAsync:
                 experience_id=assignment.experience_id,
                 personalisation_id=assignment.personalisation_id,
                 personalisation_name=assignment.personalisation_name,
+                experience_variant_id=assignment.experience_variant_id,
                 features=assignment.features,
                 evaluation_reason=assignment.evaluation_reason,
             )

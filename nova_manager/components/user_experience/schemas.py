@@ -16,6 +16,7 @@ class UserExperienceAssignment(BaseModel):
     experience_id: UUID
     personalisation_id: UUID | None
     personalisation_name: str | None
+    experience_variant_id: UUID | None
     features: Dict[str, ExperienceFeatureAssignment]
     evaluation_reason: str
 
