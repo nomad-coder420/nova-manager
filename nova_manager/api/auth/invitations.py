@@ -103,8 +103,13 @@ async def transfer_org_ownership(
     # Promote new owner
     new_mem.role = OrganisationRole.OWNER.value
     await session.flush()
-    email = (await session.get(AuthUser, new_mem.user_id)).email
-    return MemberResponse(user_id=new_mem.user_id, email=email, role=new_mem.role)
+    user_obj = await session.get(AuthUser, new_mem.user_id)
+    return MemberResponse(
+        user_id=new_mem.user_id,
+        email=user_obj.email,
+        full_name=user_obj.full_name,
+        role=new_mem.role,
+    )
 
 @router.post("/apps/{app_pid}/transfer-ownership", response_model=MemberResponse, tags=["members"])
 async def transfer_app_ownership(
@@ -132,8 +137,13 @@ async def transfer_app_ownership(
     # Promote new owner
     new_mem.role = AppRole.OWNER.value
     await session.flush()
-    email = (await session.get(AuthUser, new_mem.user_id)).email
-    return MemberResponse(user_id=new_mem.user_id, email=email, role=new_mem.role)
+    user_obj = await session.get(AuthUser, new_mem.user_id)
+    return MemberResponse(
+        user_id=new_mem.user_id,
+        email=user_obj.email,
+        full_name=user_obj.full_name,
+        role=new_mem.role,
+    )
     
 # --- Membership Management Endpoints ---
 @router.get("/orgs/{org_pid}/members", response_model=list[MemberResponse], tags=["members"])
