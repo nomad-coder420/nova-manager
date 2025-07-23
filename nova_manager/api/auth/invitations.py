@@ -211,8 +211,13 @@ async def change_org_member_role(
     # Apply role change
     membership.role = data.role
     await session.flush()
-    email = (await session.get(AuthUser, user_id)).email
-    return MemberResponse(user_id=user_id, email=email, role=membership.role)
+    user_obj = await session.get(AuthUser, user_id)
+    return MemberResponse(
+        user_id=user_id,
+        email=user_obj.email,
+        full_name=user_obj.full_name,
+        role=membership.role,
+    )
 
 @router.patch("/apps/{app_pid}/members/{user_id}/role", response_model=MemberResponse, tags=["members"])
 async def change_app_member_role(
@@ -242,8 +247,13 @@ async def change_app_member_role(
     # Apply role change
     membership.role = data.role
     await session.flush()
-    email = (await session.get(AuthUser, user_id)).email
-    return MemberResponse(user_id=user_id, email=email, role=membership.role)
+    user_obj = await session.get(AuthUser, user_id)
+    return MemberResponse(
+        user_id=user_id,
+        email=user_obj.email,
+        full_name=user_obj.full_name,
+        role=membership.role,
+    )
 
 @router.delete("/orgs/{org_pid}/members/{user_id}", tags=["members"], status_code=204)
 async def remove_org_member(
