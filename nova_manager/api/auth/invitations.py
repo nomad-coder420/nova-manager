@@ -30,6 +30,9 @@ from nova_manager.api.auth.request_response import (
     TransferOwnershipRequest,
 )
 from nova_manager.database.session import get_async_session
+from nova_manager.components.auth.models import Organisation, App
+from nova_manager.core.config import BASE_URL, APP_INVITE_TEMPLATE_ID, ORG_INVITE_TEMPLATE_ID
+from nova_manager.service.email_brevo_api import email_service
 
 router = APIRouter()
 
@@ -65,6 +68,21 @@ async def invite_to_organisation(
     # Log invitation link for manual testing or email stub
     from nova_manager.core.log import logger
     logger.info(f"Invitation created for org {org_pid}: /api/v1/invitations/{inv.pid}/respond?token={inv.token}")
+    # Fetch organisation name
+    org_res = await session.execute(select(Organisation).filter_by(pid=org_pid))
+    org_obj = org_res.scalars().first()
+    org_name = org_obj.name if org_obj else ""
+    # Send invitation email
+    link = f"{BASE_URL}/api/v1/invitations/{inv.pid}/respond?token={inv.token}"
+    try:
+        message_id = email_service.send_email(
+            to=inv.email,
+            template_id=ORG_INVITE_TEMPLATE_ID,
+            params={"link": link, "org": org_name}
+        )
+        logger.info(f"Invitation email sent to {inv.email}, message_id={message_id}")
+    except Exception as e:
+        logger.error(f"Failed to send invitation email to {inv.email}: {e}")
     return InvitationResponse(
         pid=str(inv.pid),
         target_type=inv.target_type.value,
@@ -406,6 +424,24 @@ async def invite_to_app(
     # Log invitation link for manual testing or email stub
     from nova_manager.core.log import logger
     logger.info(f"Invitation created for app {app_pid}: /api/v1/invitations/{inv.pid}/respond?token={inv.token}")
+    # Fetch app and organisation names
+    app_res = await session.execute(select(App).filter_by(pid=app_pid))
+    app_obj = app_res.scalars().first()
+    app_name = app_obj.name if app_obj else ""
+    org_res = await session.execute(select(Organisation).filter_by(pid=app_obj.organisation_id if app_obj else None))
+    org_obj = org_res.scalars().first() if app_obj else None
+    org_name = org_obj.name if org_obj else ""
+    # Send invitation email
+    link = f"{BASE_URL}/api/v1/invitations/{inv.pid}/respond?token={inv.token}"
+    try:
+        message_id = email_service.send_email(
+            to=inv.email,
+            template_id=APP_INVITE_TEMPLATE_ID,
+            params={"link": link, "org": org_name, "app": app_name}
+        )
+        logger.info(f"Invitation email sent to {inv.email}, message_id={message_id}")
+    except Exception as e:
+        logger.error(f"Failed to send invitation email to {inv.email}: {e}")
     return InvitationResponse(
         pid=str(inv.pid),
         target_type=inv.target_type.value,

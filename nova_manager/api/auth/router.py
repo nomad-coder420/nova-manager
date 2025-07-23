@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from nova_manager.components.auth.manager import auth_backend, fastapi_users
+from nova_manager.components.auth.manager import auth_backend, fastapi_users, current_active_user, get_user_manager
 from nova_manager.api.auth.request_response import (
     UserRead,
     UserCreate,
@@ -184,3 +184,26 @@ async def create_app(
 
     # No commit needed, the dependency handles it.
     return AppResponse(pid=str(app.pid), name=app.name)
+
+# Change password endpoint
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+@router.post("/auth/password", status_code=204, tags=["auth"])
+async def change_password(
+    data: ChangePasswordRequest,
+    user: AuthUser = Depends(current_active_user),
+    user_manager=Depends(get_user_manager),
+):
+    """Change current user's password by verifying the old password first"""
+    # Verify old password using password helper against hashed_password
+    valid = user_manager.password_helper.verify(data.old_password, user.hashed_password)
+    if not valid:
+        raise HTTPException(status_code=403, detail="Old password is incorrect")
+    # Update with new password
+    from nova_manager.api.auth.request_response import UserUpdate
+    update = UserUpdate(password=data.new_password)
+    await user_manager.update(user, update)
+    # No content on success
+    return None
