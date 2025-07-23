@@ -1,7 +1,7 @@
 import uuid
 from typing import Optional
 
-from fastapi import Depends, Request
+from fastapi import Depends, Request, HTTPException
 from fastapi_users import BaseUserManager, FastAPIUsers, IntegerIDMixin
 from fastapi_users.authentication import (
     AuthenticationBackend,
@@ -17,6 +17,7 @@ from nova_manager.components.auth.database import get_user_db
 from nova_manager.components.auth.models import AuthUser
 from nova_manager.core.config import SECRET_KEY, DEBUG
 from nova_manager.core.log import logger
+from nova_manager.components.auth.enums import InvitationTargetType, InvitationStatus, OrganisationRole, AppRole
 
 
 class UserManager(IntegerIDMixin, BaseUserManager[AuthUser, int]):
@@ -28,7 +29,7 @@ class UserManager(IntegerIDMixin, BaseUserManager[AuthUser, int]):
         from nova_manager.database.session import SessionLocal
         from sqlalchemy import select
         from nova_manager.components.auth.invitation import Invitation
-        from nova_manager.components.auth.enums import InvitationTargetType, InvitationStatus
+        from nova_manager.components.auth.enums import InvitationTargetType, InvitationStatus, OrganisationRole
         from nova_manager.components.auth.models import UserOrganisationMembership, UserAppMembership, App
 
         db = SessionLocal()
@@ -37,6 +38,13 @@ class UserManager(IntegerIDMixin, BaseUserManager[AuthUser, int]):
             stmt = select(Invitation).filter_by(email=user.email, status=InvitationStatus.ACCEPTED.value)
             accepted = db.execute(stmt).scalars().all()
             for inv in accepted:
+                # validate invite role
+                if inv.target_type == InvitationTargetType.ORG.value:
+                    if inv.role not in [role.value for role in OrganisationRole]:
+                        raise HTTPException(status_code=400, detail=f"Invalid organisation invite role '{inv.role}'")
+                else:
+                    if inv.role not in [role.value for role in AppRole]:
+                        raise HTTPException(status_code=400, detail=f"Invalid app invite role '{inv.role}'")
                 if inv.target_type == InvitationTargetType.ORG.value:
                     mem = UserOrganisationMembership(
                         user_id=user.id,
@@ -56,7 +64,7 @@ class UserManager(IntegerIDMixin, BaseUserManager[AuthUser, int]):
                             db.add(UserOrganisationMembership(
                                 user_id=user.id,
                                 organisation_id=org_id,
-                                role=InvitationTargetType.MEMBER.value
+                                role=OrganisationRole.MEMBER.value
                             ))
                         # add app membership
                         db.add(UserAppMembership(
