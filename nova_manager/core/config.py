@@ -16,3 +16,11 @@ BIGQUERY_RAW_EVENTS_TABLE_NAME = getenv("BIGQUERY_RAW_EVENTS_TABLE_NAME") or ""
 # Use environment variables to set this value.
 SECRET_KEY = getenv("SECRET_KEY") or "a-very-secret-key-that-is-not-secret"
 DEBUG = getenv("DEBUG", "False").lower() in ("true", "1", "t")
+
+# Brevo (Sendinblue) API key for transactional emails
+BREVO_API_KEY = getenv("BREVO_API_KEY") or ""
+
+# Base URL for generating absolute links (e.g., invitations)
+BASE_URL = getenv("BASE_URL") or ""
+# Default template ID for invitation emails (Brevo)
+INVITATION_TEMPLATE_ID = int(getenv("INVITATION_TEMPLATE_ID") or "1")
