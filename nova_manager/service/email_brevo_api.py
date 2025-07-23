@@ -1,8 +1,7 @@
+
+import requests
 import logging
 from typing import List, Dict, Optional
-
-import sib_api_v3_sdk
-from sib_api_v3_sdk.rest import ApiException
 
 from nova_manager.core.config import BREVO_API_KEY
 
@@ -14,27 +13,24 @@ class EmailService:
     """
     def send_email(
         self,
-        to: List[Dict[str, str]],
+        to: str,
         template_id: int,
         params: Dict,
         headers: Optional[Dict[str, str]] = None,
     ) -> str:
         raise NotImplementedError("send_email must be implemented by subclasses")
 
-class BrevoEmailService(EmailService):
+class BrevoAPIEmailService(EmailService):
     """
     Email service implementation using Brevo (formerly Sendinblue) API.
     """
     def __init__(self, api_key: Optional[str] = None):
         # Use configured API key or provided override
         self.api_key = api_key or BREVO_API_KEY
-        configuration = sib_api_v3_sdk.Configuration()
-        configuration.api_key['api-key'] = self.api_key
-        self.client = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
 
     def send_email(
         self,
-        to: List[Dict[str, str]],
+        to: str,
         template_id: int,
         params: Dict,
         headers: Optional[Dict[str, str]] = None,
@@ -49,21 +45,25 @@ class BrevoEmailService(EmailService):
         :return: message ID of the sent email
         :raises ApiException: when API call fails
         """
-        message = sib_api_v3_sdk.SendSmtpEmail(
-            to=to,
-            template_id=template_id,
-            params=params,
-            headers=headers or {},
-        )
-        try:
-            response = self.client.send_transac_email(message)
-            # SDK converts JSON keys to snake_case attributes
-            message_id = getattr(response, 'message_id', None)
-            logger.info(f"Email sent successfully, message_id={message_id}")
-            return message_id
-        except ApiException as e:
-            logger.error(f"Failed to send email via Brevo: {e}")
-            raise
 
-# Default email service instance
-email_service: EmailService = BrevoEmailService()
+        url = "https://api.brevo.com/v3/smtp/email"
+        payload = {
+            "params": {
+                params
+            },
+            "templateId": template_id,
+            "to": [{ "email": to }]
+        }
+        headers = {
+            "accept": "application/json",
+            "content-type": "application/json",
+            "api-key": self.api_key
+        }
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            logger.info(f"Brevo api response {response}")
+            return response.json()
+        except Exception as e:
+            logger.error(f"Failed to send email via Brevo: {e}")
+
+email_service: EmailService = BrevoAPIEmailService()
