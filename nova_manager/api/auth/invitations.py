@@ -71,6 +71,8 @@ async def invite_to_organisation(
     # Fetch organisation name
     org_res = await session.execute(select(Organisation).filter_by(pid=org_pid))
     org_obj = org_res.scalars().first()
+    if not org_obj:
+        raise HTTPException(status_code=404, detail="Organization not found")
     org_name = org_obj.name if org_obj else ""
     # Send invitation email
     link = f"{BASE_URL}/api/v1/invitations/{inv.pid}/respond?token={inv.token}"
@@ -428,16 +430,15 @@ async def invite_to_app(
     app_res = await session.execute(select(App).filter_by(pid=app_pid))
     app_obj = app_res.scalars().first()
     app_name = app_obj.name if app_obj else ""
-    org_res = await session.execute(select(Organisation).filter_by(pid=app_obj.organisation_id if app_obj else None))
-    org_obj = org_res.scalars().first() if app_obj else None
-    org_name = org_obj.name if org_obj else ""
+    if not app_obj:
+        raise HTTPException(status_code=404, detail="Application not found")
     # Send invitation email
     link = f"{BASE_URL}/api/v1/invitations/{inv.pid}/respond?token={inv.token}"
     try:
         message_id = email_service.send_email(
             to=inv.email,
             template_id=APP_INVITE_TEMPLATE_ID,
-            params={"link": link, "org": org_name, "app": app_name}
+            params={"link": link, "app": app_name}
         )
         logger.info(f"Invitation email sent to {inv.email}, message_id={message_id}")
     except Exception as e:
@@ -453,6 +454,20 @@ async def invite_to_app(
         created_at=inv.created_at,
         expires_at=inv.expires_at,
     )
+
+# Allow users to accept invitation via email link (no auth)
+@router.get("/invitations/{invitation_pid}/respond", response_model=InvitationResponse, tags=["invitations"])
+async def accept_invitation(
+    invitation_pid: str,
+    token: str,
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    Accept invitation via GET link without auth.
+    """
+    action = InvitationAction(action="accept", token=token)
+    # Delegate to POST handler logic
+    return await respond_to_invitation(invitation_pid, action, session)
 
 @router.post("/invitations/{invitation_pid}/respond", response_model=InvitationResponse, tags=["invitations"])
 async def respond_to_invitation(
