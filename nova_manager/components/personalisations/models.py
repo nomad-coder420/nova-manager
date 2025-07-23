@@ -16,7 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from nova_manager.core.models import BaseModel, BaseOrganisationModel
-from nova_manager.components.experiences.models import Experiences
+from nova_manager.components.segments.models import Segments
 
 
 class Personalisations(BaseOrganisationModel):

@@ -1,7 +1,6 @@
 from sqlalchemy import JSON, Index, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-
 from nova_manager.core.models import BaseOrganisationModel
 
 

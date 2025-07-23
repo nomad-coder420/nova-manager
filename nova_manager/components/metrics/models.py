@@ -22,6 +22,32 @@ class Metrics(BaseOrganisationModel):
     )
 
 
+class EventsSchema(BaseOrganisationModel):
+    __tablename__ = "events_schema"
+
+    event_name: Mapped[str] = mapped_column(String, nullable=False)
+    event_schema: Mapped[dict] = mapped_column(
+        JSON, nullable=False, server_default=func.json("{}")
+    )
+
+    __table_args__ = (
+        # Unique constraint: one event name
+        UniqueConstraint(
+            "event_name",
+            "organisation_id",
+            "app_id",
+            name="uq_events_schema_event_name_org_app",
+        ),
+        # Index for common queries
+        Index(
+            "idx_events_schema_event_name_org_app",
+            "event_name",
+            "organisation_id",
+            "app_id",
+        ),
+    )
+
+
 class ExperienceMetrics(BaseModel):
     __tablename__ = "experience_metrics"
 

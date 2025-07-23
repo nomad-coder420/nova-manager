@@ -18,6 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from nova_manager.core.models import BaseOrganisationModel
 from nova_manager.components.users.models import Users
+from nova_manager.components.experiences.models import Experiences
 
 
 class UserExperience(BaseOrganisationModel):

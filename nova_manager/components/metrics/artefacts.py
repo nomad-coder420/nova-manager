@@ -20,3 +20,6 @@ class EventsArtefacts:
     def _event_props_table_name(self, event_name: str) -> str:
         safe_event_name = self._sanitized_string(event_name)
         return f"{self.dataset_name}.event_{safe_event_name}_props"
+
+    def _raw_events_table_name(self) -> str:
+        return f"{self.dataset_name}.raw_events"

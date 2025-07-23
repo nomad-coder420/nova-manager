@@ -4,106 +4,119 @@ from typing import TypedDict
 from uuid import UUID
 import uuid
 
+from nova_manager.database.session import get_db
+from nova_manager.service.bigquery import BigQueryService
 
 from nova_manager.components.metrics.artefacts import EventsArtefacts
+from nova_manager.components.metrics.crud import EventsSchemaCRUD
 from nova_manager.components.user_experience.models import UserExperience
+from nova_manager.components.metrics.models import EventsSchema
 from nova_manager.components.users.models import Users
-from nova_manager.core.config import (
-    BIGQUERY_DATASET_NAME,
-    BIGQUERY_RAW_EVENTS_TABLE_NAME,
-    GCP_PROJECT_ID,
-)
+from nova_manager.core.config import GCP_PROJECT_ID
 from nova_manager.core.log import logger
-
-from datetime import datetime
-from uuid import UUID
-
-from nova_manager.service.bigquery import BigQueryService
 
 
 class TrackEvent(TypedDict):
     event_name: str
     event_data: dict | None = None
+    timestamp: datetime | None = None
 
 
 class EventsController(EventsArtefacts):
-    def track_events(
-        self,
-        user_id: UUID,
-        timestamp: datetime,
-        events: list[TrackEvent],
-    ):
-        time_now = datetime.now(timezone.utc)
+    def _create_raw_events_table(self):
+        raw_events_table_name = f"{GCP_PROJECT_ID}.{self._raw_events_table_name()}"
 
-        raw_events_rows = []
-        event_table_rows = {}
-        event_props_table_rows = {}
+        # Create raw events table if not exists
+        raw_events_table_schema = [
+            {"name": "event_id", "type": "STRING"},
+            {"name": "user_id", "type": "STRING"},
+            {"name": "client_ts", "type": "TIMESTAMP"},
+            {"name": "server_ts", "type": "TIMESTAMP"},
+            {"name": "event_name", "type": "STRING"},
+            {"name": "event_data", "type": "STRING"},
+        ]
 
-        bigquery_table_name = (
-            f"{GCP_PROJECT_ID}.{BIGQUERY_DATASET_NAME}.{BIGQUERY_RAW_EVENTS_TABLE_NAME}"
+        BigQueryService().create_table_if_not_exists(
+            raw_events_table_name,
+            raw_events_table_schema,
+            partition_field="client_ts",
+            clustering_fields=["event_name", "user_id"],
         )
 
-        for event in events:
-            event_id = str(uuid.uuid4())
-            event_name = event["event_name"]
-            event_data = event["event_data"] or {}
+        return raw_events_table_name
 
-            raw_events_rows.append(
-                {
-                    "event_id": event_id,
-                    "user_id": str(user_id),
-                    "org_id": str(self.organisation_id),
-                    "app_id": str(self.app_id),
-                    "client_ts": timestamp.isoformat(),
-                    "server_ts": time_now.isoformat(),
-                    "event_name": event_name,
-                    "event_data": json.dumps(event_data),
-                }
-            )
+    def _create_event_table(self, event_name: str):
+        event_table_name = f"{GCP_PROJECT_ID}.{self._event_table_name(event_name)}"
 
-            # TODO: Create table if not exists
+        # Create event table if not exists
+        event_table_schema = [
+            {"name": "event_id", "type": "STRING"},
+            {"name": "user_id", "type": "STRING"},
+            {"name": "event_name", "type": "STRING"},
+            {"name": "client_ts", "type": "TIMESTAMP"},
+            {"name": "server_ts", "type": "TIMESTAMP"},
+        ]
 
-            event_table_name = self._event_table_name(event_name)
-            event_props_table_name = self._event_props_table_name(event_name)
+        BigQueryService().create_table_if_not_exists(
+            event_table_name,
+            event_table_schema,
+            partition_field="client_ts",
+            clustering_fields=["event_name", "user_id"],
+        )
 
-            event_table_rows[event_table_name] = {
-                "event_id": event_id,
-                "user_id": str(user_id),
-                "org_id": str(self.organisation_id),
-                "app_id": str(self.app_id),
-                "event_name": event_name,
-                "client_ts": timestamp.isoformat(),
-                "server_ts": time_now.isoformat(),
-            }
+        return event_table_name
 
-            event_props_table_rows[event_props_table_name] = [
-                {
-                    "event_id": event_id,
-                    "user_id": str(user_id),
-                    "org_id": str(self.organisation_id),
-                    "app_id": str(self.app_id),
-                    "event_name": event_name,
-                    "key": key,
-                    "value": event_data[key],
-                    "client_ts": timestamp.isoformat(),
-                    "server_ts": time_now.isoformat(),
-                }
-                for key in event_data
-            ]
+    def _create_event_props_table(self, event_name: str):
+        event_props_table_name = (
+            f"{GCP_PROJECT_ID}.{self._event_props_table_name(event_name)}"
+        )
 
+        # Create event props table if not exists
+        event_props_table_schema = [
+            {"name": "event_id", "type": "STRING"},
+            {"name": "user_id", "type": "STRING"},
+            {"name": "event_name", "type": "STRING"},
+            {"name": "key", "type": "STRING"},
+            {"name": "value", "type": "STRING"},
+            {"name": "client_ts", "type": "TIMESTAMP"},
+            {"name": "server_ts", "type": "TIMESTAMP"},
+        ]
+
+        BigQueryService().create_table_if_not_exists(
+            event_props_table_name,
+            event_props_table_schema,
+            partition_field="client_ts",
+            clustering_fields=["event_name", "user_id"],
+        )
+
+        return event_props_table_name
+
+    def _push_to_bigquery(
+        self,
+        raw_events_rows: list[dict],
+        event_table_rows: dict,
+        event_props_table_rows: dict,
+    ):
         try:
-            errors = BigQueryService().insert_rows(bigquery_table_name, raw_events_rows)
+            raw_events_table_name = self._raw_events_table_name()
+            errors = BigQueryService().insert_rows(
+                raw_events_table_name, raw_events_rows
+            )
 
             if errors:
                 raise Exception(str(errors))
 
-            for table_name, row in event_table_rows.items():
-                errors = BigQueryService().insert_rows(table_name, [row])
+            for event_name, row in event_table_rows.items():
+                event_table_name = self._event_table_name(event_name)
+
+                errors = BigQueryService().insert_rows(event_table_name, [row])
                 if errors:
                     raise Exception(str(errors))
 
-            for table_name, rows in event_props_table_rows.items():
-                errors = BigQueryService().insert_rows(table_name, rows)
+            for event_name, rows in event_props_table_rows.items():
+                event_props_table_name = self._event_props_table_name(event_name)
+
+                errors = BigQueryService().insert_rows(event_props_table_name, rows)
                 if errors:
                     raise Exception(str(errors))
 
@@ -111,18 +124,149 @@ class EventsController(EventsArtefacts):
             logger.error(f"BigQuery insertion failed: {str(e)}")
             raise e
 
+    def track_events(self, user_id: UUID, events: list[TrackEvent]):
+        time_now = datetime.now(timezone.utc)
+
+        raw_events_rows = []
+        event_table_rows = {}
+        event_props_table_rows = {}
+
+        unique_event_names = list(set([event["event_name"] for event in events]))
+
+        events_schema_objs_map = {}
+        events_schema_map = {}
+        with get_db() as db:
+            events_schema = EventsSchemaCRUD(db).get_events_schema(
+                unique_event_names, self.organisation_id, self.app_id
+            )
+
+            events_schema_map = {
+                schema.event_name: schema.event_schema for schema in events_schema
+            }
+            events_schema_objs_map = {
+                schema.event_name: schema for schema in events_schema
+            }
+
+            print(events_schema_map, end="\n\n\n======\n\n\n")
+
+        new_events = []
+        existing_events = []
+
+        for event_name in unique_event_names:
+            if event_name not in events_schema_map:
+                self._create_event_table(event_name)
+                self._create_event_props_table(event_name)
+                events_schema_map[event_name] = {}
+                new_events.append(event_name)
+            else:
+                existing_events.append(event_name)
+
+        for event in events:
+            event_id = str(uuid.uuid4())
+            event_name = event["event_name"]
+            event_data = event.get("event_data") or {}
+            timestamp = event.get("timestamp") or time_now
+
+            event_schema = events_schema_map[event_name] or {}
+
+            if "properties" not in event_schema:
+                event_schema["properties"] = {}
+
+            event_properties = event_schema["properties"] or {}
+
+            raw_events_rows.append(
+                {
+                    "event_id": event_id,
+                    "user_id": str(user_id),
+                    "client_ts": timestamp.isoformat(),
+                    "server_ts": time_now.isoformat(),
+                    "event_name": event_name,
+                    "event_data": json.dumps(event_data),
+                }
+            )
+
+            event_table_rows[event_name] = {
+                "event_id": event_id,
+                "user_id": str(user_id),
+                "event_name": event_name,
+                "client_ts": timestamp.isoformat(),
+                "server_ts": time_now.isoformat(),
+            }
+
+            event_props_table_rows[event_name] = []
+
+            for key in event_data:
+                if key not in event_properties:
+                    event_properties[key] = {"type": type(event_data[key]).__name__}
+
+                event_props_table_rows[event_name].append(
+                    {
+                        "event_id": event_id,
+                        "user_id": str(user_id),
+                        "event_name": event_name,
+                        "key": key,
+                        "value": event_data[key],
+                        "client_ts": timestamp.isoformat(),
+                        "server_ts": time_now.isoformat(),
+                    }
+                )
+
+            event_schema["properties"].update(event_properties)
+            events_schema_map[event_name] = event_schema
+
+            print(events_schema_map, end="\n\n\n======\n\n\n")
+
+        print(events_schema_map)
+        self._push_to_bigquery(
+            raw_events_rows, event_table_rows, event_props_table_rows
+        )
+
+        with get_db() as db:
+            crud = EventsSchemaCRUD(db)
+
+            to_insert = []
+            to_update = []
+
+            for event_name in new_events:
+                event_schema = events_schema_map[event_name]
+                new_schema = EventsSchema(
+                    event_name=event_name,
+                    organisation_id=self.organisation_id,
+                    app_id=self.app_id,
+                    event_schema=event_schema,
+                )
+                to_insert.append(new_schema)
+
+            for event_name in existing_events:
+                existing_event_schema_obj = events_schema_objs_map[event_name]
+                existing_event_schema_obj.event_schema = events_schema_map[event_name]
+                to_update.append(existing_event_schema_obj)
+
+            crud.bulk_create(to_insert)
+            crud.bulk_update(to_update)
+
     def track_event(
         self,
         user_id: UUID,
-        timestamp: datetime,
         event_name: str,
         event_data: dict | None = None,
+        timestamp: datetime | None = None,
     ):
+        if not timestamp:
+            timestamp = datetime.now()
+
         if not event_data:
             event_data = {}
 
         return self.track_events(
-            user_id, timestamp, [{"event_name": event_name, "event_data": event_data}]
+            user_id,
+            [
+                {
+                    "event_name": event_name,
+                    "event_data": event_data,
+                    "timestamp": timestamp,
+                }
+            ],
         )
 
     def track_user_experience(self, user_experience: UserExperience):
@@ -130,8 +274,6 @@ class EventsController(EventsArtefacts):
 
         user_experience_row = {
             "user_id": str(user_experience.user_id),
-            "org_id": str(user_experience.organisation_id),
-            "app_id": str(user_experience.app_id),
             "experience_id": str(user_experience.experience_id),
             "personalisation_id": str(user_experience.personalisation_id),
             "personalisation_name": user_experience.personalisation_name,
@@ -149,8 +291,6 @@ class EventsController(EventsArtefacts):
         user_profile_rows = [
             {
                 "user_id": str(user.pid),
-                "org_id": str(user.organisation_id),
-                "app_id": str(user.app_id),
                 "key": key,
                 "value": user.user_profile[key],
             }

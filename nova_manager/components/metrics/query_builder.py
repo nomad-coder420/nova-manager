@@ -17,7 +17,7 @@ class EventFilter(TypedDict):
 
 class BaseMetricConfig(TypedDict):
     time_range: TimeRange | str
-    granularity: str
+    granularity: Literal["hourly", "daily", "weekly", "monthly", "none"]
     group_by: list[str]
     filters: dict
 
