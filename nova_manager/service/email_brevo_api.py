@@ -47,23 +47,28 @@ class BrevoAPIEmailService(EmailService):
         """
 
         url = "https://api.brevo.com/v3/smtp/email"
+        # Construct proper payload per Brevo SMTP API
         payload = {
-            "params": {
-                params
-            },
             "templateId": template_id,
-            "to": [{ "email": to }]
+            "to": [{"email": to}],
+            "params": params
         }
         headers = {
             "accept": "application/json",
             "content-type": "application/json",
             "api-key": self.api_key
         }
+        response = requests.post(url, json=payload, headers=headers)
+        # Log status and body for debugging
+        logger.info(f"Brevo API response: {response.status_code} {response.text}")
+        # Raise exception on HTTP errors
         try:
-            response = requests.post(url, json=payload, headers=headers)
-            logger.info(f"Brevo api response {response}")
-            return response.json()
+            response.raise_for_status()
         except Exception as e:
-            logger.error(f"Failed to send email via Brevo: {e}")
+            logger.error(f"Brevo API returned error: {e}")
+            raise
+        # Parse and return messageId
+        data = response.json()
+        return data.get("messageId")
 
 email_service: EmailService = BrevoAPIEmailService()
