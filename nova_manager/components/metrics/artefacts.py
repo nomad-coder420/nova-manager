@@ -23,3 +23,9 @@ class EventsArtefacts:
 
     def _raw_events_table_name(self) -> str:
         return f"{self.dataset_name}.raw_events"
+
+    def _user_experience_table_name(self) -> str:
+        return f"{self.dataset_name}.user_experience"
+
+    def _user_profile_props_table_name(self) -> str:
+        return f"{self.dataset_name}.user_profile_props"

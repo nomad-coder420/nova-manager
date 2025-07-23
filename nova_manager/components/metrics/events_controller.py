@@ -147,8 +147,6 @@ class EventsController(EventsArtefacts):
                 schema.event_name: schema for schema in events_schema
             }
 
-            print(events_schema_map, end="\n\n\n======\n\n\n")
-
         new_events = []
         existing_events = []
 
@@ -214,9 +212,6 @@ class EventsController(EventsArtefacts):
             event_schema["properties"].update(event_properties)
             events_schema_map[event_name] = event_schema
 
-            print(events_schema_map, end="\n\n\n======\n\n\n")
-
-        print(events_schema_map)
         self._push_to_bigquery(
             raw_events_rows, event_table_rows, event_props_table_rows
         )
@@ -270,7 +265,7 @@ class EventsController(EventsArtefacts):
         )
 
     def track_user_experience(self, user_experience: UserExperience):
-        user_experience_table_name = ""
+        user_experience_table_name = self._user_experience_table_name()
 
         user_experience_row = {
             "user_id": str(user_experience.user_id),
@@ -286,7 +281,7 @@ class EventsController(EventsArtefacts):
         BigQueryService.insert_rows(user_experience_table_name, [user_experience_row])
 
     def track_user_profile(self, user: Users):
-        user_profile_table_name = ""
+        user_profile_table_name = self._user_profile_props_table_name()
 
         user_profile_rows = [
             {
