@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from typing import Literal
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -455,19 +456,21 @@ async def invite_to_app(
         expires_at=inv.expires_at,
     )
 
-# Allow users to accept invitation via email link (no auth)
-@router.get("/invitations/{invitation_pid}/respond", response_model=InvitationResponse, tags=["invitations"])
+# Allow users to accept invitation via email link (no auth) and redirect
+@router.get("/invitations/{invitation_pid}/respond", tags=["invitations"])
 async def accept_invitation(
     invitation_pid: str,
     token: str,
     session: AsyncSession = Depends(get_async_session),
 ):
     """
-    Accept invitation via GET link without auth.
+    Accept invitation via GET link without auth, then redirect to frontend.
     """
     action = InvitationAction(action="accept", token=token)
-    # Delegate to POST handler logic
-    return await respond_to_invitation(invitation_pid, action, session)
+    # Perform acceptance logic
+    await respond_to_invitation(invitation_pid, action, session)
+    # Redirect user to frontend root, SPA will handle landing or dashboard
+    return RedirectResponse(url="/")
 
 @router.post("/invitations/{invitation_pid}/respond", response_model=InvitationResponse, tags=["invitations"])
 async def respond_to_invitation(
