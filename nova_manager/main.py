@@ -18,6 +18,7 @@ from nova_manager.api.segments.router import router as segments_router
 from nova_manager.api.experiences.router import router as experiences_router
 from nova_manager.api.auth.router import router as auth_router
 from nova_manager.api.auth.invitations import router as invitations_router
+from nova_manager.api.auth.members import router as members_router
 from nova_manager.api.user_experience.router import router as user_experience_router
 from nova_manager.api.campaigns.router import router as campaigns_router
 from nova_manager.api.users.router import router as users_router
@@ -39,6 +40,7 @@ app.include_router(segments_router, prefix="/api/v1/segments")
 app.include_router(experiences_router, prefix="/api/v1/experiences")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(invitations_router, prefix="/api/v1")
+app.include_router(members_router, prefix="/api/v1")
 app.include_router(user_experience_router, prefix="/api/v1/user-experience")
 app.include_router(campaigns_router, prefix="/api/v1/campaigns")
 app.include_router(users_router, prefix="/api/v1/users")
