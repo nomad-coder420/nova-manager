@@ -18,6 +18,8 @@ from nova_manager.components.auth.models import AuthUser
 from nova_manager.core.config import SECRET_KEY, DEBUG
 from nova_manager.core.log import logger
 from nova_manager.components.auth.enums import InvitationTargetType, InvitationStatus, OrganisationRole, AppRole
+from nova_manager.core.config import FRONTEND_URL, PASSWORD_RESET_TEMPLATE_ID
+from nova_manager.service.email_brevo_api import email_service
 
 
 class UserManager(IntegerIDMixin, BaseUserManager[AuthUser, int]):
@@ -82,7 +84,17 @@ class UserManager(IntegerIDMixin, BaseUserManager[AuthUser, int]):
     async def on_after_forgot_password(
         self, user: AuthUser, token: str, request: Optional[Request] = None
     ):
-        print(f"User {user.id} has forgot their password. Reset token: {token}")
+        # Build password reset link and send via email
+        reset_link = f"{FRONTEND_URL}/reset-password?token={token}"
+        try:
+            email_service.send_email_with_curl(
+                to=user.email,
+                template_id=PASSWORD_RESET_TEMPLATE_ID,
+                params={"link": reset_link},
+            )
+            logger.info(f"Sent password reset email to user {user.id} at {user.email}")
+        except Exception as e:
+            logger.error(f"Failed to send password reset email to {user.email}: {e}")
 
     async def on_after_request_verify(
         self, user: AuthUser, token: str, request: Optional[Request] = None

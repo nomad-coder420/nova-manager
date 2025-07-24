@@ -27,3 +27,4 @@ FRONTEND_URL = getenv("FRONTEND_URL") or "http://localhost:3000"
 # Default template ID for invitation emails (Brevo)
 APP_INVITE_TEMPLATE_ID = int(getenv("APP_INVITE_TEMPLATE_ID") or "1")
 ORG_INVITE_TEMPLATE_ID = int(getenv("ORG_INVITE_TEMPLATE_ID") or "2")
+PASSWORD_RESET_TEMPLATE_ID = int(getenv("PASSWORD_RESET_TEMPLATE_ID") or "3")
