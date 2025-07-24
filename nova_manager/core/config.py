@@ -22,6 +22,8 @@ BREVO_API_KEY = getenv("BREVO_API_KEY") or ""
 
 # Base URL for generating absolute links (e.g., invitations)
 BASE_URL = getenv("BASE_URL") or ""
+# Frontend URL for redirects after invitation acceptance
+FRONTEND_URL = getenv("FRONTEND_URL") or "http://localhost:3000"
 # Default template ID for invitation emails (Brevo)
 APP_INVITE_TEMPLATE_ID = int(getenv("APP_INVITE_TEMPLATE_ID") or "1")
 ORG_INVITE_TEMPLATE_ID = int(getenv("ORG_INVITE_TEMPLATE_ID") or "2")
