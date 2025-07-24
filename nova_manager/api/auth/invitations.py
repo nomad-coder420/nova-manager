@@ -41,6 +41,67 @@ class InvitationAction(BaseModel):
     action: Literal["accept", "decline"]
     token: str
 
+from nova_manager.components.auth.enums import AppRole, OrganisationRole, InvitationStatus, InvitationTargetType
+from nova_manager.components.auth.dependencies import RoleRequired, OrganisationRoleRequired
+from nova_manager.components.auth.invitation import Invitation
+from nova_manager.api.auth.request_response import InvitationResponse
+
+@router.get("/apps/{app_pid}/pending-invites", response_model=list[InvitationResponse], tags=["invitations"])
+async def get_pending_app_invites(
+    app_pid: str,
+    perm=Depends(RoleRequired([
+        AppRole.OWNER, AppRole.ADMIN, AppRole.DEVELOPER, AppRole.ANALYST, AppRole.VIEWER
+    ])),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Get pending invitations for an app (viewer and above)."""
+    q = select(Invitation).filter_by(
+        target_type=InvitationTargetType.APP,
+        target_id=app_pid,
+        status=InvitationStatus.PENDING.value
+    )
+    res = await session.execute(q)
+    invites = res.scalars().all()
+    return [InvitationResponse(
+        pid=str(inv.pid),
+        target_type=inv.target_type.value,
+        target_id=inv.target_id,
+        email=inv.email,
+        role=inv.role,
+        token=inv.token,
+        status=inv.status,
+        created_at=inv.created_at,
+        expires_at=inv.expires_at
+    ) for inv in invites]
+
+@router.get("/orgs/{org_pid}/pending-invites", response_model=list[InvitationResponse], tags=["invitations"])
+async def get_pending_org_invites(
+    org_pid: str,
+    perm=Depends(OrganisationRoleRequired([
+        OrganisationRole.OWNER, OrganisationRole.ADMIN, OrganisationRole.MEMBER
+    ])),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Get pending invitations for an org (member and above)."""
+    q = select(Invitation).filter_by(
+        target_type=InvitationTargetType.ORG,
+        target_id=org_pid,
+        status=InvitationStatus.PENDING.value
+    )
+    res = await session.execute(q)
+    invites = res.scalars().all()
+    return [InvitationResponse(
+        pid=str(inv.pid),
+        target_type=inv.target_type.value,
+        target_id=inv.target_id,
+        email=inv.email,
+        role=inv.role,
+        token=inv.token,
+        status=inv.status,
+        created_at=inv.created_at,
+        expires_at=inv.expires_at
+    ) for inv in invites]
+
 @router.post("/orgs/{org_pid}/invite", response_model=InvitationResponse, tags=["invitations"])
 async def invite_to_organisation(
     org_pid: str,
