@@ -74,6 +74,84 @@ async def get_pending_app_invites(
         expires_at=inv.expires_at
     ) for inv in invites]
 
+@router.post("/apps/{app_pid}/revoke-invite/{invite_pid}", response_model=InvitationResponse, tags=["invitations"])
+async def revoke_app_invite(
+    app_pid: str,
+    invite_pid: str,
+    user=Depends(require_user_authentication),
+    perm=Depends(RoleRequired([AppRole.OWNER, AppRole.ADMIN])),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Revoke an app invite (owner/admin only; admin cannot revoke admin invites)."""
+    q_inv = select(Invitation).filter_by(pid=invite_pid, target_type=InvitationTargetType.APP, target_id=app_pid)
+    res_inv = await session.execute(q_inv)
+    invite = res_inv.scalars().first()
+    if not invite or invite.status != InvitationStatus.PENDING.value:
+        raise HTTPException(status_code=404, detail="Pending invite not found")
+    # Get caller's membership
+    q_caller = select(UserAppMembership).filter_by(app_id=app_pid, user_id=user.id)
+    res_caller = await session.execute(q_caller)
+    caller_mem = res_caller.scalars().first()
+    if not caller_mem:
+        raise HTTPException(status_code=403, detail="No app membership")
+    from nova_manager.core.log import logger
+    logger.debug(f"[DEBUG] session type: {type(session)}")
+    # Admin cannot revoke admin invites
+    if caller_mem.role == AppRole.ADMIN.value and invite.role == AppRole.ADMIN.value:
+        raise HTTPException(status_code=403, detail="Admins cannot revoke admin invites")
+    invite.status = InvitationStatus.REVOKED.value
+    await session.flush()
+    return InvitationResponse(
+        pid=str(invite.pid),
+        target_type=invite.target_type.value,
+        target_id=invite.target_id,
+        email=invite.email,
+        role=invite.role,
+        token=invite.token,
+        status=invite.status,
+        created_at=invite.created_at,
+        expires_at=invite.expires_at
+    )
+
+@router.post("/orgs/{org_pid}/revoke-invite/{invite_pid}", response_model=InvitationResponse, tags=["invitations"])
+async def revoke_org_invite(
+    org_pid: str,
+    invite_pid: str,
+    user=Depends(require_user_authentication),
+    perm=Depends(OrganisationRoleRequired([OrganisationRole.OWNER, OrganisationRole.ADMIN])),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Revoke an org invite (owner/admin only; admin cannot revoke admin invites)."""
+    q_inv = select(Invitation).filter_by(pid=invite_pid, target_type=InvitationTargetType.ORG, target_id=org_pid)
+    res_inv = await session.execute(q_inv)
+    invite = res_inv.scalars().first()
+    if not invite or invite.status != InvitationStatus.PENDING.value:
+        raise HTTPException(status_code=404, detail="Pending invite not found")
+    # Get caller's membership
+    q_caller = select(UserOrganisationMembership).filter_by(organisation_id=org_pid, user_id=user.id)
+    res_caller = await session.execute(q_caller)
+    caller_mem = res_caller.scalars().first()
+    if not caller_mem:
+        raise HTTPException(status_code=403, detail="No org membership")
+    from nova_manager.core.log import logger
+    logger.debug(f"[DEBUG] session type: {type(session)}")
+    # Admin cannot revoke admin invites
+    if caller_mem.role == OrganisationRole.ADMIN.value and invite.role == OrganisationRole.ADMIN.value:
+        raise HTTPException(status_code=403, detail="Admins cannot revoke admin invites")
+    invite.status = InvitationStatus.REVOKED.value
+    await session.flush()
+    return InvitationResponse(
+        pid=str(invite.pid),
+        target_type=invite.target_type.value,
+        target_id=invite.target_id,
+        email=invite.email,
+        role=invite.role,
+        token=invite.token,
+        status=invite.status,
+        created_at=invite.created_at,
+        expires_at=invite.expires_at
+    )
+
 @router.get("/orgs/{org_pid}/pending-invites", response_model=list[InvitationResponse], tags=["invitations"])
 async def get_pending_org_invites(
     org_pid: str,

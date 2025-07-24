@@ -24,3 +24,4 @@ class InvitationStatus(str, Enum):
     PENDING = "pending"
     ACCEPTED = "accepted"
     DECLINED = "declined"
+    REVOKED = "revoked"
