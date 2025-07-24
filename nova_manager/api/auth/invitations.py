@@ -32,7 +32,7 @@ from nova_manager.api.auth.request_response import (
 )
 from nova_manager.database.session import get_async_session
 from nova_manager.components.auth.models import Organisation, App
-from nova_manager.core.config import BASE_URL, APP_INVITE_TEMPLATE_ID, ORG_INVITE_TEMPLATE_ID
+from nova_manager.core.config import BASE_URL, APP_INVITE_TEMPLATE_ID, ORG_INVITE_TEMPLATE_ID, FRONTEND_URL
 from nova_manager.service.email_brevo_api import email_service
 
 router = APIRouter()
@@ -78,7 +78,7 @@ async def invite_to_organisation(
     # Send invitation email
     link = f"{BASE_URL}/api/v1/invitations/{inv.pid}/respond?token={inv.token}"
     try:
-        message_id = email_service.send_email(
+        message_id = email_service.send_email_with_curl(
             to=inv.email,
             template_id=ORG_INVITE_TEMPLATE_ID,
             params={"link": link, "org": org_name}
@@ -86,6 +86,7 @@ async def invite_to_organisation(
         logger.info(f"Invitation email sent to {inv.email}, message_id={message_id}")
     except Exception as e:
         logger.error(f"Failed to send invitation email to {inv.email}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send invitation email")
     return InvitationResponse(
         pid=str(inv.pid),
         target_type=inv.target_type.value,
@@ -436,7 +437,7 @@ async def invite_to_app(
     # Send email
     link = f"{BASE_URL}/api/v1/invitations/{inv.pid}/respond?token={inv.token}"
     try:
-        message_id = email_service.send_email(
+        message_id = email_service.send_email_with_curl(
             to=inv.email,
             template_id=APP_INVITE_TEMPLATE_ID,
             params={"link": link, "app": app_name}
@@ -444,6 +445,7 @@ async def invite_to_app(
         logger.info(f"Invitation email sent to {inv.email}, message_id={message_id}")
     except Exception as e:
         logger.error(f"Failed to send invitation email to {inv.email}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send invitation email")
     return InvitationResponse(
         pid=str(inv.pid),
         target_type=inv.target_type.value,
@@ -464,8 +466,54 @@ async def accept_invitation(
     token: str,
     session: AsyncSession = Depends(get_async_session),
 ):
-    # Optional UI redirect to a landing page
-    return RedirectResponse(url=f"/invitation?pid={invitation_pid}&token={token}")
+    from datetime import datetime, timezone
+    # Fetch invitation
+    result = await session.execute(select(Invitation).filter_by(pid=invitation_pid))
+    inv = result.scalars().first()
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    if inv.token != token:
+        raise HTTPException(status_code=400, detail="Invalid invitation token")
+    now = datetime.now(timezone.utc)
+    if inv.expires_at < now:
+        inv.status = InvitationStatus.DECLINED.value
+        await session.flush()
+        raise HTTPException(status_code=400, detail="Invitation expired")
+    if inv.status != InvitationStatus.PENDING.value:
+        # Already processed, just redirect
+        return RedirectResponse(url=f"{FRONTEND_URL}/dashboard")
+    
+    # Auto-accept the invitation
+    inv.status = InvitationStatus.ACCEPTED.value
+    # find user by email
+    from sqlalchemy import select as sa_select
+    from nova_manager.components.auth.models import AuthUser
+    result_user = await session.execute(sa_select(AuthUser).filter_by(email=inv.email))
+    user_obj = result_user.scalars().first()
+    if user_obj:
+        # create membership only if registered
+        if inv.target_type == InvitationTargetType.ORG.value:
+            q = sa_select(UserOrganisationMembership).filter_by(user_id=user_obj.id, organisation_id=inv.target_id)
+            existing = (await session.execute(q)).scalars().first()
+            if not existing:
+                session.add(UserOrganisationMembership(
+                    user_id=user_obj.id,
+                    organisation_id=inv.target_id,
+                    role=inv.role,
+                ))
+        else:
+            q = sa_select(UserAppMembership).filter_by(user_id=user_obj.id, app_id=inv.target_id)
+            existing = (await session.execute(q)).scalars().first()
+            if not existing:
+                session.add(UserAppMembership(
+                    user_id=user_obj.id,
+                    app_id=inv.target_id,
+                    role=inv.role,
+                ))
+    # if not registered, membership will be applied on registration hook
+    await session.flush()
+    # Redirect to frontend dashboard
+    return RedirectResponse(url=f"{FRONTEND_URL}/dashboard")
 
 
 @router.post("/invitations/{invitation_pid}/respond", response_model=InvitationResponse, tags=["invitations"])
