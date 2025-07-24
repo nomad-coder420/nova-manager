@@ -407,15 +407,15 @@ async def invite_to_app(
     perm=Depends(RoleRequired([AppRole.ADMIN, AppRole.OWNER])),
     session: AsyncSession = Depends(get_async_session),
 ):
-    """
-    Invite a user to an application (app owner/admin only).
-    """
-    # Restrict app Admins from inviting OWNER or ADMIN roles
+    # Validate role on app invite
+    if data.role not in [role.value for role in AppRole]:
+        raise HTTPException(status_code=400, detail=f"Invalid app invite role '{data.role}'")
+    # Restrict app admins from inviting OWNER or ADMIN roles
     q_caller = select(UserAppMembership).filter_by(app_id=app_pid, user_id=user.id)
     res_caller = await session.execute(q_caller)
     caller_mem = res_caller.scalars().first()
     if caller_mem.role == AppRole.ADMIN.value and data.role in (AppRole.OWNER.value, AppRole.ADMIN.value):
-        raise HTTPException(status_code=403, detail="Admins may only invite developers, analysts, or viewers to the application")
+        raise HTTPException(status_code=403, detail="Admins may only invite developer/analyst/viewer roles to the application")
     inv = Invitation(
         target_type=InvitationTargetType.APP,
         target_id=app_pid,
@@ -424,16 +424,16 @@ async def invite_to_app(
     )
     session.add(inv)
     await session.flush()
-    # Log invitation link for manual testing or email stub
+    # Log invitation link
     from nova_manager.core.log import logger
     logger.info(f"Invitation created for app {app_pid}: /api/v1/invitations/{inv.pid}/respond?token={inv.token}")
-    # Fetch app and organisation names
+    # Fetch app name
     app_res = await session.execute(select(App).filter_by(pid=app_pid))
     app_obj = app_res.scalars().first()
-    app_name = app_obj.name if app_obj else ""
     if not app_obj:
         raise HTTPException(status_code=404, detail="Application not found")
-    # Send invitation email
+    app_name = app_obj.name
+    # Send email
     link = f"{BASE_URL}/api/v1/invitations/{inv.pid}/respond?token={inv.token}"
     try:
         message_id = email_service.send_email(
@@ -456,6 +456,7 @@ async def invite_to_app(
         expires_at=inv.expires_at,
     )
 
+
 # Allow users to accept invitation via email link (no auth) and redirect
 @router.get("/invitations/{invitation_pid}/respond", tags=["invitations"])
 async def accept_invitation(
@@ -463,14 +464,9 @@ async def accept_invitation(
     token: str,
     session: AsyncSession = Depends(get_async_session),
 ):
-    """
-    Accept invitation via GET link without auth, then redirect to frontend.
-    """
-    action = InvitationAction(action="accept", token=token)
-    # Perform acceptance logic
-    await respond_to_invitation(invitation_pid, action, session)
-    # Redirect user to frontend root, SPA will handle landing or dashboard
-    return RedirectResponse(url="/")
+    # Optional UI redirect to a landing page
+    return RedirectResponse(url=f"/invitation?pid={invitation_pid}&token={token}")
+
 
 @router.post("/invitations/{invitation_pid}/respond", response_model=InvitationResponse, tags=["invitations"])
 async def respond_to_invitation(
@@ -478,71 +474,52 @@ async def respond_to_invitation(
     action: InvitationAction,
     session: AsyncSession = Depends(get_async_session),
 ):
-    """
-    Accept or decline an invitation.
-    """
-    # Lookup invitation
-    q = select(Invitation).filter_by(pid=invitation_pid)
-    result = await session.execute(q)
+    from datetime import datetime, timezone
+    # Fetch invitation
+    result = await session.execute(select(Invitation).filter_by(pid=invitation_pid))
     inv = result.scalars().first()
     if not inv:
         raise HTTPException(status_code=404, detail="Invitation not found")
-    # Validate token and status
     if inv.token != action.token:
-        raise HTTPException(status_code=403, detail="Invalid token")
-    if inv.status != InvitationStatus.PENDING:
-        raise HTTPException(status_code=400, detail="Invitation already responded to")
-    # Compare with timezone-aware now
-    if inv.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Invalid invitation token")
+    now = datetime.now(timezone.utc)
+    if inv.expires_at < now:
+        inv.status = InvitationStatus.DECLINED.value
+        await session.flush()
         raise HTTPException(status_code=400, detail="Invitation expired")
-
-    # Process action
+    if inv.status != InvitationStatus.PENDING.value:
+        raise HTTPException(status_code=400, detail=f"Invitation already {inv.status}")
+    # Process response
     if action.action == "accept":
-        # Try to lookup an existing user by invited email
-        q2 = select(AuthUser).filter_by(email=inv.email)
-        res2 = await session.execute(q2)
-        auth_user = res2.scalars().first()
-        if auth_user:
-            # Add membership only for registered users
-            if inv.target_type == InvitationTargetType.ORG:
-                membership = UserOrganisationMembership(
-                    user_id=auth_user.id,
-                    organisation_id=inv.target_id,
-                    role=inv.role,
-                )
-                session.add(membership)
-            else:
-                # APP invite: ensure org membership exists first
-                from nova_manager.components.auth.models import App
-                res_app = await session.execute(select(App).filter_by(pid=inv.target_id))
-                app_obj = res_app.scalars().first()
-                if not app_obj:
-                    raise HTTPException(status_code=404, detail="Application not found")
-                org_pid = app_obj.organisation_id
-                # Check or add org membership
-                q3 = select(UserOrganisationMembership).filter_by(
-                    user_id=auth_user.id, organisation_id=org_pid
-                )
-                has_org = (await session.execute(q3)).scalars().first()
-                if not has_org:
+        inv.status = InvitationStatus.ACCEPTED.value
+        # find user by email
+        from sqlalchemy import select as sa_select
+        from nova_manager.components.auth.models import AuthUser
+        result_user = await session.execute(sa_select(AuthUser).filter_by(email=inv.email))
+        user_obj = result_user.scalars().first()
+        if user_obj:
+            # create membership only if registered
+            if inv.target_type == InvitationTargetType.ORG.value:
+                q = sa_select(UserOrganisationMembership).filter_by(user_id=user_obj.id, organisation_id=inv.target_id)
+                existing = (await session.execute(q)).scalars().first()
+                if not existing:
                     session.add(UserOrganisationMembership(
-                        user_id=auth_user.id,
-                        organisation_id=org_pid,
-                        role=OrganisationRole.MEMBER.value,
+                        user_id=user_obj.id,
+                        organisation_id=inv.target_id,
+                        role=inv.role,
                     ))
-                # Add app membership
-                session.add(UserAppMembership(
-                    user_id=auth_user.id,
-                    app_id=inv.target_id,
-                    role=inv.role,
-                ))
+            else:
+                q = sa_select(UserAppMembership).filter_by(user_id=user_obj.id, app_id=inv.target_id)
+                existing = (await session.execute(q)).scalars().first()
+                if not existing:
+                    session.add(UserAppMembership(
+                        user_id=user_obj.id,
+                        app_id=inv.target_id,
+                        role=inv.role,
+                    ))
+        # if not registered, membership will be applied on registration hook
     else:
-        inv.status = InvitationStatus.DECLINED
-
-    # Update invitation status
-    if action.action == "accept":
-        inv.status = InvitationStatus.ACCEPTED
-    # Flush and return
+        inv.status = InvitationStatus.DECLINED.value
     await session.flush()
     return InvitationResponse(
         pid=str(inv.pid),
