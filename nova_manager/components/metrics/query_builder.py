@@ -317,8 +317,9 @@ class QueryBuilder(EventsArtefacts):
 
         # Final select
         select_cols = ["i.cohort_period AS period"] + [f"i.{c}" for c in group_by]
+        group_by_cols = ["i.cohort_period"] + group_by
         select_list = ", ".join(select_cols)
-        group_clause = ", ".join(select_cols)
+        group_clause = ", ".join(group_by_cols)
 
         final_sql = (
             "SELECT\n    "
