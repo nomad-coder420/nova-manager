@@ -39,7 +39,7 @@ class Experiences(BaseOrganisationModel):
     )
 
     # Relationships
-    features = relationship(
+    features: Mapped[list["ExperienceFeatures"]] = relationship(
         "ExperienceFeatures",
         foreign_keys="ExperienceFeatures.experience_id",
         back_populates="experience",
@@ -52,7 +52,7 @@ class Experiences(BaseOrganisationModel):
         cascade="all, delete-orphan",
     )
 
-    personalisations = relationship(
+    personalisations: Mapped[list[Personalisations]] = relationship(
         "Personalisations",
         foreign_keys="Personalisations.experience_id",
         back_populates="experience",
@@ -138,7 +138,7 @@ class ExperienceVariants(BaseModel):
         "Experiences", foreign_keys=[experience_id], back_populates="variants"
     )
 
-    feature_variants = relationship(
+    feature_variants: Mapped[list["ExperienceFeatureVariants"]] = relationship(
         "ExperienceFeatureVariants",
         foreign_keys="ExperienceFeatureVariants.experience_variant_id",
         back_populates="experience_variant",
