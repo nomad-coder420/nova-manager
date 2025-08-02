@@ -69,6 +69,25 @@ class EventsController(EventsArtefacts):
 
         return event_props_table_name
 
+    def _create_user_profile_table(self):
+        user_profile_table_name = f"{GCP_PROJECT_ID}.{self._user_profile_props_table_name()}"
+
+        # user_profile_table_schema = [
+        #     {"name": "user_id", "type": "STRING"},
+        #     {"name": "key", "type": "STRING"},
+        #     {"name": "value", "type": "STRING"},
+        #     {"name": "server_ts", "type": "TIMESTAMP"},
+        # ]
+
+        # BigQueryService().create_table_if_not_exists(
+        #     user_profile_table_name,
+        #     user_profile_table_schema,
+        #     partition_field="server_ts",
+        #     clustering_fields=["user_id", "key"],
+        # )
+
+        return user_profile_table_name
+
     def _push_to_bigquery(
         self,
         raw_events_rows: list[dict],
@@ -256,10 +275,10 @@ class EventsController(EventsArtefacts):
             "assigned_at": user_experience.assigned_at.isoformat(),
         }
 
-        BigQueryService.insert_rows(user_experience_table_name, [user_experience_row])
+        BigQueryService().insert_rows(user_experience_table_name, [user_experience_row])
 
     def track_user_profile(self, user: Users):
-        user_profile_table_name = self._user_profile_props_table_name()
+        user_profile_table_name = self._create_user_profile_table()
 
         # Create user profile key entries for new keys
         if user.user_profile:
@@ -282,8 +301,9 @@ class EventsController(EventsArtefacts):
                 "user_id": str(user.pid),
                 "key": key,
                 "value": user.user_profile[key],
+                "server_ts": datetime.now(timezone.utc).isoformat(),
             }
             for key in user.user_profile
         ]
 
-        BigQueryService.insert_rows(user_profile_table_name, user_profile_rows)
+        BigQueryService().insert_rows(user_profile_table_name, user_profile_rows)
