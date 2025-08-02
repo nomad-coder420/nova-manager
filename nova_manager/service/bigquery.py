@@ -10,7 +10,8 @@ bq_client = bigquery.Client(project=GCP_PROJECT_ID)
 
 class BigQueryService:
     def insert_rows(self, table_name: str, rows: list[dict]):
-        bq_client.insert_rows_json(table_name, rows)
+        errors = bq_client.insert_rows_json(table_name, rows)
+        return errors
 
     def run_query(self, query: str):
         query_job = bq_client.query(query, location=BIGQUERY_LOCATION)

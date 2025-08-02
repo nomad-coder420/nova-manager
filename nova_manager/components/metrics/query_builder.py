@@ -1,8 +1,14 @@
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Literal, TypedDict
+from typing import Literal, TypedDict, Union
+from enum import Enum
 
 from nova_manager.components.metrics.artefacts import EventsArtefacts
+
+
+class KeySource:
+    EVENT_PROPERTIES = "event_properties"
+    USER_PROFILE = "user_profile"
 
 
 class TimeRange(TypedDict):
@@ -15,11 +21,22 @@ class EventFilter(TypedDict):
     filters: dict | None
 
 
+class EnhancedFilterType(TypedDict):
+    value: str
+    source: str  # KeySource enum value
+    op: Literal["=", "!=", ">", "<", ">=", "<="]
+
+
+class GroupByType(TypedDict):
+    key: str
+    source: str  # KeySource enum value
+
+
 class BaseMetricConfig(TypedDict):
     time_range: TimeRange | str
     granularity: Literal["hourly", "daily", "weekly", "monthly", "none"]
-    group_by: list[str]
-    filters: dict
+    group_by: list[GroupByType]
+    filters: dict[str, EnhancedFilterType]
 
 
 class CountMetricConfig(BaseMetricConfig):
@@ -124,7 +141,8 @@ class QueryBuilder(EventsArtefacts):
 
         join_expression = "\n".join(where_joins + group_props_join_expression)
 
-        group_by_expression = "GROUP BY " + ", ".join(["period"] + group_by)
+        group_by_keys = [item["key"] for item in group_by]
+        group_by_expression = "GROUP BY " + ", ".join(["period"] + group_by_keys)
 
         order_expression = "ORDER BY period"
 
@@ -180,7 +198,8 @@ class QueryBuilder(EventsArtefacts):
             where_joins + group_props_join_expression + property_join_expression
         )
 
-        group_by_expression = "GROUP BY " + ", ".join(["period"] + group_by)
+        group_by_keys = [item["key"] for item in group_by]
+        group_by_expression = "GROUP BY " + ", ".join(["period"] + group_by_keys)
 
         return self._format_query(
             select_expression,
@@ -228,16 +247,19 @@ class QueryBuilder(EventsArtefacts):
 
         with_expression = f"WITH\n num AS (\n{numerator_expression}\n),\n den AS (\n{denominator_expression}\n)"
 
+        # Extract keys from group_by
+        group_by_keys = [item["key"] for item in group_by]
+        
         select_parts = [
             "num.period AS period",
             f"SAFE_DIVIDE(num.num_val, den.den_val) AS value",
-        ] + [f"num.{c}" for c in group_by]
+        ] + [f"num.{c}" for c in group_by_keys]
         select_expression = "SELECT " + ",\n    ".join(select_parts)
 
         from_expression = "FROM num"
 
         group_by_join_conditions = [
-            f"IFNULL(num.{c},'') = IFNULL(den.{c},'')" for c in group_by
+            f"IFNULL(num.{c},'') = IFNULL(den.{c},'')" for c in group_by_keys
         ]
         join_conditions = ["num.period = den.period"] + group_by_join_conditions
         join_expression = "JOIN den ON " + " AND ".join(join_conditions)
@@ -288,7 +310,10 @@ class QueryBuilder(EventsArtefacts):
             ]
         )
 
-        init_group_clause = ", ".join(["cohort_period", "user_id"] + group_by)
+        # Extract keys from group_by
+        group_by_keys = [item["key"] for item in group_by]
+
+        init_group_clause = ", ".join(["cohort_period", "user_id"] + group_by_keys)
 
         init_cte = (
             "initial_cohort AS (\n    SELECT\n        "
@@ -316,8 +341,8 @@ class QueryBuilder(EventsArtefacts):
         )
 
         # Final select
-        select_cols = ["i.cohort_period AS period"] + [f"i.{c}" for c in group_by]
-        group_by_cols = ["i.cohort_period"] + group_by
+        select_cols = ["i.cohort_period AS period"] + [f"i.{c}" for c in group_by_keys]
+        group_by_cols = ["i.cohort_period"] + group_by_keys
         select_list = ", ".join(select_cols)
         group_clause = ", ".join(group_by_cols)
 
@@ -376,10 +401,12 @@ class QueryBuilder(EventsArtefacts):
 
         return [period_expression] + group_selects
 
-    def _group_selects(self, group_by: list[str], event_table_alias: str) -> list[str]:
+    def _group_selects(self, group_by: list[GroupByType], event_table_alias: str) -> list[str]:
         selects = []
 
-        for key in group_by:
+        for item in group_by:
+            key = item["key"]
+                
             if key in CORE_FIELDS:
                 selects.append(f"{event_table_alias}.{key} AS {key}")
             else:
@@ -395,33 +422,54 @@ class QueryBuilder(EventsArtefacts):
             f"ON e.event_id = {alias}.event_id AND {alias}.key = '{key}'"
         )
 
+    def _user_profile_join_expression(self, alias: str, key: str) -> str:
+        """Return LEFT JOIN clause for user profile properties."""
+        return (
+            f"LEFT JOIN `{self._user_profile_props_table_name()}` AS {alias} "
+            f"ON e.user_id = {alias}.user_id AND {alias}.key = '{key}'"
+        )
+
     def _group_props_join_expression(
-        self, event_name: str, group_by: list[str]
+        self, event_name: str, group_by: list[GroupByType]
     ) -> list[str]:
         joins = []
 
-        for key in group_by:
+        for item in group_by:
+            key = item["key"]
+            source = item["source"]
+            
             if key not in CORE_FIELDS:
                 alias = f"val_{key}"
-                joins.append(self._props_join_expression(event_name, alias, key))
+                if source == KeySource.EVENT_PROPERTIES:
+                    joins.append(self._props_join_expression(event_name, alias, key))
+                else:  # User Profile
+                    joins.append(self._user_profile_join_expression(alias, key))
 
         return joins
 
     def _wheres_and_joins(
-        self, event_name: str, filters: dict[str, str] | None
+        self, event_name: str, filters: dict[str, EnhancedFilterType] | None
     ) -> tuple[list[str], list[str]]:
         """Generate SQL WHERE snippets and JOIN clauses for filters."""
         filters = filters or {}
         joins = []
         wheres = []
 
-        for key, value in filters.items():
+        for key, filter_data in filters.items():
+            value = filter_data["value"]
+            source = filter_data["source"]
+            op = filter_data["op"]
+            
             if key in CORE_FIELDS:
-                wheres.append(f"e.{key} = '{value}'")
-            else:
-                alias = f"f_{key}"
+                wheres.append(f"e.{key} {op} '{value}'")
+            elif source == KeySource.EVENT_PROPERTIES:
+                alias = f"ep_{key}"
                 joins.append(self._props_join_expression(event_name, alias, key))
-                wheres.append(f"{alias}.value = '{value}'")
+                wheres.append(f"{alias}.value {op} '{value}'")
+            else:  # User Profile
+                alias = f"up_{key}"
+                joins.append(self._user_profile_join_expression(alias, key))
+                wheres.append(f"{alias}.value {op} '{value}'")
 
         return wheres, joins
 
