@@ -200,7 +200,7 @@ class EventsController(EventsArtefacts):
                         "user_id": str(user_id),
                         "event_name": event_name,
                         "key": key,
-                        "value": event_data[key],
+                        "value": str(event_data[key]),
                         "client_ts": timestamp.isoformat(),
                         "server_ts": time_now.isoformat(),
                     }
@@ -300,10 +300,10 @@ class EventsController(EventsArtefacts):
             {
                 "user_id": str(user.pid),
                 "key": key,
-                "value": user.user_profile[key],
+                "value": str(user.user_profile[key]),  # Convert all values to strings
                 "server_ts": datetime.now(timezone.utc).isoformat(),
             }
             for key in user.user_profile
         ]
 
-        BigQueryService().insert_rows(user_profile_table_name, user_profile_rows)
+        errors = BigQueryService().insert_rows(user_profile_table_name, user_profile_rows)
