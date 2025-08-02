@@ -13,6 +13,7 @@ from nova_manager.components.metrics.crud import MetricsCRUD
 from nova_manager.components.metrics.events_controller import EventsController
 from nova_manager.components.metrics.query_builder import QueryBuilder
 from nova_manager.database.session import get_db
+from nova_manager.service.bigquery import BigQueryService
 from nova_manager.queues.controller import QueueController
 from sqlalchemy.orm import Session
 
@@ -43,7 +44,7 @@ async def compute_metric(compute_request: ComputeMetricRequest):
     query_builder = QueryBuilder(organisation_id, app_id)
     query = query_builder.build_query(type, config)
 
-    big_query_service = EventsController(organisation_id, app_id)
+    big_query_service = BigQueryService()
     result = big_query_service.run_query(query)
 
     return result
