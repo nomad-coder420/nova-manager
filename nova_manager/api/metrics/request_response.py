@@ -1,4 +1,4 @@
-from typing import Any, Dict, Literal
+from typing import Any, Dict, List, Literal
 from uuid import UUID as UUIDType
 from datetime import datetime
 from pydantic import BaseModel
@@ -43,3 +43,22 @@ class ComputeMetricRequest(BaseModel):
     app_id: str
     type: Literal["count", "aggregation", "ratio", "retention"]
     config: Dict[str, Any]
+
+
+class EventsSchemaResponse(BaseModel):
+    pid: UUIDType
+    event_name: str
+    event_schema: dict
+
+    class Config:
+        from_attributes = True
+
+
+class UserProfileKeyResponse(BaseModel):
+    pid: UUIDType
+    key: str
+    type: str
+    description: str
+
+    class Config:
+        from_attributes = True

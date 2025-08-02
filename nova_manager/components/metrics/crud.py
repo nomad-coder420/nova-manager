@@ -185,16 +185,49 @@ class UserProfileKeysCRUD(BaseCRUD):
             .first()
         )
 
-    def get_user_profile_keys(
-        self, organisation_id: str, app_id: str
+    def get_multi_by_org(
+        self,
+        organisation_id: str,
+        app_id: str,
+        skip: int = 0,
+        limit: int = 10,
+        order_by: str = "created_at",
+        order_direction: str = "desc",
     ) -> list[UserProfileKeys]:
-        """Get all user profile keys for org/app"""
+        """Get user profile keys for organization/app with pagination and filtering"""
+        query = self.db.query(UserProfileKeys).filter(
+            and_(
+                UserProfileKeys.organisation_id == organisation_id,
+                UserProfileKeys.app_id == app_id,
+            )
+        )
+
+        # Apply ordering
+        order_column = getattr(UserProfileKeys, order_by, UserProfileKeys.created_at)
+
+        if order_direction.lower() == "desc":
+            query = query.order_by(desc(order_column))
+        else:
+            query = query.order_by(asc(order_column))
+
+        return query.offset(skip).limit(limit).all()
+
+    def search_user_profile_keys(
+        self, organisation_id: str, app_id: str, search_term: str, skip: int = 0, limit: int = 100
+    ) -> list[UserProfileKeys]:
+        """Search user profile keys by key name or description"""
         return (
             self.db.query(UserProfileKeys)
             .filter(
                 UserProfileKeys.organisation_id == organisation_id,
                 UserProfileKeys.app_id == app_id,
+                (
+                    UserProfileKeys.key.ilike(f"%{search_term}%") |
+                    UserProfileKeys.description.ilike(f"%{search_term}%")
+                )
             )
+            .offset(skip)
+            .limit(limit)
             .all()
         )
 

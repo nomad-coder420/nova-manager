@@ -1,15 +1,19 @@
-from datetime import datetime
-import json
 from typing import Dict, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from nova_manager.api.metrics.request_response import (
     CreateMetricRequest,
     ComputeMetricRequest,
+    EventsSchemaResponse,
     MetricResponse,
     TrackEventRequest,
+    UserProfileKeyResponse,
 )
-from nova_manager.components.metrics.crud import MetricsCRUD
+from nova_manager.components.metrics.crud import (
+    MetricsCRUD,
+    EventsSchemaCRUD,
+    UserProfileKeysCRUD,
+)
 from nova_manager.components.metrics.events_controller import EventsController
 from nova_manager.components.metrics.query_builder import QueryBuilder
 from nova_manager.database.session import get_db
@@ -48,6 +52,64 @@ async def compute_metric(compute_request: ComputeMetricRequest):
     result = big_query_service.run_query(query)
 
     return result
+
+
+@router.get("/events-schema/", response_model=List[EventsSchemaResponse])
+async def list_events_schema(
+    organisation_id: str = Query(...),
+    app_id: str = Query(...),
+    search: str = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Get all events schema for an organization/app with optional search"""
+    events_schema_crud = EventsSchemaCRUD(db)
+
+    if search:
+        events_schema = events_schema_crud.search_events_schema(
+            organisation_id=organisation_id,
+            app_id=app_id,
+            search_term=search,
+            skip=0,
+            limit=100,
+        )
+    else:
+        events_schema = events_schema_crud.get_multi_by_org(
+            organisation_id=organisation_id,
+            app_id=app_id,
+            skip=0,
+            limit=100,
+        )
+
+    return events_schema
+
+
+@router.get("/user-profile-keys/", response_model=List[UserProfileKeyResponse])
+async def list_user_profile_keys(
+    organisation_id: str = Query(...),
+    app_id: str = Query(...),
+    search: str = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Get all user profile keys for an organization/app with optional search"""
+    user_profile_keys_crud = UserProfileKeysCRUD(db)
+
+    if search:
+        user_profile_keys = user_profile_keys_crud.search_user_profile_keys(
+            organisation_id=organisation_id,
+            app_id=app_id,
+            search_term=search,
+            skip=0,
+            limit=100,
+        )
+    else:
+        user_profile_keys = user_profile_keys_crud.get_multi_by_org(
+            organisation_id=organisation_id,
+            app_id=app_id,
+            skip=0,
+            limit=100,
+        )
+
+    return user_profile_keys
 
 
 @router.post("/")
@@ -104,9 +166,7 @@ async def get_metric(metric_id: UUID, db: Session = Depends(get_db)):
 
 @router.put("/{metric_id}/", response_model=MetricResponse)
 async def update_metric(
-    metric_id: UUID,
-    metric_data: CreateMetricRequest,
-    db: Session = Depends(get_db)
+    metric_id: UUID, metric_data: CreateMetricRequest, db: Session = Depends(get_db)
 ):
     metrics_crud = MetricsCRUD(db)
 

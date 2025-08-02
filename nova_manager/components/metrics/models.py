@@ -45,6 +45,7 @@ class EventsSchema(BaseOrganisationModel):
             "organisation_id",
             "app_id",
         ),
+        Index("idx_events_schema_org_app", "organisation_id", "app_id"),
     )
 
 
@@ -60,6 +61,8 @@ class UserProfileKeys(BaseOrganisationModel):
         UniqueConstraint(
             "key", "organisation_id", "app_id", name="uq_user_profile_keys_key_org_app"
         ),
+        # Index for common queries
+        Index("idx_user_profile_keys_org_app", "organisation_id", "app_id"),
     )
 
 
