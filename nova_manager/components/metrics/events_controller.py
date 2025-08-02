@@ -8,7 +8,7 @@ from nova_manager.database.session import get_db
 from nova_manager.service.bigquery import BigQueryService
 
 from nova_manager.components.metrics.artefacts import EventsArtefacts
-from nova_manager.components.metrics.crud import EventsSchemaCRUD
+from nova_manager.components.metrics.crud import EventsSchemaCRUD, UserProfileKeysCRUD
 from nova_manager.components.user_experience.models import UserExperience
 from nova_manager.components.metrics.models import EventsSchema
 from nova_manager.components.users.models import Users
@@ -261,6 +261,22 @@ class EventsController(EventsArtefacts):
     def track_user_profile(self, user: Users):
         user_profile_table_name = self._user_profile_props_table_name()
 
+        # Create user profile key entries for new keys
+        if user.user_profile:
+            try:
+                with get_db() as db:
+                    user_profile_keys_crud = UserProfileKeysCRUD(db)
+
+                    user_profile_keys_crud.create_user_profile_keys_if_not_exists(
+                        user_profile_data=user.user_profile,
+                        organisation_id=self.organisation_id,
+                        app_id=self.app_id,
+                    )
+
+            except Exception as e:
+                logger.error(f"Failed to create user profile keys: {e}")
+
+        # Track user profile data to BigQuery
         user_profile_rows = [
             {
                 "user_id": str(user.pid),

@@ -9,6 +9,6 @@ from nova_manager.queues.controller import QueueController
 @event.listens_for(Users, "after_insert")
 def after_insert(mapper, connection, target: Users):
     QueueController().add_task(
-        EventsController().track_user_profile,
+        EventsController(target.organisation_id, target.app_id).track_user_profile,
         target,
     )

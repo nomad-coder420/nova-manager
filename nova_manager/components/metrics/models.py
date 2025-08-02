@@ -48,6 +48,21 @@ class EventsSchema(BaseOrganisationModel):
     )
 
 
+class UserProfileKeys(BaseOrganisationModel):
+    __tablename__ = "user_profile_keys"
+
+    key: Mapped[str] = mapped_column(String, nullable=False)
+    type: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str] = mapped_column(String, nullable=False, default="")
+
+    __table_args__ = (
+        # Unique constraint: one key
+        UniqueConstraint(
+            "key", "organisation_id", "app_id", name="uq_user_profile_keys_key_org_app"
+        ),
+    )
+
+
 class ExperienceMetrics(BaseModel):
     __tablename__ = "experience_metrics"
 
