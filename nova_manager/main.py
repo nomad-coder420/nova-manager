@@ -12,6 +12,10 @@ from nova_manager.core.exceptions import (
 from nova_manager.core.log import configure_logging
 from nova_manager.middlewares.exceptions import ExceptionMiddleware
 
+# Import event listeners to register them with SQLAlchemy
+import nova_manager.components.users.event_listeners
+import nova_manager.components.user_experience.event_listeners
+
 from nova_manager.api.frontend.router import router as frontend_router
 from nova_manager.api.feature_flags.router import router as feature_flags_router
 from nova_manager.api.segments.router import router as segments_router
