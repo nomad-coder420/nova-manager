@@ -3,6 +3,7 @@ from nova_manager.components.experiences.schemas import ExperienceResponse
 from typing import List, Optional, Dict, Any
 from uuid import UUID as UUIDType
 from pydantic import BaseModel
+from nova_manager.components.metrics.schemas import MetricResponse
 
 
 class ExperienceFeatureVariantCreate(BaseModel):
@@ -31,6 +32,7 @@ class PersonalisationCreate(BaseModel):
     priority: int | None = None
     rule_config: dict
     rollout_percentage: int
+    selected_metrics: List[UUIDType] = []
 
     experience_variants: List[PersonalisationCreateExperienceVariant]
 
@@ -54,6 +56,10 @@ class PersonalisationExperienceVariantResponse(BaseModel):
     experience_variant: ExperienceVariantResponse
 
 
+class PersonalisationMetric(BaseModel):
+    metric: MetricResponse
+
+
 class PersonalisationDetailedResponse(BaseModel):
     pid: UUIDType
     name: str
@@ -63,3 +69,4 @@ class PersonalisationDetailedResponse(BaseModel):
     rollout_percentage: int
     rule_config: dict
     experience_variants: List[PersonalisationExperienceVariantResponse]
+    metrics: List[PersonalisationMetric] = []

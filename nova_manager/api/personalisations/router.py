@@ -18,6 +18,10 @@ from nova_manager.components.personalisations.crud import (
     PersonalisationExperienceVariantsCRUD,
     PersonalisationsCRUD,
 )
+from nova_manager.components.metrics.crud import (
+    MetricsCRUD,
+    PersonalisationMetricsCRUD,
+)
 from uuid import UUID
 
 
@@ -36,14 +40,24 @@ async def create_personalisation(
     experience_variants_crud = ExperienceVariantsCRUD(db)
     experience_feature_variants_crud = ExperienceFeatureVariantsCRUD(db)
     personalisation_experience_variants_crud = PersonalisationExperienceVariantsCRUD(db)
+    metrics_crud = MetricsCRUD(db)
+    personalisation_metrics_crud = PersonalisationMetricsCRUD(db)
 
     experience_id = personalisation_data.experience_id
     experience_variants = personalisation_data.experience_variants
+    selected_metrics = personalisation_data.selected_metrics
 
     # Validate experience exists
     experience = experiences_crud.get_with_features(experience_id)
     if not experience:
         raise HTTPException(status_code=404, detail="Experience not found")
+
+    # Validate metrics exist
+    if selected_metrics:
+        for metric_id in selected_metrics:
+            metric = metrics_crud.get_by_pid(metric_id)
+            if not metric:
+                raise HTTPException(status_code=404, detail=f"Metric not found: {metric_id}")
 
     # Check if personalisation name already exists in this experience
     existing = personalisations_crud.get_by_name(
@@ -162,6 +176,14 @@ async def create_personalisation(
                 "target_percentage": target_percentage,
             }
         )
+
+    # Create personalisation metrics associations
+    if selected_metrics:
+        for metric_id in selected_metrics:
+            personalisation_metrics_crud.create_personalisation_metric(
+                personalisation_id=personalisation.pid,
+                metric_id=metric_id
+            )
 
     return personalisation
 

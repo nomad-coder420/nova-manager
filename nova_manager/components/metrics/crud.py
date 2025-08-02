@@ -1,5 +1,5 @@
 from uuid import UUID
-from nova_manager.components.metrics.models import EventsSchema, Metrics
+from nova_manager.components.metrics.models import EventsSchema, Metrics, PersonalisationMetrics
 from nova_manager.core.base_crud import BaseCRUD
 from sqlalchemy import and_, asc, desc
 from sqlalchemy.orm import Session
@@ -104,3 +104,56 @@ class EventsSchemaCRUD(BaseCRUD):
             self.db.add(obj)
 
         self.db.commit()
+
+
+class PersonalisationMetricsCRUD(BaseCRUD):
+    def __init__(self, db: Session):
+        super().__init__(PersonalisationMetrics, db)
+
+    def get_by_personalisation(self, personalisation_id: UUID) -> list[PersonalisationMetrics]:
+        """Get all metrics for a personalisation"""
+        return (
+            self.db.query(PersonalisationMetrics)
+            .filter(PersonalisationMetrics.personalisation_id == personalisation_id)
+            .all()
+        )
+
+    def get_by_metric(self, metric_id: UUID) -> list[PersonalisationMetrics]:
+        """Get all personalisations using a specific metric"""
+        return (
+            self.db.query(PersonalisationMetrics)
+            .filter(PersonalisationMetrics.metric_id == metric_id)
+            .all()
+        )
+
+    def create_personalisation_metric(self, personalisation_id: UUID, metric_id: UUID) -> PersonalisationMetrics:
+        """Create association between personalisation and metric"""
+        personalisation_metric = PersonalisationMetrics(
+            personalisation_id=personalisation_id,
+            metric_id=metric_id
+        )
+        self.db.add(personalisation_metric)
+        self.db.commit()
+        self.db.refresh(personalisation_metric)
+        return personalisation_metric
+
+    def delete_personalisation_metrics(self, personalisation_id: UUID) -> int:
+        """Delete all metrics for a personalisation"""
+        deleted_count = (
+            self.db.query(PersonalisationMetrics)
+            .filter(PersonalisationMetrics.personalisation_id == personalisation_id)
+            .delete()
+        )
+        self.db.commit()
+        return deleted_count
+
+    def exists(self, personalisation_id: UUID, metric_id: UUID) -> bool:
+        """Check if association already exists"""
+        return (
+            self.db.query(PersonalisationMetrics)
+            .filter(
+                PersonalisationMetrics.personalisation_id == personalisation_id,
+                PersonalisationMetrics.metric_id == metric_id
+            )
+            .first()
+        ) is not None

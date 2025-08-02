@@ -8,6 +8,7 @@ from nova_manager.components.personalisations.models import (
     PersonalisationExperienceVariants,
     Personalisations,
 )
+from nova_manager.components.metrics.models import PersonalisationMetrics
 
 
 class PersonalisationsCRUD(BaseCRUD):
@@ -127,6 +128,9 @@ class PersonalisationsCRUD(BaseCRUD):
             .options(
                 selectinload(Personalisations.experience_variants).selectinload(
                     PersonalisationExperienceVariants.experience_variant
+                ),
+                selectinload(Personalisations.metrics).selectinload(
+                    PersonalisationMetrics.metric
                 )
             )
             .filter(Personalisations.experience_id == experience_id)

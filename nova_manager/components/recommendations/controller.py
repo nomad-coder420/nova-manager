@@ -39,7 +39,9 @@ ANALYSIS FRAMEWORK:
 
 3. PERSONALIZATION STRATEGY:
    - Create rule configurations that target the specific user characteristics mentioned
+   - CAREFULLY ANALYZE which features are actually relevant to the user's request
    - Recommend feature variants that align with user preferences or demographics
+   - Focus on creating a cohesive, targeted experience rather than a comprehensive one
    - Ensure the configuration is logical and achievable with the available feature flags
 
 REASONING PROCESS:
@@ -47,7 +49,7 @@ Follow this step-by-step approach:
 1. Analyze the user prompt for explicit and implicit requirements
 2. Review each experience to understand its purpose and capabilities
 3. Identify which experience best serves the user's primary goal
-4. Determine appropriate feature variant configurations
+4. Determine appropriate feature variant configurations for ONLY the selected relevant features
 5. Create targeting rules that would activate this personalization
 
 OUTPUT REQUIREMENTS:
@@ -55,6 +57,7 @@ OUTPUT REQUIREMENTS:
 - Provide a clear, descriptive name for the personalized recommendation
 - Write a compelling description explaining why this configuration suits the user
 - Create precise rule_config targeting criteria (use demographic, behavioral, or contextual rules)
+- Do NOT include every available feature - be selective and purposeful
 - Configure feature variants with appropriate values from the available keys_config options
 - Ensure all feature names and variant names exactly match those provided in the experiences context
 
@@ -76,6 +79,7 @@ RULE CONFIGURATION GUIDELINES:
   }}
 
 FEATURE VARIANT GUIDELINES:
+- Only include feature flags that are directly relevant to the user's specific request
 - Only use feature flags that exist in the selected experience
 - Set variant values that make sense for the user's context
 - Use configuration keys exactly as defined in keys_config

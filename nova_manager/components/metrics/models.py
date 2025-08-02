@@ -1,6 +1,6 @@
 from uuid import UUID as UUIDType
 from sqlalchemy import JSON, UUID, ForeignKey, Index, String, UniqueConstraint, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from nova_manager.core.models import BaseModel, BaseOrganisationModel
 
@@ -98,3 +98,6 @@ class PersonalisationMetrics(BaseModel):
             name="uq_personalisation_metrics_pers_metric",
         ),
     )
+
+    # Relationships
+    metric: Mapped[Metrics] = relationship("Metrics", foreign_keys=[metric_id])

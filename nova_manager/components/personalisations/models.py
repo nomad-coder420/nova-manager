@@ -17,6 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from nova_manager.core.models import BaseModel, BaseOrganisationModel
 from nova_manager.components.segments.models import Segments
+from nova_manager.components.metrics.models import PersonalisationMetrics
 
 
 class Personalisations(BaseOrganisationModel):
@@ -74,6 +75,13 @@ class Personalisations(BaseOrganisationModel):
         "UserExperience",
         foreign_keys="UserExperience.personalisation_id",
         back_populates="personalisation",
+        cascade="all, delete-orphan",
+    )
+
+    # Metrics relationship
+    metrics: Mapped[list[PersonalisationMetrics]] = relationship(
+        "PersonalisationMetrics",
+        foreign_keys="PersonalisationMetrics.personalisation_id",
         cascade="all, delete-orphan",
     )
 
