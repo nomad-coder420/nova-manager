@@ -100,3 +100,29 @@ async def get_metric(metric_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Metric not found")
 
     return metric
+
+
+@router.put("/{metric_id}/", response_model=MetricResponse)
+async def update_metric(
+    metric_id: UUID,
+    metric_data: CreateMetricRequest,
+    db: Session = Depends(get_db)
+):
+    metrics_crud = MetricsCRUD(db)
+
+    # Check if metric exists
+    existing_metric = metrics_crud.get_by_pid(metric_id)
+    if not existing_metric:
+        raise HTTPException(status_code=404, detail="Metric not found")
+
+    # Update the metric
+    update_data = {
+        "name": metric_data.name,
+        "description": metric_data.description,
+        "type": metric_data.type,
+        "config": metric_data.config,
+    }
+
+    updated_metric = metrics_crud.update(existing_metric.id, update_data)
+
+    return updated_metric
