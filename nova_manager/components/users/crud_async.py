@@ -1,3 +1,4 @@
+from uuid import UUID
 from typing import Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
@@ -18,6 +19,21 @@ class UsersAsyncCRUD:
         stmt = select(Users).where(
             and_(
                 Users.user_id == user_id,
+                Users.organisation_id == organisation_id,
+                Users.app_id == app_id,
+            )
+        )
+
+        result = await self.db.execute(stmt)
+
+        return result.scalar_one_or_none()
+
+    async def get_by_pid(self, pid: UUID, organisation_id: str, app_id: str) -> Optional[Users]:
+        """Get user by pid"""
+
+        stmt = select(Users).where(
+            and_(
+                Users.pid == pid,
                 Users.organisation_id == organisation_id,
                 Users.app_id == app_id,
             )

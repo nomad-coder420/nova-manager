@@ -11,7 +11,7 @@ from nova_manager.components.user_experience.schemas import (
 from nova_manager.components.users.models import Users
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from nova_manager.components.personalisations.models import Personalisations
+from nova_manager.components.personalisations.models import Personalisations, PersonalisationExperienceVariants
 
 from nova_manager.components.users.crud_async import UsersAsyncCRUD
 from nova_manager.components.experiences.crud_async import ExperiencesAsyncCRUD
@@ -173,7 +173,7 @@ class GetUserExperienceVariantFlowAsync:
                     continue
 
                 selected_experience_variant_features_map = {
-                    feature_variant.name: feature_variant
+                    feature_variant.experience_feature_id: feature_variant
                     for feature_variant in selected_experience_variant.feature_variants
                 }
                 experience_features = experience.features
@@ -181,13 +181,14 @@ class GetUserExperienceVariantFlowAsync:
                 experience_feature_variants = {}
 
                 for feature in experience_features:
+                    experience_feature_id = feature.pid
                     feature_flag = feature.feature_flag
 
                     feature_id = feature_flag.pid
                     feature_name = feature_flag.name
 
                     feature_variant = selected_experience_variant_features_map.get(
-                        feature_name
+                        experience_feature_id
                     )
 
                     if feature_variant:
@@ -207,7 +208,7 @@ class GetUserExperienceVariantFlowAsync:
                                 feature_name=feature_name,
                                 variant_id=None,
                                 variant_name="default",
-                                config=feature.default_variant,
+                                config=feature_flag.default_variant,
                             )
                         )
 
@@ -259,8 +260,8 @@ class GetUserExperienceVariantFlowAsync:
     async def _update_or_create_user(
         self, user_id: str, organisation_id: str, app_id: str, payload: Dict[str, Any]
     ):
-        existing_user = await self.users_crud.get_by_user_id(
-            user_id=user_id, organisation_id=organisation_id, app_id=app_id
+        existing_user = await self.users_crud.get_by_pid(
+            pid=user_id, organisation_id=organisation_id, app_id=app_id
         )
 
         if existing_user:
@@ -268,8 +269,11 @@ class GetUserExperienceVariantFlowAsync:
             user = await self.users_crud.update_user_profile(existing_user, payload)
         else:
             # User doesn't exist, create new user with user profile
-            user = await self.users_crud.create_user(
-                user_id, organisation_id, app_id, payload
+            # user = await self.users_crud.create_user(
+            #     user_id, organisation_id, app_id, payload
+            # )
+            raise HTTPException(
+                status_code=404, detail=f"User '{user_id}' not found"
             )
 
         return user
@@ -279,7 +283,7 @@ class GetUserExperienceVariantFlowAsync:
         user: Users,
         experience_id: UUID,
         personalisation_id: UUID,
-        experience_variants: List[ExperienceVariants],
+        experience_variants: List[PersonalisationExperienceVariants],
     ) -> ExperienceVariants | None:
         """
         Select an experience variant based on target percentage evaluation.
@@ -311,9 +315,9 @@ class GetUserExperienceVariantFlowAsync:
             if self.rule_evaluator.evaluate_target_percentage(
                 str(user.pid), target_percentage, context_id
             ):
-                return experience_variant
+                return experience_variant.experience_variant
 
-        return experience_variants[0]
+        return experience_variants[0].experience_variant
 
     async def _load_experience_personalisation_cache(
         self,

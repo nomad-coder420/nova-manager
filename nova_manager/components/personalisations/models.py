@@ -56,7 +56,7 @@ class Personalisations(BaseOrganisationModel):
         back_populates="personalisations",
     )
 
-    experience_variants = relationship(
+    experience_variants: Mapped[list["PersonalisationExperienceVariants"]] = relationship(
         "PersonalisationExperienceVariants",
         foreign_keys="PersonalisationExperienceVariants.personalisation_id",
         back_populates="personalisation",
