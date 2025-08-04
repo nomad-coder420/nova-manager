@@ -29,12 +29,7 @@ from nova_manager.components.auth.enums import AppRole
 router = APIRouter()
 
 
-@router.post(
-    "/sync-nova-objects/",
-    dependencies=[Depends(RoleRequired([
-        AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
-    ]))]
-)
+@router.post("/sync-nova-objects/")
 async def sync_nova_objects(
     sync_request: NovaObjectSyncRequest, db: Session = Depends(get_db)
 ):
@@ -252,7 +247,13 @@ async def sync_nova_objects(
     )
 
 
-@router.get("/", response_model=List[FeatureFlagListItem])
+@router.get(
+    "/",
+    response_model=List[FeatureFlagListItem],
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def list_feature_flags(
     organisation_id: str = Query(...),
     app_id: str = Query(...),
@@ -296,7 +297,13 @@ async def list_available_feature_flags(
     return flags
 
 
-@router.get("/{flag_pid}/", response_model=FeatureFlagDetailedResponse)
+@router.get(
+    "/{flag_pid}/",
+    response_model=FeatureFlagDetailedResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def get_feature_flag(flag_pid: UUID, db: Session = Depends(get_db)):
     """Get feature flag by ID with all variants"""
     feature_flags_crud = FeatureFlagsCRUD(db)

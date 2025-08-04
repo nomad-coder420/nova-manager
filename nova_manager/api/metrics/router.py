@@ -20,6 +20,8 @@ from nova_manager.database.session import get_db
 from nova_manager.service.bigquery import BigQueryService
 from nova_manager.queues.controller import QueueController
 from sqlalchemy.orm import Session
+from nova_manager.components.auth.dependencies import RoleRequired
+from nova_manager.components.auth.enums import AppRole
 
 
 router = APIRouter()
@@ -38,7 +40,13 @@ async def track_event(event: TrackEventRequest):
     return {"success": True}
 
 
-@router.post("/compute/", response_model=List[Dict])
+@router.post(
+    "/compute/",
+    response_model=List[Dict],
+    dependencies=[Depends(RoleRequired([
+        AppRole.DEVELOPER, AppRole.ANALYST, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def compute_metric(compute_request: ComputeMetricRequest):
     organisation_id = compute_request.organisation_id
     app_id = compute_request.app_id
@@ -54,7 +62,13 @@ async def compute_metric(compute_request: ComputeMetricRequest):
     return result
 
 
-@router.get("/events-schema/", response_model=List[EventsSchemaResponse])
+@router.get(
+    "/events-schema/",
+    response_model=List[EventsSchemaResponse],
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def list_events_schema(
     organisation_id: str = Query(...),
     app_id: str = Query(...),
@@ -83,7 +97,13 @@ async def list_events_schema(
     return events_schema
 
 
-@router.get("/user-profile-keys/", response_model=List[UserProfileKeyResponse])
+@router.get(
+    "/user-profile-keys/",
+    response_model=List[UserProfileKeyResponse],
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def list_user_profile_keys(
     organisation_id: str = Query(...),
     app_id: str = Query(...),
@@ -112,7 +132,12 @@ async def list_user_profile_keys(
     return user_profile_keys
 
 
-@router.post("/")
+@router.post(
+    "/",
+    dependencies=[Depends(RoleRequired([
+        AppRole.DEVELOPER, AppRole.ANALYST, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def create_metric(
     metric_data: CreateMetricRequest, db: Session = Depends(get_db)
 ):
@@ -139,7 +164,13 @@ async def create_metric(
     return metric
 
 
-@router.get("/", response_model=List[MetricResponse])
+@router.get(
+    "/",
+    response_model=List[MetricResponse],
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def list_metric(
     organisation_id: str = Query(...),
     app_id: str = Query(...),
@@ -152,7 +183,13 @@ async def list_metric(
     return metrics
 
 
-@router.get("/{metric_id}/", response_model=MetricResponse)
+@router.get(
+    "/{metric_id}/",
+    response_model=MetricResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def get_metric(metric_id: UUID, db: Session = Depends(get_db)):
     metrics_crud = MetricsCRUD(db)
 
@@ -164,7 +201,13 @@ async def get_metric(metric_id: UUID, db: Session = Depends(get_db)):
     return metric
 
 
-@router.put("/{metric_id}/", response_model=MetricResponse)
+@router.put(
+    "/{metric_id}/",
+    response_model=MetricResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.DEVELOPER, AppRole.ANALYST, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def update_metric(
     metric_id: UUID, metric_data: CreateMetricRequest, db: Session = Depends(get_db)
 ):

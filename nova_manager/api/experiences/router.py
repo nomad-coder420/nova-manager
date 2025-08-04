@@ -69,7 +69,13 @@ async def list_experiences(
     return experiences
 
 
-@router.get("/{experience_pid}/", response_model=ExperienceDetailedResponse)
+@router.get(
+    "/{experience_pid}/",
+    response_model=ExperienceDetailedResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def get_experience(experience_pid: UUIDType, db: Session = Depends(get_db)):
     """Get experience by ID with full details"""
     experiences_crud = ExperiencesCRUD(db)
@@ -82,7 +88,11 @@ async def get_experience(experience_pid: UUIDType, db: Session = Depends(get_db)
 
 
 @router.get(
-    "/{experience_pid}/features/", response_model=List[ExperienceFeatureResponse]
+    "/{experience_pid}/features/",
+    response_model=List[ExperienceFeatureResponse],
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
 )
 async def get_experience_features(
     experience_pid: UUIDType, db: Session = Depends(get_db)

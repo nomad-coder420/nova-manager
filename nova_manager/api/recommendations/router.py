@@ -4,6 +4,8 @@ from nova_manager.api.recommendations.request_response import (
     GetAiRecommendationsRequest,
     RecommendationResponse,
 )
+from nova_manager.components.auth.dependencies import RoleRequired
+from nova_manager.components.auth.enums import AppRole
 from nova_manager.components.experiences.crud import ExperiencesCRUD
 from nova_manager.components.recommendations.controller import RecommendationsController
 from nova_manager.components.recommendations.crud import RecommendationsCRUD
@@ -14,7 +16,11 @@ from sqlalchemy.orm import Session
 router = APIRouter()
 
 
-@router.post("/get-ai-recommendations/", response_model=AiRecommendationResponse)
+@router.post(
+    "/get-ai-recommendations/",
+    response_model=AiRecommendationResponse,
+    dependencies=[Depends(RoleRequired([AppRole.DEVELOPER, AppRole.ANALYST, AppRole.ADMIN, AppRole.OWNER]))],
+)
 async def get_ai_recommendations(
     validated_data: GetAiRecommendationsRequest, db: Session = Depends(get_db)
 ):
@@ -61,7 +67,6 @@ async def get_ai_recommendations(
 
     recommendations_crud.create(
         {
-            
             "organisation_id": organisation_id,
             "app_id": app_id,
             "experience_id": experience.pid,
@@ -72,7 +77,11 @@ async def get_ai_recommendations(
     return recommendation
 
 
-@router.get("/", response_model=List[RecommendationResponse])
+@router.get(
+    "/",
+    response_model=List[RecommendationResponse],
+    dependencies=[Depends(RoleRequired([AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER]))],
+)
 async def get_recommendations(
     organisation_id: str = Query(...),
     app_id: str = Query(...),
