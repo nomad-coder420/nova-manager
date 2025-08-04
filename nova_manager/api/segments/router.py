@@ -14,12 +14,24 @@ from nova_manager.components.segments.schemas import SegmentResponse
 from nova_manager.components.segments.crud import SegmentsCRUD
 from nova_manager.components.rule_evaluator.controller import RuleEvaluator
 from nova_manager.database.session import get_db
+from nova_manager.components.auth.manager import current_active_user
+from nova_manager.components.auth.dependencies import RoleRequired
+from nova_manager.components.auth.enums import AppRole
+from nova_manager.components.auth.models import AuthUser
 
 router = APIRouter()
 
 
-@router.post("/", response_model=SegmentResponse)
-async def create_segment(segment_data: SegmentCreate, db: Session = Depends(get_db)):
+@router.post(
+    "/",
+    response_model=SegmentResponse,
+    dependencies=[Depends(RoleRequired([AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER]))]
+)
+async def create_segment(
+    segment_data: SegmentCreate, 
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(current_active_user),
+):
     """Create a new segment"""
     try:
         segments_crud = SegmentsCRUD(db)
@@ -60,7 +72,11 @@ async def create_segment(segment_data: SegmentCreate, db: Session = Depends(get_
         )
 
 
-@router.get("/", response_model=List[SegmentListResponse])
+@router.get(
+    "/",
+    response_model=List[SegmentListResponse],
+    dependencies=[Depends(RoleRequired([AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER]))]
+)
 async def list_segments(
     organisation_id: str = Query(...),
     app_id: str = Query(...),
@@ -70,6 +86,7 @@ async def list_segments(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     db: Session = Depends(get_db),
+    user: AuthUser = Depends(current_active_user),
 ):
     """List segments with optional search"""
     segments_crud = SegmentsCRUD(db)
@@ -90,8 +107,16 @@ async def list_segments(
     return segments
 
 
-@router.get("/{segment_pid}/", response_model=SegmentDetailedResponse)
-async def get_segment(segment_pid: UUIDType, db: Session = Depends(get_db)):
+@router.get(
+    "/{segment_pid}/",
+    response_model=SegmentDetailedResponse,
+    dependencies=[Depends(RoleRequired([AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER]))]
+)
+async def get_segment(
+    segment_pid: UUIDType,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(current_active_user),
+):
     """Get segment by ID"""
     segments_crud = SegmentsCRUD(db)
 
@@ -102,9 +127,16 @@ async def get_segment(segment_pid: UUIDType, db: Session = Depends(get_db)):
     return segment
 
 
-@router.put("/{segment_pid}/", response_model=SegmentResponse)
+@router.put(
+    "/{segment_pid}/",
+    response_model=SegmentResponse,
+    dependencies=[Depends(RoleRequired([AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER]))]
+)
 async def update_segment(
-    segment_pid: UUIDType, segment_update: SegmentUpdate, db: Session = Depends(get_db)
+    segment_pid: UUIDType,
+    segment_update: SegmentUpdate, 
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(current_active_user),
 ):
     """Update segment"""
     segments_crud = SegmentsCRUD(db)
@@ -140,3 +172,33 @@ async def update_segment(
     updated_segment = segments_crud.update(db_obj=segment, obj_in=update_data)
 
     return updated_segment
+
+
+# TODO: Fix this. Shouldnt delete directly from db.
+@router.delete(
+    "/{segment_pid}/",
+    dependencies=[Depends(RoleRequired([AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER]))]
+)
+async def delete_segment(
+    segment_pid: UUIDType,
+    force: bool = Query(False, description="Force delete even if used in experiences"),
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(current_active_user),
+):
+    """Delete segment"""
+    segments_crud = SegmentsCRUD(db)
+
+    segment = segments_crud.get_by_pid(segment_pid)
+    if not segment:
+        raise HTTPException(status_code=404, detail="Segment not found")
+
+    # Check if segment is used in experiences
+    stats = segments_crud.get_segment_usage_stats(pid=segment_pid)
+    if stats.get("experience_count", 0) > 0 and not force:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete segment. It is used in {stats['experience_count']} experience(s). Use force=true to delete anyway.",
+        )
+
+    segments_crud.delete_by_pid(pid=segment_pid)
+    return {"message": "Segment deleted successfully"}

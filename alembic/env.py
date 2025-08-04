@@ -15,6 +15,9 @@ from nova_manager.components.segments.models import *
 from nova_manager.components.experiences.models import *
 from nova_manager.components.personalisations.models import *
 from nova_manager.components.user_experience.models import *
+from nova_manager.components.auth.models import *
+# Ensure Invitation model is loaded into metadata for Alembic autogeneration
+from nova_manager.components.auth.invitation import Invitation
 from nova_manager.components.metrics.models import *
 from nova_manager.components.recommendations.models import *
 

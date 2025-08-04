@@ -2,6 +2,8 @@ import traceback
 from typing import List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
+from nova_manager.components.auth.dependencies import RoleRequired
+from nova_manager.components.auth.enums import AppRole
 from sqlalchemy.orm import Session
 
 
@@ -19,12 +21,20 @@ from nova_manager.components.experiences.crud import (
     ExperienceFeaturesCRUD,
 )
 from nova_manager.database.session import get_db
+from fastapi import Depends
+from nova_manager.components.auth.dependencies import RoleRequired
+from nova_manager.components.auth.enums import AppRole
 
 
 router = APIRouter()
 
 
-@router.post("/sync-nova-objects/")
+@router.post(
+    "/sync-nova-objects/",
+    dependencies=[Depends(RoleRequired([
+        AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def sync_nova_objects(
     sync_request: NovaObjectSyncRequest, db: Session = Depends(get_db)
 ):
@@ -266,7 +276,11 @@ async def list_feature_flags(
     return flags
 
 
-@router.get("/available/", response_model=List[FeatureFlagListItem])
+@router.get("/available/", response_model=List[FeatureFlagListItem],
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def list_available_feature_flags(
     organisation_id: str = Query(...),
     app_id: str = Query(...),

@@ -2,6 +2,11 @@ from typing import List, Optional, Dict, Any
 from uuid import UUID as UUIDType
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from datetime import datetime
+from fastapi import Depends
+from nova_manager.components.auth.dependencies import RoleRequired
+from nova_manager.components.auth.enums import AppRole
 
 from nova_manager.api.experiences.request_response import (
     ExperienceDetailedResponse,
@@ -17,7 +22,13 @@ from nova_manager.database.session import get_db
 router = APIRouter()
 
 
-@router.get("/", response_model=List[ExperienceListResponse])
+@router.get(
+    "/",
+    response_model=List[ExperienceListResponse],
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def list_experiences(
     organisation_id: str = Query(...),
     app_id: str = Query(...),
