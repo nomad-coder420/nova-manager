@@ -178,7 +178,7 @@ async def create_app(
     await session.flush()  # Flush to get the generated app.pid
 
     app_membership = UserAppMembership(
-        user_id=user.id, app_id=str(app.pid), role=AppRole.ADMIN.value
+        user_id=user.id, app_id=str(app.pid), role=AppRole.OWNER.value
     )
     session.add(app_membership)
 
