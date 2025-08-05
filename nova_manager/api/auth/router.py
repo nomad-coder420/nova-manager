@@ -66,7 +66,15 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
-@router.post("/auth/token/app/{app_pid}", response_model=TokenResponse, tags=["auth"])
+class TokenWithContextResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    current_app_id: str
+    current_app_name: str
+    current_org_id: str
+    current_org_name: str
+
+@router.post("/auth/token/app/{app_pid}", response_model=TokenWithContextResponse, tags=["auth"])
 async def switch_app(
     app_pid: str,
     user: AuthUser = Depends(require_user_authentication),
@@ -92,7 +100,17 @@ async def switch_app(
         "app_pid": app_pid,
     }
     token = jwt.encode(payload, strategy.secret, algorithm="HS256")
-    return {"access_token": token}
+    # Fetch app and organisation details for context
+    q2 = select(App, Organisation).join(Organisation, App.organisation_id == Organisation.pid).filter(App.pid == app_pid)
+    res2 = await session.execute(q2)
+    app_obj, org_obj = res2.one()
+    return {
+        "access_token": token,
+        "current_app_id": str(app_obj.pid),
+        "current_app_name": app_obj.name,
+        "current_org_id": str(org_obj.pid),
+        "current_org_name": org_obj.name,
+    }
 
 @router.get("/auth/apps", response_model=list[AppResponse], tags=["auth"])
 async def list_apps(
@@ -207,3 +225,31 @@ async def change_password(
     await user_manager.update(user, update)
     # No content on success
     return None
+
+# New endpoint to retrieve current app and organisation context
+class ContextResponse(BaseModel):
+    current_app_id: str
+    current_app_name: str
+    current_org_id: str
+    current_org_name: str
+
+@router.get("/auth/context", response_model=ContextResponse, tags=["auth"])
+async def get_current_context(
+    app_pid: str = Depends(require_user_authentication),
+    session: AsyncSession = Depends(get_async_session),
+    payload: dict = Depends(get_token_payload),
+):
+    """Return the current app and organisation context based on JWT claims"""
+    # Extract app and org PIDs from token payload
+    app_pid = payload.get("app_pid")
+    org_pid = payload.get("org_pid")
+    # Fetch app and organisation details
+    q = select(App, Organisation).join(Organisation, App.organisation_id == Organisation.pid).filter(App.pid == app_pid)
+    res = await session.execute(q)
+    app_obj, org_obj = res.one()
+    return ContextResponse(
+        current_app_id=str(app_obj.pid),
+        current_app_name=app_obj.name,
+        current_org_id=str(org_obj.pid),
+        current_org_name=org_obj.name,
+    )
