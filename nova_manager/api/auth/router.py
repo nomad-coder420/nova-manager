@@ -7,6 +7,7 @@ from nova_manager.api.auth.request_response import (
     OrganisationRead,
     AppCreate,
     AppResponse,
+    MeResponse,
 )
 
 from datetime import datetime, timedelta  # noqa: F811
@@ -226,6 +227,11 @@ async def change_password(
     # No content on success
     return None
 
+# Endpoint to get current authenticated user's basic info
+@router.get("/auth/me", response_model=MeResponse, tags=["auth"])
+async def get_me(user: AuthUser = Depends(require_user_authentication)):
+    """Get current authenticated user's email and full name"""
+    return MeResponse(email=user.email, full_name=user.full_name)
 # New endpoint to retrieve current app and organisation context
 class ContextResponse(BaseModel):
     current_app_id: str

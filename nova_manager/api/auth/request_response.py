@@ -60,3 +60,8 @@ class RoleChangeRequest(BaseModel):
 
 class TransferOwnershipRequest(BaseModel):
     new_owner_id: int
+
+# Add response schema for authenticated user
+class MeResponse(BaseModel):
+    email: EmailStr
+    full_name: str = Field(..., description="User's full name")
