@@ -31,7 +31,7 @@ class UserManager(IntegerIDMixin, BaseUserManager[AuthUser, int]):
         from nova_manager.database.session import SessionLocal
         from sqlalchemy import select
         from nova_manager.components.auth.invitation import Invitation
-        from nova_manager.components.auth.enums import InvitationTargetType, InvitationStatus, OrganisationRole
+        from nova_manager.components.auth.enums import InvitationTargetType, InvitationStatus, OrganisationRole, AppRole
         from nova_manager.components.auth.models import UserOrganisationMembership, UserAppMembership, App, Organisation
 
         db = SessionLocal()
@@ -44,6 +44,15 @@ class UserManager(IntegerIDMixin, BaseUserManager[AuthUser, int]):
                 user_id=user.id,
                 organisation_id=org.pid,
                 role=OrganisationRole.OWNER.value,
+            ))
+            # Automatically create default app for new organisation
+            first_app = App(name="MyFirstApp", organisation_id=org.pid)
+            db.add(first_app)
+            db.flush()  # assign first_app.pid
+            db.add(UserAppMembership(
+                user_id=user.id,
+                app_id=first_app.pid,
+                role=AppRole.OWNER.value,
             ))
             # find all accepted invites for this email
             stmt = select(Invitation).filter_by(email=user.email, status=InvitationStatus.ACCEPTED.value)
