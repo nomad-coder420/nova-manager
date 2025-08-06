@@ -2,6 +2,7 @@ import uuid
 from fastapi_users import schemas
 from pydantic import BaseModel, Field, EmailStr
 from datetime import datetime
+from typing import Optional
 
 
 
@@ -16,7 +17,9 @@ class UserCreate(schemas.BaseUserCreate):
 
 
 class UserUpdate(schemas.BaseUserUpdate):
-    pass
+    # Allow updating full_name and company_name
+    full_name: Optional[str] = Field(None, min_length=1, max_length=100, description="User's full name")
+    company_name: Optional[str] = Field(None, min_length=1, max_length=100, description="User's company name")
  
 
 class OrganisationCreate(BaseModel):
@@ -65,3 +68,7 @@ class TransferOwnershipRequest(BaseModel):
 class MeResponse(BaseModel):
     email: EmailStr
     full_name: str = Field(..., description="User's full name")
+
+# Schema for updating full_name without password
+class ChangeNameRequest(BaseModel):
+    full_name: str = Field(..., min_length=1, max_length=100, description="User's new full name")

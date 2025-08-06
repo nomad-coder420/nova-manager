@@ -8,6 +8,7 @@ from nova_manager.api.auth.request_response import (
     AppCreate,
     AppResponse,
     MeResponse,
+    ChangeNameRequest,
 )
 
 from datetime import datetime, timedelta  # noqa: F811
@@ -232,6 +233,20 @@ async def change_password(
 async def get_me(user: AuthUser = Depends(require_user_authentication)):
     """Get current authenticated user's email and full name"""
     return MeResponse(email=user.email, full_name=user.full_name)
+
+@router.put("/auth/me", response_model=MeResponse, tags=["auth"])
+async def update_me(
+    data: ChangeNameRequest,
+    user: AuthUser = Depends(require_user_authentication),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Update current user's full name"""
+    # Directly update the ORM model and commit
+    db_user = await session.get(AuthUser, user.id)
+    db_user.full_name = data.full_name
+    # Add to session; commit will be handled by the session dependency
+    session.add(db_user)
+    return MeResponse(email=db_user.email, full_name=db_user.full_name)
 # New endpoint to retrieve current app and organisation context
 class ContextResponse(BaseModel):
     current_app_id: str
