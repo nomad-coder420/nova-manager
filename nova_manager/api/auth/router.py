@@ -253,3 +253,34 @@ async def get_current_context(
         current_org_id=str(org_obj.pid),
         current_org_name=org_obj.name,
     )
+
+@router.put("/auth/organisations/{org_pid}", response_model=OrganisationRead, tags=["auth"])
+async def update_organisation(
+    org_pid: str,
+    data: OrganisationCreate,
+    user: AuthUser = Depends(require_user_authentication),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Update organisation name (owner/admin only)"""
+    # verify membership
+    q = select(UserOrganisationMembership).filter_by(
+        user_id=user.id,
+        organisation_id=org_pid,
+    )
+    result = await session.execute(q)
+    membership = result.scalars().first()
+    if not membership or membership.role not in (
+        OrganisationRole.OWNER.value,
+        OrganisationRole.ADMIN.value,
+    ):
+        raise HTTPException(status_code=403, detail="Insufficient permissions to update organisation")
+    # load org
+    q2 = select(Organisation).filter_by(pid=org_pid)
+    res2 = await session.execute(q2)
+    org = res2.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+    org.name = data.name
+    session.add(org)
+    await session.commit()
+    return OrganisationRead(pid=str(org.pid), name=org.name)
