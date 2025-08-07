@@ -1,9 +1,11 @@
 import traceback
 from typing import Dict
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 
+from nova_manager.components.auth.dependencies import RoleRequired
+from nova_manager.components.auth.enums import AppRole
 from nova_manager.database.async_session import get_async_db
+from sqlalchemy.ext.asyncio import AsyncSession
 from nova_manager.api.user_experience.request_response import (
     GetExperienceRequest,
     GetExperiencesRequest,
@@ -16,7 +18,15 @@ from nova_manager.flows.get_user_experience_variant_flow_async import (
 router = APIRouter()
 
 
-@router.post("/get-experience/", response_model=UserExperienceAssignment)
+@router.post(
+    "/get-experience/",
+    response_model=UserExperienceAssignment,
+    dependencies=[Depends(RoleRequired(
+        [
+            AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+        ]
+    ))]
+)
 async def get_user_experience_variant(
     request: GetExperienceRequest,
     db: AsyncSession = Depends(get_async_db),
@@ -41,7 +51,15 @@ async def get_user_experience_variant(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/get-experiences/", response_model=Dict[str, UserExperienceAssignment])
+@router.post(
+    "/get-experiences/",
+    response_model=Dict[str, UserExperienceAssignment],
+    dependencies=[Depends(RoleRequired(
+        [
+            AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+        ]
+    ))]
+)
 async def get_user_experiences(
     request: GetExperiencesRequest,
     db: AsyncSession = Depends(get_async_db),
@@ -67,7 +85,13 @@ async def get_user_experiences(
 
 
 @router.post(
-    "/get-all-experiences/", response_model=Dict[str, UserExperienceAssignment]
+    "/get-all-experiences/",
+    response_model=Dict[str, UserExperienceAssignment],
+    dependencies=[Depends(RoleRequired(
+        [
+            AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+        ]
+    ))]
 )
 async def get_all_user_experiences(
     request: GetExperiencesRequest,

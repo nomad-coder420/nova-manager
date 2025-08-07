@@ -4,6 +4,9 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from nova_manager.database.session import get_db
+from fastapi import Depends
+from nova_manager.components.auth.dependencies import RoleRequired
+from nova_manager.components.auth.enums import AppRole
 from nova_manager.api.personalisations.request_response import (
     PersonalisationCreate,
     PersonalisationDetailedResponse,
@@ -29,7 +32,13 @@ router = APIRouter()
 
 
 # Personalisation endpoints
-@router.post("/create-personalisation/", response_model=PersonalisationResponse)
+@router.post(
+    "/create-personalisation/",
+    response_model=PersonalisationResponse,
+    dependencies=[Depends(RoleRequired([
+        AppRole.DEVELOPER, AppRole.ANALYST, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def create_personalisation(
     personalisation_data: PersonalisationCreate,
     db: Session = Depends(get_db),
@@ -188,7 +197,13 @@ async def create_personalisation(
     return personalisation
 
 
-@router.get("/", response_model=List[PersonalisationListResponse])
+@router.get(
+    "/",
+    response_model=List[PersonalisationListResponse],
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
+)
 async def list_personalisations(
     organisation_id: str = Query(...),
     app_id: str = Query(...),
@@ -229,6 +244,9 @@ async def list_personalisations(
 @router.get(
     "/personalised-experiences/{experience_id}/",
     response_model=List[PersonalisationDetailedResponse],
+    dependencies=[Depends(RoleRequired([
+        AppRole.VIEWER, AppRole.ANALYST, AppRole.DEVELOPER, AppRole.ADMIN, AppRole.OWNER
+    ]))]
 )
 async def list_personalisations(
     experience_id: UUID,
