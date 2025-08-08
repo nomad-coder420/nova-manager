@@ -19,6 +19,8 @@ from nova_manager.components.metrics.query_builder import QueryBuilder
 from nova_manager.database.session import get_db
 from nova_manager.service.bigquery import BigQueryService
 from nova_manager.queues.controller import QueueController
+from nova_manager.components.auth.dependencies import require_app_context
+from nova_manager.core.security import AuthContext
 from sqlalchemy.orm import Session
 
 
@@ -39,9 +41,12 @@ async def track_event(event: TrackEventRequest):
 
 
 @router.post("/compute/", response_model=List[Dict])
-async def compute_metric(compute_request: ComputeMetricRequest):
-    organisation_id = compute_request.organisation_id
-    app_id = compute_request.app_id
+async def compute_metric(
+    compute_request: ComputeMetricRequest,
+    auth: AuthContext = Depends(require_app_context)
+):
+    organisation_id = auth.organisation_id
+    app_id = auth.app_id
     type = compute_request.type
     config = compute_request.config
 
@@ -56,8 +61,7 @@ async def compute_metric(compute_request: ComputeMetricRequest):
 
 @router.get("/events-schema/", response_model=List[EventsSchemaResponse])
 async def list_events_schema(
-    organisation_id: str = Query(...),
-    app_id: str = Query(...),
+    auth: AuthContext = Depends(require_app_context),
     search: str = Query(None),
     db: Session = Depends(get_db),
 ):
@@ -66,16 +70,16 @@ async def list_events_schema(
 
     if search:
         events_schema = events_schema_crud.search_events_schema(
-            organisation_id=organisation_id,
-            app_id=app_id,
+            organisation_id=str(auth.organisation_id),
+            app_id=auth.app_id,
             search_term=search,
             skip=0,
             limit=100,
         )
     else:
         events_schema = events_schema_crud.get_multi_by_org(
-            organisation_id=organisation_id,
-            app_id=app_id,
+            organisation_id=str(auth.organisation_id),
+            app_id=auth.app_id,
             skip=0,
             limit=100,
         )
@@ -85,8 +89,7 @@ async def list_events_schema(
 
 @router.get("/user-profile-keys/", response_model=List[UserProfileKeyResponse])
 async def list_user_profile_keys(
-    organisation_id: str = Query(...),
-    app_id: str = Query(...),
+    auth: AuthContext = Depends(require_app_context),
     search: str = Query(None),
     db: Session = Depends(get_db),
 ):
@@ -95,16 +98,16 @@ async def list_user_profile_keys(
 
     if search:
         user_profile_keys = user_profile_keys_crud.search_user_profile_keys(
-            organisation_id=organisation_id,
-            app_id=app_id,
+            organisation_id=auth.organisation_id,
+            app_id=auth.app_id,
             search_term=search,
             skip=0,
             limit=100,
         )
     else:
         user_profile_keys = user_profile_keys_crud.get_multi_by_org(
-            organisation_id=organisation_id,
-            app_id=app_id,
+            organisation_id=auth.organisation_id,
+            app_id=auth.app_id,
             skip=0,
             limit=100,
         )
@@ -114,12 +117,14 @@ async def list_user_profile_keys(
 
 @router.post("/")
 async def create_metric(
-    metric_data: CreateMetricRequest, db: Session = Depends(get_db)
+    metric_data: CreateMetricRequest,
+    auth: AuthContext = Depends(require_app_context),
+    db: Session = Depends(get_db)
 ):
     metrics_crud = MetricsCRUD(db)
 
-    organisation_id = metric_data.organisation_id
-    app_id = metric_data.app_id
+    organisation_id = str(auth.organisation_id)
+    app_id = auth.app_id
     name = metric_data.name
     description = metric_data.description
     type = metric_data.type
@@ -141,19 +146,22 @@ async def create_metric(
 
 @router.get("/", response_model=List[MetricResponse])
 async def list_metric(
-    organisation_id: str = Query(...),
-    app_id: str = Query(...),
+    auth: AuthContext = Depends(require_app_context),
     db: Session = Depends(get_db),
 ):
     metrics_crud = MetricsCRUD(db)
 
-    metrics = metrics_crud.get_multi(organisation_id=organisation_id, app_id=app_id)
+    metrics = metrics_crud.get_multi(organisation_id=auth.organisation_id, app_id=auth.app_id)
 
     return metrics
 
 
 @router.get("/{metric_id}/", response_model=MetricResponse)
-async def get_metric(metric_id: UUID, db: Session = Depends(get_db)):
+async def get_metric(
+    metric_id: UUID,
+    auth: AuthContext = Depends(require_app_context),
+    db: Session = Depends(get_db)
+):
     metrics_crud = MetricsCRUD(db)
 
     metric = metrics_crud.get_by_pid(metric_id)
@@ -166,7 +174,10 @@ async def get_metric(metric_id: UUID, db: Session = Depends(get_db)):
 
 @router.put("/{metric_id}/", response_model=MetricResponse)
 async def update_metric(
-    metric_id: UUID, metric_data: CreateMetricRequest, db: Session = Depends(get_db)
+    metric_id: UUID,
+    metric_data: CreateMetricRequest,
+    auth: AuthContext = Depends(require_app_context),
+    db: Session = Depends(get_db)
 ):
     metrics_crud = MetricsCRUD(db)
 

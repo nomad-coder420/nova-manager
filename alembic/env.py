@@ -9,6 +9,7 @@ from nova_manager.core.config import DATABASE_URL
 from nova_manager.core.models import Base
 
 # Import all models here
+from nova_manager.components.auth.models import *
 from nova_manager.components.users.models import *
 from nova_manager.components.feature_flags.models import *
 from nova_manager.components.segments.models import *

@@ -24,8 +24,6 @@ class SegmentCreate(BaseModel):
         default="", max_length=500, description="Segment description"
     )
     rule_config: Dict[str, Any] = Field(..., description="Segment rule configuration")
-    organisation_id: str = Field(..., description="Organization ID")
-    app_id: str = Field(..., description="Application ID")
 
 
 class SegmentUpdate(BaseModel):

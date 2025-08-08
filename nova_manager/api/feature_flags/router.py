@@ -19,6 +19,8 @@ from nova_manager.components.experiences.crud import (
     ExperienceFeaturesCRUD,
 )
 from nova_manager.database.session import get_db
+from nova_manager.components.auth.dependencies import require_app_context
+from nova_manager.core.security import AuthContext
 
 
 router = APIRouter()
@@ -223,7 +225,7 @@ async def sync_nova_objects(
             traceback.print_exc()
             continue
 
-    dashboard_url = f"https://dashboard.nova.com/apps/{sync_request.app_id}/objects"
+    dashboard_url = f"https://dashboard.nova.com/objects"
 
     return NovaObjectSyncResponse(
         success=True,
@@ -244,8 +246,7 @@ async def sync_nova_objects(
 
 @router.get("/", response_model=List[FeatureFlagListItem])
 async def list_feature_flags(
-    organisation_id: str = Query(...),
-    app_id: str = Query(...),
+    auth: AuthContext = Depends(require_app_context),
     active_only: bool = Query(False),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -256,11 +257,14 @@ async def list_feature_flags(
 
     if active_only:
         flags = feature_flags_crud.get_active_flags(
-            organisation_id=organisation_id, app_id=app_id
+            organisation_id=auth.organisation_id, app_id=auth.app_id
         )
     else:
         flags = feature_flags_crud.get_multi(
-            skip=skip, limit=limit, organisation_id=organisation_id, app_id=app_id
+            skip=skip,
+            limit=limit,
+            organisation_id=auth.organisation_id,
+            app_id=auth.app_id,
         )
 
     return flags
@@ -268,22 +272,25 @@ async def list_feature_flags(
 
 @router.get("/available/", response_model=List[FeatureFlagListItem])
 async def list_available_feature_flags(
-    organisation_id: str = Query(...),
-    app_id: str = Query(...),
+    auth: AuthContext = Depends(require_app_context),
     db: Session = Depends(get_db),
 ):
     """List feature flags that are not assigned to any experience"""
     feature_flags_crud = FeatureFlagsCRUD(db)
 
     flags = feature_flags_crud.get_available_flags(
-        organisation_id=organisation_id, app_id=app_id
+        organisation_id=auth.organisation_id, app_id=auth.app_id
     )
 
     return flags
 
 
 @router.get("/{flag_pid}/", response_model=FeatureFlagDetailedResponse)
-async def get_feature_flag(flag_pid: UUID, db: Session = Depends(get_db)):
+async def get_feature_flag(
+    flag_pid: UUID, 
+    auth: AuthContext = Depends(require_app_context),
+    db: Session = Depends(get_db)
+):
     """Get feature flag by ID with all variants"""
     feature_flags_crud = FeatureFlagsCRUD(db)
 

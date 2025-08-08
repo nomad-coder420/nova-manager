@@ -9,6 +9,8 @@ from nova_manager.components.recommendations.controller import RecommendationsCo
 from nova_manager.components.recommendations.crud import RecommendationsCRUD
 from nova_manager.components.recommendations.schemas import AiRecommendationResponse
 from nova_manager.database.session import get_db
+from nova_manager.components.auth.dependencies import require_app_context
+from nova_manager.core.security import AuthContext
 from sqlalchemy.orm import Session
 
 router = APIRouter()
@@ -16,11 +18,13 @@ router = APIRouter()
 
 @router.post("/get-ai-recommendations/", response_model=AiRecommendationResponse)
 async def get_ai_recommendations(
-    validated_data: GetAiRecommendationsRequest, db: Session = Depends(get_db)
+    validated_data: GetAiRecommendationsRequest, 
+    auth: AuthContext = Depends(require_app_context),
+    db: Session = Depends(get_db)
 ):
     user_prompt = validated_data.user_prompt
-    organisation_id = validated_data.organisation_id
-    app_id = validated_data.app_id
+    organisation_id = str(auth.organisation_id)
+    app_id = auth.app_id
 
     experiences_crud = ExperiencesCRUD(db)
     experiences = experiences_crud.get_with_feature_details(
@@ -74,11 +78,10 @@ async def get_ai_recommendations(
 
 @router.get("/", response_model=List[RecommendationResponse])
 async def get_recommendations(
-    organisation_id: str = Query(...),
-    app_id: str = Query(...),
+    auth: AuthContext = Depends(require_app_context),
     db: Session = Depends(get_db),
 ):
     recommendations_crud = RecommendationsCRUD(db)
-    recommendations = recommendations_crud.get_multi_by_org(organisation_id, app_id)
+    recommendations = recommendations_crud.get_multi_by_org(auth.organisation_id, auth.app_id)
 
     return recommendations

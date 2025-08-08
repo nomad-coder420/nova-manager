@@ -46,15 +46,6 @@ class NovaObjectSyncResponse(BaseModel):
     details: List[Dict[str, Any]] = []
 
 
-class FeatureFlagCreate(BaseModel):
-    name: str
-    organisation_id: str
-    app_id: str
-    description: Optional[str] = None
-    keys_config: Dict[str, Any]
-    is_active: bool = False
-
-
 class FeatureFlagUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None

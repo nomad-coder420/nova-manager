@@ -4,6 +4,8 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from nova_manager.database.session import get_db
+from nova_manager.components.auth.dependencies import require_app_context
+from nova_manager.core.security import AuthContext
 from nova_manager.api.personalisations.request_response import (
     PersonalisationCreate,
     PersonalisationDetailedResponse,
@@ -32,6 +34,7 @@ router = APIRouter()
 @router.post("/create-personalisation/", response_model=PersonalisationResponse)
 async def create_personalisation(
     personalisation_data: PersonalisationCreate,
+    auth: AuthContext = Depends(require_app_context),
     db: Session = Depends(get_db),
 ):
     """Create a new personalisation for an experience"""
@@ -51,13 +54,27 @@ async def create_personalisation(
     experience = experiences_crud.get_with_features(experience_id)
     if not experience:
         raise HTTPException(status_code=404, detail="Experience not found")
+    
+    # Validate experience belongs to the same org and app as in token
+    if str(experience.organisation_id) != str(auth.organisation_id):
+        raise HTTPException(status_code=403, detail="Experience does not belong to your organization")
+    
+    if experience.app_id != auth.app_id:
+        raise HTTPException(status_code=403, detail="Experience does not belong to your app")
 
-    # Validate metrics exist
+    # Validate metrics exist and belong to same org/app
     if selected_metrics:
         for metric_id in selected_metrics:
             metric = metrics_crud.get_by_pid(metric_id)
             if not metric:
                 raise HTTPException(status_code=404, detail=f"Metric not found: {metric_id}")
+            
+            # Validate metric belongs to the same org and app as in token
+            if str(metric.organisation_id) != str(auth.organisation_id):
+                raise HTTPException(status_code=403, detail=f"Metric {metric_id} does not belong to your organization")
+            
+            if metric.app_id != auth.app_id:
+                raise HTTPException(status_code=403, detail=f"Metric {metric_id} does not belong to your app")
 
     # Check if personalisation name already exists in this experience
     existing = personalisations_crud.get_by_name(
@@ -190,8 +207,7 @@ async def create_personalisation(
 
 @router.get("/", response_model=List[PersonalisationListResponse])
 async def list_personalisations(
-    organisation_id: str = Query(...),
-    app_id: str = Query(...),
+    auth: AuthContext = Depends(require_app_context),
     search: Optional[str] = Query(
         None, description="Search personalisations by name or description"
     ),
@@ -207,16 +223,16 @@ async def list_personalisations(
 
     if search:
         personalisations = personalisations_crud.search_personalisations(
-            organisation_id=organisation_id,
-            app_id=app_id,
+            organisation_id=str(auth.organisation_id),
+            app_id=auth.app_id,
             search_term=search,
             skip=skip,
             limit=limit,
         )
     else:
         personalisations = personalisations_crud.get_multi_by_org(
-            organisation_id=organisation_id,
-            app_id=app_id,
+            organisation_id=str(auth.organisation_id),
+            app_id=auth.app_id,
             skip=skip,
             limit=limit,
             order_by=order_by,
@@ -230,8 +246,9 @@ async def list_personalisations(
     "/personalised-experiences/{experience_id}/",
     response_model=List[PersonalisationDetailedResponse],
 )
-async def list_personalisations(
+async def list_personalised_experiences(
     experience_id: UUID,
+    auth: AuthContext = Depends(require_app_context),
     db: Session = Depends(get_db),
 ):
     personalisations_crud = PersonalisationsCRUD(db)

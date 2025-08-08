@@ -17,6 +17,7 @@ import nova_manager.components.users.event_listeners
 import nova_manager.components.user_experience.event_listeners
 
 from nova_manager.api.frontend.router import router as frontend_router
+from nova_manager.api.auth.router import router as auth_router
 from nova_manager.api.feature_flags.router import router as feature_flags_router
 from nova_manager.api.segments.router import router as segments_router
 from nova_manager.api.experiences.router import router as experiences_router
@@ -37,6 +38,7 @@ app.mount("/static", StaticFiles(directory="nova_manager/static"), name="static"
 
 # Include Routers
 app.include_router(frontend_router)
+app.include_router(auth_router, prefix="/api/v1/auth")
 app.include_router(feature_flags_router, prefix="/api/v1/feature-flags")
 app.include_router(segments_router, prefix="/api/v1/segments")
 app.include_router(experiences_router, prefix="/api/v1/experiences")

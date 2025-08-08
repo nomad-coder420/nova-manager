@@ -18,8 +18,6 @@ class CreateMetricRequest(BaseModel):
     description: str
     type: Literal["count", "aggregation", "ratio", "retention"]
     config: dict
-    organisation_id: str
-    app_id: str
 
 
 class MetricResponse(BaseModel):
@@ -39,8 +37,6 @@ class TimeRange(BaseModel):
 
 
 class ComputeMetricRequest(BaseModel):
-    organisation_id: str
-    app_id: str
     type: Literal["count", "aggregation", "ratio", "retention"]
     config: Dict[str, Any]
 

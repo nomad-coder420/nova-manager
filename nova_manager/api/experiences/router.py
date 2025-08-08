@@ -13,14 +13,15 @@ from nova_manager.components.experiences.crud import (
     ExperiencesCRUD,
 )
 from nova_manager.database.session import get_db
+from nova_manager.components.auth.dependencies import require_app_context
+from nova_manager.core.security import AuthContext
 
 router = APIRouter()
 
 
 @router.get("/", response_model=List[ExperienceListResponse])
 async def list_experiences(
-    organisation_id: str = Query(...),
-    app_id: str = Query(...),
+    auth: AuthContext = Depends(require_app_context),
     status: Optional[str] = Query(None, description="Filter by status"),
     search: Optional[str] = Query(
         None, description="Search experiences by name or description"
@@ -38,16 +39,16 @@ async def list_experiences(
 
     if search:
         experiences = experiences_crud.search_experiences(
-            organisation_id=organisation_id,
-            app_id=app_id,
+            organisation_id=auth.organisation_id,
+            app_id=auth.app_id,
             search_term=search,
             skip=skip,
             limit=limit,
         )
     else:
         experiences = experiences_crud.get_multi_by_org(
-            organisation_id=organisation_id,
-            app_id=app_id,
+            organisation_id=auth.organisation_id,
+            app_id=auth.app_id,
             skip=skip,
             limit=limit,
             status=status,
@@ -59,7 +60,11 @@ async def list_experiences(
 
 
 @router.get("/{experience_pid}/", response_model=ExperienceDetailedResponse)
-async def get_experience(experience_pid: UUIDType, db: Session = Depends(get_db)):
+async def get_experience(
+    experience_pid: UUIDType,
+    auth: AuthContext = Depends(require_app_context),
+    db: Session = Depends(get_db)
+):
     """Get experience by ID with full details"""
     experiences_crud = ExperiencesCRUD(db)
     experience = experiences_crud.get_with_full_details(experience_pid)
@@ -74,7 +79,9 @@ async def get_experience(experience_pid: UUIDType, db: Session = Depends(get_db)
     "/{experience_pid}/features/", response_model=List[ExperienceFeatureResponse]
 )
 async def get_experience_features(
-    experience_pid: UUIDType, db: Session = Depends(get_db)
+    experience_pid: UUIDType,
+    auth: AuthContext = Depends(require_app_context),
+    db: Session = Depends(get_db)
 ):
     """Get features for a specific experience"""
     experience_features_crud = ExperienceFeaturesCRUD(db)
