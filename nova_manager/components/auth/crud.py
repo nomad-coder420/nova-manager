@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from nova_manager.components.auth.models import Organisation, App, AuthUser
 from nova_manager.core.security import hash_password, verify_password
+from nova_manager.core.enums import UserRole
 
 
 class AuthCRUD:
@@ -13,8 +14,8 @@ class AuthCRUD:
         self.db = db
 
     def get_auth_user_by_email(self, email: str) -> Optional[AuthUser]:
-        """Get auth user by email"""
-        return self.db.query(AuthUser).filter(AuthUser.email == email).first()
+        """Get auth user by email (emails stored normalized)"""
+        return self.db.query(AuthUser).filter(AuthUser.email == email.lower()).first()
 
     def get_auth_user_by_id(self, auth_user_id: str) -> Optional[AuthUser]:
         """Get auth user by ID"""
@@ -36,17 +37,19 @@ class AuthCRUD:
         email: str, 
         password: str, 
         name: str, 
-        organisation_id: str
+        organisation_id: str,
+        role: UserRole = UserRole.MEMBER
     ) -> AuthUser:
         """Create a new auth user"""
         hashed_password = hash_password(password)
         
         auth_user = AuthUser(
             pid=str(uuid4()),
-            email=email,
+            email=email.lower(),  # Normalize email at storage
             password=hashed_password,
             name=name,
-            organisation_id=organisation_id
+            organisation_id=organisation_id,
+            role=role
         )
         self.db.add(auth_user)
         self.db.flush()

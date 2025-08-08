@@ -5,6 +5,8 @@ from passlib.context import CryptContext
 from fastapi import HTTPException, status
 from pydantic import BaseModel
 
+from nova_manager.core.enums import UserRole
+
 # Password hashing with bcrypt (12 rounds for security)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 
@@ -21,6 +23,7 @@ class AuthContext(BaseModel):
     organisation_id: str
     app_id: Optional[str] = None  # Can be None before app creation
     email: str
+    role: UserRole  # User role in the organization
 
 
 def hash_password(password: str) -> str:
@@ -95,4 +98,5 @@ def create_auth_context(payload: dict) -> AuthContext:
         organisation_id=payload.get("organisation_id"),
         app_id=payload.get("app_id"),
         email=payload.get("email"),
+        role=payload.get("role"),
     )

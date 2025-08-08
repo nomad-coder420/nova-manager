@@ -1,10 +1,12 @@
 from datetime import timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
+from nova_manager.components.invitations.crud import InvitationsCRUD
 from sqlalchemy.orm import Session
 
 from nova_manager.database.session import get_db
 from nova_manager.components.auth.crud import AuthCRUD
+from nova_manager.core.enums import UserRole
 from nova_manager.api.auth.request_response import (
     AuthUserRegister,
     AuthUserLogin,
@@ -13,6 +15,7 @@ from nova_manager.api.auth.request_response import (
     AuthUserResponse,
     AppCreate,
     AppResponse,
+    AppCreateResponse,
     SwitchAppRequest,
 )
 from nova_manager.components.auth.dependencies import (
@@ -33,7 +36,7 @@ router = APIRouter()
 
 @router.post("/register", response_model=TokenResponse)
 async def register(user_data: AuthUserRegister, db: Session = Depends(get_db)):
-    """Register a new user and create organisation"""
+    """Register a new user"""
     auth_crud = AuthCRUD(db)
     
     # Check if user already exists
@@ -44,23 +47,61 @@ async def register(user_data: AuthUserRegister, db: Session = Depends(get_db)):
             detail="User with this email already exists"
         )
     
-    # Create organisation
-    organisation = auth_crud.create_organisation(name=user_data.company)
+    organisation_id = None
+    role = UserRole.OWNER  # Default for self-registration
+    
+    # Handle invitation-based registration
+    if user_data.invite_token:
+        invitations_crud = InvitationsCRUD(db)
+        
+        # Validate invitation
+        invitation = invitations_crud.get_valid_invitation(user_data.invite_token)
+        if not invitation:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired invitation token"
+            )
+        
+        # Verify email matches invitation
+        if invitation.email.lower() != user_data.email.lower():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email does not match invitation"
+            )
+        
+        # Use organization from invitation
+        organisation_id = invitation.organisation_id
+        role = invitation.role
+        
+        # Mark invitation as accepted
+        invitations_crud.mark_as_accepted(user_data.invite_token)
+        
+    else:
+        # Self-registration - create new organisation
+        if not user_data.company:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Company name is required for self-registration"
+            )
+        organisation = auth_crud.create_organisation(name=user_data.company)
+        organisation_id = organisation.pid
     
     # Create auth user
     auth_user = auth_crud.create_auth_user(
         email=user_data.email,
         password=user_data.password,
         name=user_data.name,
-        organisation_id=organisation.pid
+        organisation_id=organisation_id,
+        role=role
     )
     
     # Create tokens (no app_id yet)
     token_data = {
         "auth_user_id": str(auth_user.pid),
-        "organisation_id": str(organisation.pid),
+        "organisation_id": str(organisation_id),
         "app_id": None,
         "email": auth_user.email,
+        "role": auth_user.role,
     }
     
     access_token = create_access_token(token_data)
@@ -103,6 +144,7 @@ async def login(user_data: AuthUserLogin, db: Session = Depends(get_db)):
         "organisation_id": str(auth_user.organisation_id),
         "app_id": current_app_id,
         "email": auth_user.email,
+        "role": auth_user.role,
     }
     
     access_token = create_access_token(token_data)
@@ -162,6 +204,7 @@ async def refresh_token(
         "organisation_id": str(auth_user.organisation_id),
         "app_id": current_app_id,
         "email": auth_user.email,
+        "role": auth_user.role,
     }
     
     access_token = create_access_token(token_data)
@@ -193,17 +236,18 @@ async def get_current_user(
     return AuthUserResponse(
         name=auth_user.name,
         email=auth_user.email,
-        has_apps=has_apps
+        has_apps=has_apps,
+        role=auth_user.role
     )
 
 
-@router.post("/apps", response_model=AppResponse)
+@router.post("/apps", response_model=AppCreateResponse)
 async def create_app(
     app_data: AppCreate,
     auth: AuthContext = Depends(require_org_context),
     db: Session = Depends(get_db)
 ):
-    """Create a new app"""
+    """Create a new app and return new tokens with app context"""
     auth_crud = AuthCRUD(db)
     
     # Create app
@@ -213,11 +257,28 @@ async def create_app(
         description=app_data.description
     )
     
-    return AppResponse(
-        id=app.pid,
-        name=app.name,
-        description=app_data.description,
-        created_at=app.created_at.isoformat() if hasattr(app, 'created_at') else ""
+    # Create new tokens with the new app context
+    token_data = {
+        "auth_user_id": str(auth.auth_user_id),
+        "organisation_id": str(auth.organisation_id),
+        "app_id": str(app.pid),
+        "email": auth.email,
+        "role": auth.role,
+    }
+    
+    access_token = create_access_token(token_data)
+    refresh_token = create_refresh_token({"auth_user_id": str(auth.auth_user_id)})
+    
+    return AppCreateResponse(
+        app=AppResponse(
+            id=app.pid,
+            name=app.name,
+            description=app_data.description,
+            created_at=app.created_at.isoformat() if hasattr(app, 'created_at') else ""
+        ),
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
 
 
@@ -265,6 +326,7 @@ async def switch_app(
         "organisation_id": str(auth.organisation_id),
         "app_id": switch_data.app_id,
         "email": auth.email,
+        "role": auth.role,
     }
     
     access_token = create_access_token(token_data)

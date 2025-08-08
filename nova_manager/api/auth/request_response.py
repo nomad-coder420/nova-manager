@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from uuid import UUID
 
 
@@ -8,7 +8,21 @@ class AuthUserRegister(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=6, description="Password must be at least 6 characters")
     name: str = Field(..., min_length=2, description="Name must be at least 2 characters")
-    company: str = Field(..., min_length=2, description="Company name must be at least 2 characters")
+    invite_token: Optional[str] = None  # Optional invitation token
+    company: Optional[str] = Field(None, description="Company name (required for self-signup, null for invited users)")
+    
+    @field_validator('company')
+    @classmethod
+    def validate_company(cls, v, info):
+        """Validate company field based on whether it's an invite signup"""
+        print(f"Company: {info}, Invite token: {info.data.get('invite_token')}")
+        # If there's an invite_token, company should be null
+        if info.data.get('invite_token'):
+            return None  # Force null for invited users
+        # If no invite_token, company is required and must be at least 2 characters
+        if not v or len(v.strip()) < 2:
+            raise ValueError('Company name is required for self-signup and must be at least 2 characters')
+        return v.strip()
 
 
 class AuthUserLogin(BaseModel):
@@ -35,6 +49,7 @@ class AuthUserResponse(BaseModel):
     name: str
     email: str
     has_apps: bool  # Whether user has created any apps
+    role: str  # User role in the organization
 
 
 class AppCreate(BaseModel):
@@ -49,6 +64,15 @@ class AppResponse(BaseModel):
     name: str
     description: Optional[str]
     created_at: str
+
+
+class AppCreateResponse(BaseModel):
+    """App creation response with new tokens"""
+    app: AppResponse
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int  # seconds until access token expires
 
 
 class SwitchAppRequest(BaseModel):
