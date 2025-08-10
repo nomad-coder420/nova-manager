@@ -1,5 +1,11 @@
 import logging
 import os
+from ..service.email_service import email_service
+from ..core.config import (
+    ORG_INVITE_TEMPLATE_ID,
+    WELCOME_TEMPLATE_ID,
+    PASSWORD_RESET_TEMPLATE_ID
+)
 
 logger = logging.getLogger(__name__)
 
@@ -8,51 +14,34 @@ def get_frontend_url() -> str:
     """Get frontend URL from environment or default"""
     return os.getenv("FRONTEND_URL", "http://localhost:3000")
 
-
 async def send_invitation_email(
     email: str, invite_token: str, organisation_name: str, invited_by_name: str
 ) -> bool:
     """
     Send invitation email to user
-
-    Args:
-        email: Recipient email address
-        invite_token: Invitation token for signup link
-        organisation_name: Name of the organization
-        invited_by_name: Name of person who sent invite
-
+    
     Returns:
         bool: True if email sent successfully, False otherwise
     """
-
-    # TODO: Implement actual email sending (SendGrid, Resend, AWS SES, etc.)
-    # For now, just log the email details
-
     invite_link = f"{get_frontend_url()}/signup?invite={invite_token}"
-
-    logger.info(
-        f"""
-    =================================
-    EMAIL TO SEND:
-    =================================
-    To: {email}
-    Subject: You're invited to join {organisation_name}
     
-    Hi there!
+    logger.info(f"Sending invitation email to: {email}")
     
-    {invited_by_name} has invited you to join {organisation_name}.
-    
-    Click here to accept the invitation: {invite_link}
-    
-    This invitation will expire in 7 days.
-    
-    Best regards,
-    The Xgaming Nova Team
-    =================================
-    """
+    success, error_message = email_service.send_email(
+        to=email,
+        template_id=ORG_INVITE_TEMPLATE_ID,
+        params={
+            "invite_link": invite_link,
+            "organisation_name": organisation_name,
+            "invited_by_name": invited_by_name,
+        },
     )
-
-    # Return True for now (simulate success)
+    
+    if not success:
+        logger.error(f"Failed to send invitation email to {email}: {error_message}")
+        return False
+    
+    logger.info(f"Invitation email sent successfully to: {email}")
     return True
 
 
@@ -61,18 +50,20 @@ async def send_password_reset_email(email: str, reset_token: str) -> bool:
     # TODO: Implement when password reset feature is needed
     reset_link = f"{get_frontend_url()}/reset-password?token={reset_token}"
 
-    logger.info(
-        f"""
-    =================================
-    PASSWORD RESET EMAIL TO SEND:
-    =================================
-    To: {email}
-    Subject: Reset your Xgaming Nova password
-    
-    Click here to reset your password: {reset_link}
-    =================================
-    """
+    logger.info(f"Sending password reset email to: {email}")
+    success, error_message = email_service.send_email(
+        to=email,
+        template_id=PASSWORD_RESET_TEMPLATE_ID,
+        params={
+            "reset_link": reset_link,
+        },
     )
+
+    if not success:
+        logger.error(f"Failed to send password reset email to {email}: {error_message}")
+        return False
+    
+    logger.info(f"Password reset email sent successfully to: {email}")
     return True
 
 
@@ -80,20 +71,20 @@ async def send_welcome_email(email: str, name: str, organisation_name: str) -> b
     """Send welcome email after successful signup (for future use)"""
     # TODO: Implement welcome email template
 
-    logger.info(
-        f"""
-    =================================
-    WELCOME EMAIL TO SEND:
-    =================================
-    To: {email}
-    Subject: Welcome to {organisation_name}!
-    
-    Hi {name},
-    
-    Welcome to Xgaming Nova! You're now part of {organisation_name}.
-    
-    Get started: {get_frontend_url()}/console
-    =================================
-    """
+    logger.info(f"Sending welcome email to: {email}")
+
+    success, error_message = email_service.send_email(
+        to=email,
+        template_id=WELCOME_TEMPLATE_ID,
+        params={
+            "name": name,
+            "organisation_name": organisation_name,
+            "welcome_link": f"{get_frontend_url()}/console",
+        },
     )
+    if not success:
+        logger.error(f"Failed to send welcome email to {email}: {error_message}")
+        return False
+
+    logger.info(f"Welcome email sent successfully to: {email}")
     return True

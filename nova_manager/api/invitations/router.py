@@ -15,6 +15,7 @@ from nova_manager.api.invitations.request_response import (
 from nova_manager.components.invitations.crud import InvitationsCRUD
 from nova_manager.components.auth.crud import AuthCRUD
 from nova_manager.core.email import send_invitation_email
+from nova_manager.core.log import logger
 
 router = APIRouter()
 
@@ -68,10 +69,8 @@ async def send_invitation(
     )
     
     if not email_sent:
-        # Could still return success since invitation is created
-        # But log the warning
-        pass
-    
+        logger.warning(f"Failed to send invitation email to {invite_data.email}")
+
     return InvitationResponse(
         id=invitation.pid,
         email=invitation.email,
