@@ -96,3 +96,11 @@ class AuthCRUD:
         return self.db.query(App).filter(
             App.organisation_id == auth_user.organisation_id
         ).count() > 0
+    
+    def get_users_by_organisation(self, organisation_id: str) -> List[AuthUser]:
+        """Get all auth users for an organisation"""
+        return (
+            self.db.query(AuthUser)
+            .filter(AuthUser.organisation_id == organisation_id)
+            .all()
+        )

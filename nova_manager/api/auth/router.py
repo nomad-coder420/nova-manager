@@ -17,6 +17,7 @@ from nova_manager.api.auth.request_response import (
     AppResponse,
     AppCreateResponse,
     SwitchAppRequest,
+    OrgUserResponse,
 )
 from nova_manager.components.auth.dependencies import (
     get_current_auth,
@@ -339,3 +340,21 @@ async def switch_app(
         refresh_token=refresh_token,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
+    
+@router.get("/users", response_model=list[OrgUserResponse])
+async def list_org_users(
+    auth: AuthContext = Depends(require_org_context),
+    db: Session = Depends(get_db)
+):
+    """List all users in the current organisation"""
+    auth_crud = AuthCRUD(db)
+    users = auth_crud.get_users_by_organisation(auth.organisation_id)
+    return [
+        OrgUserResponse(
+            id=u.pid,
+            name=u.name,
+            email=u.email,
+            role=u.role
+        )
+        for u in users
+    ]
