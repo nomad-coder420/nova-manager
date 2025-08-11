@@ -86,3 +86,7 @@ class OrgUserResponse(BaseModel):
     name: str
     email: str
     role: str  # User role in the organization
+class AuthContextResponse(BaseModel):
+    """Response schema for current auth context"""
+    organisation_id: str
+    app_id: Optional[str] = None  # Current app (project) ID

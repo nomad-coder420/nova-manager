@@ -18,6 +18,7 @@ from nova_manager.api.auth.request_response import (
     AppCreateResponse,
     SwitchAppRequest,
     OrgUserResponse,
+    AuthContextResponse,
 )
 from nova_manager.components.auth.dependencies import (
     get_current_auth,
@@ -239,6 +240,16 @@ async def get_current_user(
         email=auth_user.email,
         has_apps=has_apps,
         role=auth_user.role
+    )
+   
+@router.get("/context", response_model=AuthContextResponse)
+async def get_context(
+    auth: AuthContext = Depends(get_current_auth)
+):
+    """Get current auth context (organisation and project IDs)"""
+    return AuthContextResponse(
+        organisation_id=auth.organisation_id,
+        app_id=auth.app_id
     )
 
 
