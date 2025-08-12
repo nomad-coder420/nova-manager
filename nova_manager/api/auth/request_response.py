@@ -78,3 +78,15 @@ class AppCreateResponse(BaseModel):
 class SwitchAppRequest(BaseModel):
     """App switch request schema"""
     app_id: str = Field(..., description="App ID to switch to")
+
+
+class OrgUserResponse(BaseModel):
+    """Organization user response schema"""
+    id: UUID
+    name: str
+    email: str
+    role: str  # User role in the organization
+class AuthContextResponse(BaseModel):
+    """Response schema for current auth context"""
+    organisation_id: str
+    app_id: Optional[str] = None  # Current app (project) ID
