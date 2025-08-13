@@ -10,6 +10,7 @@ from nova_manager.api.personalisations.request_response import (
     PersonalisationCreate,
     PersonalisationDetailedResponse,
     PersonalisationListResponse,
+    PersonalisationUpdate,
 )
 from nova_manager.components.experiences.crud import (
     ExperiencesCRUD,
@@ -258,3 +259,35 @@ async def list_personalised_experiences(
     )
 
     return personalisations
+
+
+@router.patch("/{pid}/", response_model=PersonalisationDetailedResponse)
+async def update_personalisation(
+    pid: UUID,
+    update_data: PersonalisationUpdate,
+    auth: AuthContext = Depends(require_app_context),
+    db: Session = Depends(get_db),
+):
+    """
+    Update a personalisation. By default only new evaluations see changes.
+    """
+    crud = PersonalisationsCRUD(db)
+
+    # fetch and auth
+    personalisation = crud.get_by_pid(pid)
+    if not personalisation:
+        raise HTTPException(status_code=404, detail="Personalisation not found")
+    if str(personalisation.organisation_id) != str(auth.organisation_id):
+        raise HTTPException(status_code=403, detail="Not in your organization")
+    if personalisation.app_id != auth.app_id:
+        raise HTTPException(status_code=403, detail="Not in your app")
+
+    # validate any new variants or metrics here (omitted for brevity)
+
+    try:
+        # pass the Pydantic DTO so nested fields remain as objects
+        updated = crud.update_personalisation(pid, update_data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return updated

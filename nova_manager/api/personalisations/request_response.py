@@ -24,6 +24,11 @@ class PersonalisationCreateExperienceVariant(BaseModel):
     experience_variant: ExperienceVariantCreate
     target_percentage: int
 
+# DTO for updating variants by ID
+class PersonalisationUpdateExperienceVariant(BaseModel):
+    experience_variant_id: UUIDType
+    target_percentage: int
+
 
 class PersonalisationCreate(BaseModel):
     name: str
@@ -70,3 +75,13 @@ class PersonalisationDetailedResponse(BaseModel):
     rule_config: dict
     experience_variants: List[PersonalisationExperienceVariantResponse]
     metrics: List[PersonalisationMetric] = []
+
+class PersonalisationUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    rule_config: Optional[Dict[str, Any]] = None
+    rollout_percentage: Optional[int] = None
+    selected_metrics: Optional[List[UUIDType]] = None
+    # Use the same variant structure as create for consistency
+    experience_variants: Optional[List[PersonalisationCreateExperienceVariant]] = None
+    apply_to_existing: bool = False
