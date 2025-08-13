@@ -235,8 +235,26 @@ class PersonalisationsCRUD(BaseCRUD):
         self.db.flush()
         self.db.refresh(personalisation)
         return personalisation
+    
+    def get_detailed_personalisation(
+    self, pid: UUIDType
+    ) -> Optional[Personalisations]:
+        """Get a personalisation by ID with all its relationships loaded"""
+        return (
+            self.db.query(Personalisations)
+            .options(
+                selectinload(Personalisations.experience),
+                selectinload(Personalisations.experience_variants)
+                .selectinload(PersonalisationExperienceVariants.experience_variant),
+                selectinload(Personalisations.metrics)
+                .selectinload(PersonalisationMetrics.metric)
+            )
+            .filter(Personalisations.pid == pid)
+            .first()
+    )
 
 
 class PersonalisationExperienceVariantsCRUD(BaseCRUD):
     def __init__(self, db: Session):
         super().__init__(PersonalisationExperienceVariants, db)
+

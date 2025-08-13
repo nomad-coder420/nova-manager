@@ -291,3 +291,29 @@ async def update_personalisation(
         raise HTTPException(status_code=400, detail=str(e))
 
     return updated
+
+@router.get("/{pid}/", response_model=PersonalisationDetailedResponse)
+async def get_personalisation(
+    pid: UUID,
+    auth: AuthContext = Depends(require_app_context),
+    db: Session = Depends(get_db),
+):
+    """
+    Get a personalisation by ID with all its details including variants and metrics.
+    """
+    personalisations_crud = PersonalisationsCRUD(db)
+    
+    # Get the personalisation with all related data
+    personalisation = personalisations_crud.get_detailed_personalisation(pid)
+    
+    if not personalisation:
+        raise HTTPException(status_code=404, detail="Personalisation not found")
+    
+    # Validate organisation and app access
+    if str(personalisation.organisation_id) != str(auth.organisation_id):
+        raise HTTPException(status_code=403, detail="Not in your organization")
+    
+    if personalisation.app_id != auth.app_id:
+        raise HTTPException(status_code=403, detail="Not in your app")
+    
+    return personalisation
