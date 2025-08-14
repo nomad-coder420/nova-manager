@@ -156,87 +156,138 @@ class PersonalisationsCRUD(BaseCRUD):
         )
 
     def update_personalisation(
-        self,
-        pid: UUIDType,
-        update_dto: PersonalisationUpdate,
-    ) -> Personalisations:
+    self,
+    pid: UUIDType,
+    update_dto: PersonalisationUpdate,
+) -> Personalisations:
         """
-        Update an existing personalisation (only new users see changes).
-        Does not purge existing user_experience assignments.
+        Update an existing personalisation.
+        Handles updating, adding, or removing experience variants.
         """
-        # Fetch and validate
-        personalisation = self.get_by_pid(pid)
+        # Fetch personalisation with related data
+        personalisation = self.get_detailed_personalisation(pid)
         if not personalisation:
-            raise ValueError(f"Personalisation {pid} not found")
-
-        # Update scalar fields if provided
-        for field in ("name", "description", "rule_config", "rollout_percentage"): 
-            value = getattr(update_dto, field)
-            if value is not None:
-                setattr(personalisation, field, value)
-
-        # If variants are provided, create new variants while preserving personalisation link
+            return None
+            
+        # Update basic fields if provided
+        if update_dto.name is not None:
+            personalisation.name = update_dto.name
+        if update_dto.description is not None:
+            personalisation.description = update_dto.description
+        if update_dto.rule_config is not None:
+            personalisation.rule_config = update_dto.rule_config
+        if update_dto.rollout_percentage is not None:
+            personalisation.rollout_percentage = update_dto.rollout_percentage
+        
+        # Handle experience variants if provided
         if update_dto.experience_variants is not None:
+            # Create dependencies
             experience_variants_crud = ExperienceVariantsCRUD(self.db)
             experience_feature_variants_crud = ExperienceFeatureVariantsCRUD(self.db)
             personalisation_experience_variants_crud = PersonalisationExperienceVariantsCRUD(self.db)
             
-            # Get experience_id from personalisation
-            experience_id = personalisation.experience_id
+            # Get existing variants
+            existing_variants = {
+                pev.experience_variant.name: pev 
+                for pev in personalisation.experience_variants
+            }
             
-            # Delete old variant links but not the variants themselves
-            self.db.query(PersonalisationExperienceVariants).filter(
-                PersonalisationExperienceVariants.personalisation_id == pid
-            ).delete()
-            
-            # Process each variant like create flow
-            for variant_item in update_dto.experience_variants:
-                target_percentage = variant_item.target_percentage
-                experience_variant = variant_item.experience_variant
+            # Create/update new variants
+            for variant_data in update_dto.experience_variants:
+                variant_name = variant_data.experience_variant.name
                 
-                # Create the variant object
-                if experience_variant.is_default:
-                    experience_variant_obj = experience_variants_crud.create_default_variant(
-                        experience_id=experience_id,
-                    )
-                else:
-                    experience_variant_obj = experience_variants_crud.create_experience_variant(
-                        experience_id=experience_id,
-                        name=experience_variant.name,
-                        description=experience_variant.description,
+                # Check if this variant already exists by name
+                existing_variant = experience_variants_crud.get_by_name(
+                    name=variant_name,
+                    experience_id=personalisation.experience_id
+                )
+                
+                if existing_variant:
+                    # Update existing variant
+                    existing_variant.description = variant_data.experience_variant.description
+                    existing_variant.is_default = variant_data.experience_variant.is_default
+                    
+                    # Update the personalisation-variant association
+                    existing_association = next(
+                        (pev for pev in personalisation.experience_variants 
+                        if pev.experience_variant.name == variant_name),
+                        None
                     )
                     
-                    # Create feature variants if specified
-                    if experience_variant.feature_variants:
-                        for feature_variant in experience_variant.feature_variants:
+                    if existing_association:
+                        existing_association.target_percentage = variant_data.target_percentage
+                    else:
+                        # Create new association for existing variant
+                        personalisation_experience_variants_crud.create({
+                            "personalisation_id": personalisation.pid,
+                            "experience_variant_id": existing_variant.pid,
+                            "target_percentage": variant_data.target_percentage
+                        })
+                        
+                    # Handle feature variants
+                    if variant_data.experience_variant.feature_variants:
+                        # Remove existing feature variants
+                        experience_feature_variants_crud.delete_all_for_variant(existing_variant.pid)
+                        
+                        # Create new feature variants
+                        for fv in variant_data.experience_variant.feature_variants:
                             experience_feature_variants_crud.create({
-                                "experience_variant_id": experience_variant_obj.pid,
-                                "experience_feature_id": feature_variant.experience_feature_id,
-                                "name": feature_variant.name,
-                                "config": feature_variant.config,
+                                "experience_variant_id": existing_variant.pid,
+                                "experience_feature_id": fv.experience_feature_id,
+                                "name": fv.name,
+                                "config": fv.config
                             })
-                
-                # Link the new variant to the personalisation
-                personalisation_experience_variants_crud.create({
-                    "personalisation_id": pid,
-                    "experience_variant_id": experience_variant_obj.pid,
-                    "target_percentage": target_percentage,
+                else:
+                    # Create new variant and association
+                    new_variant = experience_variants_crud.create({
+                        "name": variant_name,
+                        "description": variant_data.experience_variant.description,
+                        "experience_id": personalisation.experience_id,
+                        "is_default": variant_data.experience_variant.is_default
+                    })
+
+                    personalisation_experience_variants_crud.create({
+                        "personalisation_id": personalisation.pid,
+                        "experience_variant_id": new_variant.pid,
+                        "target_percentage": variant_data.target_percentage
+                    })
+
+                    # Create feature variants
+                    if variant_data.experience_variant.feature_variants:
+                        for fv in variant_data.experience_variant.feature_variants:
+                            experience_feature_variants_crud.create({
+                                "experience_variant_id": new_variant.pid,
+                                "experience_feature_id": fv.experience_feature_id,
+                                "name": fv.name,
+                                "config": fv.config
+                            })
+
+            # Remove variants that are no longer included
+            new_variant_names = {v.experience_variant.name for v in update_dto.experience_variants}
+            for name, association in existing_variants.items():
+                if name not in new_variant_names:
+                    self.db.delete(association)
+        
+        # Handle metrics if provided
+        if update_dto.selected_metrics is not None:
+            metrics_crud = PersonalisationMetricsCRUD(self.db)
+            
+            # Remove existing metrics
+            metrics_crud.delete_personalisation_metrics(personalisation.pid)
+
+            # Add new metrics
+            for metric_id in update_dto.selected_metrics:
+                metrics_crud.create({
+                    "personalisation_id": personalisation.pid,
+                    "metric_id": metric_id
                 })
 
-        # Metrics update if provided
-        if update_dto.selected_metrics is not None:
-            
-            metrics_crud = PersonalisationMetricsCRUD(self.db)
-            # remove old
-            metrics_crud.delete_personalisation_metrics(pid)
-            # add new
-            for m_id in update_dto.selected_metrics:
-                metrics_crud.create_personalisation_metric(pid, m_id)
-
-        self.db.flush()
+        self.db.add(personalisation)
+        self.db.commit()
         self.db.refresh(personalisation)
+        
         return personalisation
-    
+
     def get_detailed_personalisation(
     self, pid: UUIDType
     ) -> Optional[Personalisations]:
