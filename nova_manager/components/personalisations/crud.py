@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_, asc, desc
 from nova_manager.api.personalisations.request_response import PersonalisationUpdate
 
+from nova_manager.components.experiences.models import ExperienceVariants
 from nova_manager.core.base_crud import BaseCRUD
 from nova_manager.components.personalisations.models import (
     PersonalisationExperienceVariants,
@@ -132,12 +133,12 @@ class PersonalisationsCRUD(BaseCRUD):
         return (
             self.db.query(Personalisations)
             .options(
-                selectinload(Personalisations.experience_variants).selectinload(
-                    PersonalisationExperienceVariants.experience_variant
-                ),
-                selectinload(Personalisations.metrics).selectinload(
-                    PersonalisationMetrics.metric
-                )
+                selectinload(Personalisations.experience_variants)
+                .selectinload(PersonalisationExperienceVariants.experience_variant)
+                .selectinload(ExperienceVariants.feature_variants),
+                selectinload(Personalisations.metrics)
+                .selectinload(PersonalisationMetrics.metric)
+        
             )
             .filter(Personalisations.experience_id == experience_id)
             .all()
@@ -245,7 +246,8 @@ class PersonalisationsCRUD(BaseCRUD):
             .options(
                 selectinload(Personalisations.experience),
                 selectinload(Personalisations.experience_variants)
-                .selectinload(PersonalisationExperienceVariants.experience_variant),
+                .selectinload(PersonalisationExperienceVariants.experience_variant)
+                .selectinload(ExperienceVariants.feature_variants),
                 selectinload(Personalisations.metrics)
                 .selectinload(PersonalisationMetrics.metric)
             )

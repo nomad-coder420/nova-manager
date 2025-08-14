@@ -49,12 +49,16 @@ class PersonalisationListResponse(BaseModel):
     experience_id: UUIDType
     experience: ExperienceResponse
 
+class ExperienceFeatureVariantResponse(BaseModel):
+    experience_feature_id: UUIDType
+    name: str
+    config: dict
 
 class ExperienceVariantResponse(BaseModel):
     name: str
     description: str
     is_default: bool
-
+    feature_variants: List[ExperienceFeatureVariantResponse] = []
 
 class PersonalisationExperienceVariantResponse(BaseModel):
     target_percentage: int
