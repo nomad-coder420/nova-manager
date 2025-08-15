@@ -118,6 +118,6 @@ async def require_technical_roles(auth: AuthContext = Depends(require_roles(User
     """Require technical roles (owner, admin, developer)"""
     return auth
 
-async def require_analyst_or_higher(auth: AuthContext = Depends(require_roles([UserRole.OWNER, UserRole.ADMIN, UserRole.ANALYST]))) -> AuthContext:
+async def require_analyst_or_higher(auth: AuthContext = Depends(require_roles([UserRole.OWNER, UserRole.ADMIN, UserRole.ANALYST, UserRole.DEVELOPER]))) -> AuthContext:
     """Require analyst or higher roles"""
     return auth
