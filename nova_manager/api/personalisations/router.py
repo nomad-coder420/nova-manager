@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from nova_manager.database.session import get_db
-from nova_manager.components.auth.dependencies import require_app_context
+from nova_manager.components.auth.dependencies import require_app_context, require_analyst_or_higher
 from nova_manager.core.security import AuthContext
 from nova_manager.api.personalisations.request_response import (
     PersonalisationCreate,
@@ -35,7 +35,7 @@ router = APIRouter()
 @router.post("/create-personalisation/", response_model=PersonalisationResponse)
 async def create_personalisation(
     personalisation_data: PersonalisationCreate,
-    auth: AuthContext = Depends(require_app_context),
+    auth: AuthContext = Depends(require_analyst_or_higher),
     db: Session = Depends(get_db),
 ):
     """Create a new personalisation for an experience"""
@@ -265,7 +265,7 @@ async def list_personalised_experiences(
 async def update_personalisation(
     pid: UUID,
     update_data: PersonalisationUpdate,
-    auth: AuthContext = Depends(require_app_context),
+    auth: AuthContext = Depends(require_analyst_or_higher),
     db: Session = Depends(get_db),
 ):
     """

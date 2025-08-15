@@ -13,7 +13,7 @@ from nova_manager.api.segments.request_response import (
 from nova_manager.components.segments.schemas import SegmentResponse
 from nova_manager.components.segments.crud import SegmentsCRUD
 from nova_manager.components.rule_evaluator.controller import RuleEvaluator
-from nova_manager.components.auth.dependencies import require_app_context
+from nova_manager.components.auth.dependencies import require_app_context, require_analyst_or_higher
 from nova_manager.core.security import AuthContext
 from nova_manager.database.session import get_db
 
@@ -23,7 +23,7 @@ router = APIRouter()
 @router.post("/", response_model=SegmentResponse)
 async def create_segment(
     segment_data: SegmentCreate, 
-    auth: AuthContext = Depends(require_app_context),
+    auth: AuthContext = Depends(require_analyst_or_higher),
     db: Session = Depends(get_db)
 ):
     """Create a new segment"""
@@ -119,7 +119,7 @@ async def get_segment(
 async def update_segment(
     segment_pid: UUIDType, 
     segment_update: SegmentUpdate, 
-    auth: AuthContext = Depends(require_app_context),
+    auth: AuthContext = Depends(require_analyst_or_higher),
     db: Session = Depends(get_db)
 ):
     """Update segment"""

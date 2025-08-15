@@ -5,6 +5,8 @@ class UserRole(str, Enum):
     """User roles in the organization"""
     OWNER = "owner"
     ADMIN = "admin"
+    DEVELOPER = "developer"
+    ANALYST = "analyst"
     MEMBER = "member"
 
     @classmethod
@@ -16,6 +18,11 @@ class UserRole(str, Enum):
     def all_roles(cls) -> list[str]:
         """All available roles"""
         return [cls.OWNER, cls.ADMIN, cls.MEMBER]
+
+    @classmethod
+    def technical_roles(cls) -> list[str]:
+        """Roles that have technical permissions"""
+        return [cls.OWNER, cls.ADMIN, cls.DEVELOPER]
 
 
 class InvitationStatus(str, Enum):

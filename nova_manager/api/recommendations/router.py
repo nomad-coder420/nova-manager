@@ -9,7 +9,7 @@ from nova_manager.components.recommendations.controller import RecommendationsCo
 from nova_manager.components.recommendations.crud import RecommendationsCRUD
 from nova_manager.components.recommendations.schemas import AiRecommendationResponse
 from nova_manager.database.session import get_db
-from nova_manager.components.auth.dependencies import require_app_context
+from nova_manager.components.auth.dependencies import require_app_context,require_analyst_or_higher
 from nova_manager.core.security import AuthContext
 from sqlalchemy.orm import Session
 
@@ -19,7 +19,7 @@ router = APIRouter()
 @router.post("/get-ai-recommendations/", response_model=AiRecommendationResponse)
 async def get_ai_recommendations(
     validated_data: GetAiRecommendationsRequest, 
-    auth: AuthContext = Depends(require_app_context),
+    auth: AuthContext = Depends(require_analyst_or_higher),
     db: Session = Depends(get_db)
 ):
     user_prompt = validated_data.user_prompt
