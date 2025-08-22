@@ -2,6 +2,8 @@ import pandas as pd
 import json
 
 from google.cloud import bigquery
+from google.api_core.exceptions import NotFound
+import re
 
 from nova_manager.core.config import GCP_PROJECT_ID, BIGQUERY_LOCATION
 
@@ -60,3 +62,17 @@ class BigQueryService:
         print(f"Creating table {table_name}")
         bq_client.create_table(table)
         print(f"Table {table_name} created")
+    
+    def create_dataset_if_not_exists(self, dataset_name: str, location: str = BIGQUERY_LOCATION):
+        # Ensure dataset ID is alphanumeric+underscores
+        parts = dataset_name.split('.')
+        project = parts[0]
+        raw_ds = parts[-1]
+        safe_ds = re.sub(r'[^a-zA-Z0-9_]', '_', raw_ds)
+        full_name = f"{project}.{safe_ds}"
+        try:
+            bq_client.get_dataset(full_name)
+        except NotFound:
+            ds = bigquery.Dataset(full_name)
+            ds.location = location
+            bq_client.create_dataset(ds)

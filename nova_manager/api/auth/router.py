@@ -32,6 +32,9 @@ from nova_manager.core.security import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     AuthContext,
 )
+from nova_manager.service.bigquery import BigQueryService
+from nova_manager.core.config import GCP_PROJECT_ID, BIGQUERY_LOCATION
+from nova_manager.core.log import logger
 
 router = APIRouter()
 
@@ -269,6 +272,17 @@ async def create_app(
         description=app_data.description
     )
     
+    # Provision BigQuery dataset for this app
+    try:
+        dataset_name = f"{GCP_PROJECT_ID}.org_{auth.organisation_id}_app_{app.pid}"
+        BigQueryService().create_dataset_if_not_exists(dataset_name, BIGQUERY_LOCATION)
+    except Exception as e:
+        logger.error(f"BigQuery dataset provisioning failed for app {app.pid}: {e}")
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to provision BigQuery dataset"
+        )
+
     # Create new tokens with the new app context
     token_data = {
         "auth_user_id": str(auth.auth_user_id),
