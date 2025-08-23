@@ -5,6 +5,7 @@ from uuid import UUID
 import uuid
 
 from nova_manager.database.session import get_db
+from nova_manager.core.log import logger
 from nova_manager.service.bigquery import BigQueryService
 
 from nova_manager.components.metrics.artefacts import EventsArtefacts
@@ -13,7 +14,6 @@ from nova_manager.components.user_experience.models import UserExperience
 from nova_manager.components.metrics.models import EventsSchema
 from nova_manager.components.users.models import Users
 from nova_manager.core.config import GCP_PROJECT_ID
-from nova_manager.core.log import logger
 
 
 class TrackEvent(TypedDict):
@@ -122,6 +122,7 @@ class EventsController(EventsArtefacts):
             raise e
 
     def track_events(self, user_id: UUID, events: list[TrackEvent]):
+        logger.info(f"EventsController.track_events: user_id={user_id}, org={self.organisation_id}, app={self.app_id}, events={events}")
         time_now = datetime.now(timezone.utc)
 
         raw_events_rows = []
@@ -144,11 +145,12 @@ class EventsController(EventsArtefacts):
                 schema.event_name: schema for schema in events_schema
             }
 
-        new_events = []
-        existing_events = []
+        new_events: list[str] = []
+        existing_events: list[str] = []
 
         for event_name in unique_event_names:
             if event_name not in events_schema_map:
+                logger.info(f"Creating BigQuery tables for new event: {event_name}")
                 self._create_event_table(event_name)
                 self._create_event_props_table(event_name)
                 events_schema_map[event_name] = {}
@@ -209,6 +211,7 @@ class EventsController(EventsArtefacts):
             event_schema["properties"].update(event_properties)
             events_schema_map[event_name] = event_schema
 
+        logger.info(f"Pushing rows to BigQuery: raw_rows={len(raw_events_rows)}, event_rows={len(event_table_rows)}, prop_rows total={{sum(len(v) for v in event_props_table_rows.values())}}")
         self._push_to_bigquery(
             raw_events_rows, event_table_rows, event_props_table_rows
         )

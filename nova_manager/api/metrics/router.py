@@ -17,6 +17,7 @@ from nova_manager.components.metrics.crud import (
 from nova_manager.components.metrics.events_controller import EventsController
 from nova_manager.components.metrics.query_builder import QueryBuilder
 from nova_manager.database.session import get_db
+from nova_manager.core.log import logger
 from nova_manager.service.bigquery import BigQueryService
 from nova_manager.queues.controller import QueueController
 from nova_manager.components.auth.dependencies import require_app_context
@@ -29,13 +30,16 @@ router = APIRouter()
 
 @router.post("/track-event/")
 async def track_event(event: TrackEventRequest):
-    QueueController().add_task(
+    logger.info(f"Received track_event request: {event.json()}")
+    # Enqueue background job
+    job_id = QueueController().add_task(
         EventsController(event.organisation_id, event.app_id).track_event,
         event.user_id,
         event.timestamp,
         event.event_name,
         event.event_data,
     )
+    logger.info(f"Enqueued track_event job: {job_id}")
 
     return {"success": True}
 

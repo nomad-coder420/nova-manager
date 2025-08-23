@@ -272,16 +272,45 @@ async def create_app(
         description=app_data.description
     )
     
-    # Provision BigQuery dataset for this app
+    # Provision BigQuery dataset and core tables for this app
+    dataset = f"{GCP_PROJECT_ID}.org_{auth.organisation_id}_app_{app.pid}"
+    bq = BigQueryService()
     try:
-        dataset_name = f"{GCP_PROJECT_ID}.org_{auth.organisation_id}_app_{app.pid}"
-        BigQueryService().create_dataset_if_not_exists(dataset_name, BIGQUERY_LOCATION)
+        # create dataset
+        bq.create_dataset_if_not_exists(dataset, BIGQUERY_LOCATION)
+        # raw events table
+        raw_schema = [
+            {"name": "event_id", "type": "STRING"},
+            {"name": "user_id", "type": "STRING"},
+            {"name": "client_ts", "type": "TIMESTAMP"},
+            {"name": "server_ts", "type": "TIMESTAMP"},
+            {"name": "event_name", "type": "STRING"},
+            {"name": "event_data", "type": "STRING"},
+        ]
+        bq.create_table_if_not_exists(f"{dataset}.raw_events", raw_schema, partition_field="client_ts", clustering_fields=["event_name", "user_id"])
+        # user profile props table
+        profile_schema = [
+            {"name": "user_id", "type": "STRING"},
+            {"name": "key", "type": "STRING"},
+            {"name": "value", "type": "STRING"},
+            {"name": "server_ts", "type": "TIMESTAMP"},
+        ]
+        bq.create_table_if_not_exists(f"{dataset}.user_profile_props", profile_schema, partition_field="server_ts", clustering_fields=["user_id", "key"])
+        # user experience table
+        ue_schema = [
+            {"name": "user_id", "type": "STRING"},
+            {"name": "experience_id", "type": "STRING"},
+            {"name": "personalisation_id", "type": "STRING"},
+            {"name": "personalisation_name", "type": "STRING"},
+            {"name": "experience_variant_id", "type": "STRING"},
+            {"name": "features", "type": "STRING"},
+            {"name": "evaluation_reason", "type": "STRING"},
+            {"name": "assigned_at", "type": "TIMESTAMP"},
+        ]
+        bq.create_table_if_not_exists(f"{dataset}.user_experience", ue_schema)
     except Exception as e:
-        logger.error(f"BigQuery dataset provisioning failed for app {app.pid}: {e}")
-        raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to provision BigQuery dataset"
-        )
+        logger.error(f"Failed to provision core BigQuery tables for app {app.pid}: {e}")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to provision BigQuery tables")
 
     # Create new tokens with the new app context
     token_data = {
