@@ -6,6 +6,7 @@ from rq.job import Job
 
 
 from nova_manager.core.config import REDIS_URL
+from nova_manager.core.log import logger
 
 
 class QueueController:
@@ -26,7 +27,9 @@ class QueueController:
 
     def add_task(self, func_name: str, *args, **kwargs) -> str:
         """Add a task and return task ID"""
+        logger.info(f"QueueController.add_task: Adding task {func_name.__name__ if callable(func_name) else func_name}")
         job = self.default_queue.enqueue(func_name, *args, **kwargs)
+        logger.info(f"QueueController.add_task: Task added with ID {job.id}")
         return job.id
 
     def get_task_status(self, job_id: str):

@@ -4,7 +4,7 @@ from typing import TypedDict
 from uuid import UUID
 import uuid
 
-from nova_manager.database.session import get_db
+from nova_manager.database.session import db_session
 from nova_manager.core.log import logger
 from nova_manager.service.bigquery import BigQueryService
 
@@ -71,20 +71,27 @@ class EventsController(EventsArtefacts):
 
     def _create_user_profile_table(self):
         user_profile_table_name = f"{GCP_PROJECT_ID}.{self._user_profile_props_table_name()}"
+        
+        logger.info(f"Creating user profile table: {user_profile_table_name}")
+        
+        user_profile_table_schema = [
+            {"name": "user_id", "type": "STRING"},
+            {"name": "key", "type": "STRING"},
+            {"name": "value", "type": "STRING"},
+            {"name": "server_ts", "type": "TIMESTAMP"},
+        ]
 
-        # user_profile_table_schema = [
-        #     {"name": "user_id", "type": "STRING"},
-        #     {"name": "key", "type": "STRING"},
-        #     {"name": "value", "type": "STRING"},
-        #     {"name": "server_ts", "type": "TIMESTAMP"},
-        # ]
-
-        # BigQueryService().create_table_if_not_exists(
-        #     user_profile_table_name,
-        #     user_profile_table_schema,
-        #     partition_field="server_ts",
-        #     clustering_fields=["user_id", "key"],
-        # )
+        try:
+            BigQueryService().create_table_if_not_exists(
+                user_profile_table_name,
+                user_profile_table_schema,
+                partition_field="server_ts",
+                clustering_fields=["user_id", "key"],
+            )
+            logger.info(f"User profile table created/confirmed: {user_profile_table_name}")
+        except Exception as e:
+            logger.error(f"Failed to create user profile table: {str(e)}")
+            raise e
 
         return user_profile_table_name
 
@@ -133,7 +140,7 @@ class EventsController(EventsArtefacts):
 
         events_schema_objs_map = {}
         events_schema_map = {}
-        with get_db() as db:
+        with db_session() as db:
             events_schema = EventsSchemaCRUD(db).get_events_schema(
                 unique_event_names, self.organisation_id, self.app_id
             )
@@ -216,7 +223,7 @@ class EventsController(EventsArtefacts):
             raw_events_rows, event_table_rows, event_props_table_rows
         )
 
-        with get_db() as db:
+        with db_session() as db:
             crud = EventsSchemaCRUD(db)
 
             to_insert = []
@@ -286,7 +293,7 @@ class EventsController(EventsArtefacts):
         # Create user profile key entries for new keys
         if user.user_profile:
             try:
-                with get_db() as db:
+                with db_session() as db:
                     user_profile_keys_crud = UserProfileKeysCRUD(db)
 
                     user_profile_keys_crud.create_user_profile_keys_if_not_exists(

@@ -35,9 +35,9 @@ async def track_event(event: TrackEventRequest):
     job_id = QueueController().add_task(
         EventsController(event.organisation_id, event.app_id).track_event,
         event.user_id,
-        event.timestamp,
         event.event_name,
         event.event_data,
+        event.timestamp,
     )
     logger.info(f"Enqueued track_event job: {job_id}")
 
