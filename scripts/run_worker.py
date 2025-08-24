@@ -9,6 +9,9 @@ import signal
 import argparse
 from rq import Worker, Queue
 from redis import from_url
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -16,6 +19,26 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from nova_manager.core.config import REDIS_URL
 from nova_manager.core.log import logger, configure_logging
 
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b'Worker healthy')
+    
+    def log_message(self, format, *args):
+        # Suppress HTTP logs to keep worker logs clean
+        return
+    
+def start_health_server(port=8080):
+    """Start a simple HTTP server for Cloud Run health checks"""
+    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.daemon = True
+    thread.start()
+    logger.info(f"Health check server started on port {port}")
+
+    
 # Handle graceful shutdown on SIGTERM
 def handle_sigterm(signum, frame):
     logger.info("Received SIGTERM signal. Shutting down worker gracefully...")
@@ -38,6 +61,9 @@ def main():
     signal.signal(signal.SIGINT, handle_sigterm)
     
     try:
+        
+        port = int(os.environ.get('PORT', 8080))
+        start_health_server(port)
         # Connect to Redis
         conn = from_url(REDIS_URL)
         logger.info(f"Connected to Redis at {REDIS_URL}")
