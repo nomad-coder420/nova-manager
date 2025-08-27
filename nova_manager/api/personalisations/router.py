@@ -262,7 +262,7 @@ async def list_personalised_experiences(
 
 
 @router.patch("/{pid}/", response_model=PersonalisationDetailedResponse)
-async def update_personalisation(
+def update_personalisation(
     pid: UUID,
     update_data: PersonalisationUpdate,
     auth: AuthContext = Depends(require_analyst_or_higher),
@@ -270,7 +270,12 @@ async def update_personalisation(
 ):
     """
     Update a personalisation. By default only new evaluations see changes.
+    If apply_to_existing=True, existing user assignments for this personalisation will be deleted,
+    causing users to be re-evaluated on their next request.
     """
+    from nova_manager.components.user_experience.models import UserExperience
+    from nova_manager.core.log import logger
+    
     crud = PersonalisationsCRUD(db)
 
     # fetch and auth
@@ -289,6 +294,17 @@ async def update_personalisation(
         updated = crud.update_personalisation(pid, update_data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    
+    # apply changes to existing user assignments if requested
+    if update_data.apply_to_existing:
+        logger.info(f"Applying personalisation changes to existing users for personalisation {pid}")
+        deleted_count = db.query(UserExperience).filter(
+            UserExperience.personalisation_id == pid,
+            UserExperience.organisation_id == personalisation.organisation_id,
+            UserExperience.app_id == personalisation.app_id
+        ).delete(synchronize_session=False)
+        db.commit()
+        logger.info(f"Deleted {deleted_count} existing assignments for personalisation {pid}")
 
     return updated
 

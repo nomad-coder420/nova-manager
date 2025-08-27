@@ -65,6 +65,9 @@ class GetUserExperienceVariantFlowAsync:
         payload: Dict[str, Any],
         experience_names: Optional[List[str]] = None,
     ) -> Dict[str, UserExperienceAssignment]:
+        logger.info(f"[DEBUG] Starting get_user_experience_variants for user_id={user_id}, org={organisation_id}, app={app_id}")
+        logger.info(f"[DEBUG] Looking for experiences: {experience_names}")
+        
         # Step 1: Check if user exists, if yes update user payload, if no create user
         user = await self._update_or_create_user(
             user_id, organisation_id, app_id, payload
@@ -79,8 +82,10 @@ class GetUserExperienceVariantFlowAsync:
         )
 
         experience_ids = [experience.pid for experience in experiences]
+        logger.info(f"[DEBUG] Found {len(experiences)} experiences with IDs: {experience_ids}")
 
         # Step 3: Load existing user experience personalisation cache
+        logger.info(f"[DEBUG] Loading cache for user {user.pid} (type: {type(user.pid)}), org: {organisation_id}, app: {app_id}")
         await self._load_experience_personalisation_cache(
             user=user,
             organisation_id=organisation_id,
@@ -100,10 +105,14 @@ class GetUserExperienceVariantFlowAsync:
 
             if experience_id in self.experience_personalisation_map:
                 user_experience = self.experience_personalisation_map[experience_id]
+                logger.info(f"[DEBUG] Using CACHED assignment for experience {experience_name} (ID: {experience_id})")
+                logger.info(f"[DEBUG] Cache details - personalisation: {user_experience.personalisation_name}, variant: {user_experience.experience_variant_id}, reason: {user_experience.evaluation_reason}")
 
                 results[experience_name] = user_experience
 
                 continue
+            
+            logger.info(f"[DEBUG] No cache found for experience {experience_name} (ID: {experience_id}) - will evaluate personalisations")
 
             experience_variant_assignment = None
 
@@ -220,6 +229,8 @@ class GetUserExperienceVariantFlowAsync:
                     features=experience_feature_variants,
                     evaluation_reason="personalisation_match",
                 )
+                logger.info(f"[DEBUG] Found matching personalisation: {personalisation.name} (ID: {personalisation.pid})")
+                logger.info(f"[DEBUG] Selected variant ID: {selected_experience_variant.pid}")
                 break
 
             if not experience_variant_assignment:
@@ -239,21 +250,28 @@ class GetUserExperienceVariantFlowAsync:
             self.experience_personalisation_map[experience_id] = (
                 experience_variant_assignment
             )
+            logger.info(f"[DEBUG] Created NEW assignment for experience {experience_name} (ID: {experience_id})")
+            logger.info(f"[DEBUG] New assignment: personalisation={experience_variant_assignment.personalisation_name}, variant={experience_variant_assignment.experience_variant_id}")
 
         # TODO: Add this in task in queue
         # Bulk upsert user experience personalisation assignments
         if new_assignments:
             try:
+                logger.info(f"[DEBUG] Saving {len(new_assignments)} new assignments to database")
                 await self.user_experience_personalisation_crud.bulk_create_user_experience_personalisations(
                     user_id=user.pid,
                     organisation_id=organisation_id,
                     app_id=app_id,
                     personalisation_assignments=new_assignments,
                 )
+                logger.info(f"[DEBUG] Successfully saved {len(new_assignments)} assignments")
             except Exception as e:
                 logger.error(
                     f"Error bulk creating user experience personalisations: {e}"
                 )
+                logger.error(f"[DEBUG] EXCEPTION DETAILS: {str(e)}")
+        else:
+            logger.info(f"[DEBUG] No new assignments to save (all from cache)")
 
         return results
 
@@ -334,6 +352,8 @@ class GetUserExperienceVariantFlowAsync:
             experience_ids=experience_ids,
         )
 
+        logger.info(f"[DEBUG] Found {len(existing_assignments)} existing assignments in DB for user {user.pid}")
+        
         # Populate cache (single loop)
         for assignment in existing_assignments:
             cache_data = UserExperienceAssignment(
@@ -345,6 +365,7 @@ class GetUserExperienceVariantFlowAsync:
                 evaluation_reason=assignment.evaluation_reason,
             )
             self.experience_personalisation_map[assignment.experience_id] = cache_data
+            logger.info(f"[DEBUG] Loaded cached assignment for experience {assignment.experience_id}, personalisation: {assignment.personalisation_name}, variant: {assignment.experience_variant_id}")
 
     def _get_experience_default_features(
         self, experience: Experiences
