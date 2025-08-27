@@ -26,6 +26,9 @@ from nova_manager.components.metrics.crud import (
     PersonalisationMetricsCRUD,
 )
 from uuid import UUID
+from nova_manager.core.log import logger
+from nova_manager.queues.controller import QueueController
+from nova_manager.tasks.user_experience_tasks import delete_personalisation_assignments
 
 
 router = APIRouter()
@@ -274,7 +277,6 @@ def update_personalisation(
     causing users to be re-evaluated on their next request.
     """
     from nova_manager.components.user_experience.models import UserExperience
-    from nova_manager.core.log import logger
     
     crud = PersonalisationsCRUD(db)
 
@@ -335,4 +337,65 @@ async def get_personalisation(
     if personalisation.app_id != auth.app_id:
         raise HTTPException(status_code=403, detail="Not in your app")
     
+    return personalisation
+
+
+@router.patch("/{pid}/disable/", response_model=PersonalisationDetailedResponse)
+async def disable_personalisation(
+    pid: UUID,
+    auth: AuthContext = Depends(require_analyst_or_higher),
+    db: Session = Depends(get_db),
+):
+    """
+    Disable a personalisation and remove existing user assignments.
+    """
+    crud = PersonalisationsCRUD(db)
+    # fetch and auth
+    personalisation = crud.get_by_pid(pid)
+    if not personalisation:
+        raise HTTPException(status_code=404, detail="Personalisation not found")
+    if str(personalisation.organisation_id) != str(auth.organisation_id):
+        raise HTTPException(status_code=403, detail="Not in your organization")
+    if personalisation.app_id != auth.app_id:
+        raise HTTPException(status_code=403, detail="Not in your app")
+    # disable
+    personalisation.is_active = False
+    db.add(personalisation)
+    db.commit()
+    db.refresh(personalisation)
+    logger.info(f"Personalisation {pid} disabled")
+    # enqueue deletion of existing assignments
+    job_id = QueueController().add_task(
+        delete_personalisation_assignments,
+        pid,
+        str(personalisation.organisation_id),
+        personalisation.app_id,
+    )
+    logger.info(f"Enqueued background job '{job_id}' to delete assignments for disabled personalisation {pid}")
+    return personalisation
+
+@router.patch("/{pid}/enable/", response_model=PersonalisationDetailedResponse)
+async def enable_personalisation(
+    pid: UUID,
+    auth: AuthContext = Depends(require_analyst_or_higher),
+    db: Session = Depends(get_db),
+):
+    """
+    Enable a previously disabled personalisation.
+    """
+    crud = PersonalisationsCRUD(db)
+    # fetch and auth
+    personalisation = crud.get_by_pid(pid)
+    if not personalisation:
+        raise HTTPException(status_code=404, detail="Personalisation not found")
+    if str(personalisation.organisation_id) != str(auth.organisation_id):
+        raise HTTPException(status_code=403, detail="Not in your organization")
+    if personalisation.app_id != auth.app_id:
+        raise HTTPException(status_code=403, detail="Not in your app")
+    # enable
+    personalisation.is_active = True
+    db.add(personalisation)
+    db.commit()
+    db.refresh(personalisation)
+    logger.info(f"Personalisation {pid} enabled")
     return personalisation

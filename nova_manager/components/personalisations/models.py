@@ -37,6 +37,10 @@ class Personalisations(BaseOrganisationModel):
     rollout_percentage: Mapped[int] = mapped_column(
         Integer, nullable=False, default=100
     )
+    # Active flag for enabling/disabling personalisation
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     last_updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

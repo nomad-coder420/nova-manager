@@ -139,6 +139,10 @@ class GetUserExperienceVariantFlowAsync:
                 continue
 
             for personalisation in personalisations:
+                # skip disabled personalisations
+                if not getattr(personalisation, 'is_active', True):
+                    logger.info(f"Skipping disabled personalisation {personalisation.pid} for experience {experience_id}")
+                    continue
                 rollout_percentage = personalisation.rollout_percentage
 
                 context_id = f"{experience_id}:{personalisation.pid}"
