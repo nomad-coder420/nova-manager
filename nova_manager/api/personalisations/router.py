@@ -297,14 +297,17 @@ def update_personalisation(
     
     # apply changes to existing user assignments if requested
     if update_data.apply_to_existing:
-        logger.info(f"Applying personalisation changes to existing users for personalisation {pid}")
-        deleted_count = db.query(UserExperience).filter(
-            UserExperience.personalisation_id == pid,
-            UserExperience.organisation_id == personalisation.organisation_id,
-            UserExperience.app_id == personalisation.app_id
-        ).delete(synchronize_session=False)
-        db.commit()
-        logger.info(f"Deleted {deleted_count} existing assignments for personalisation {pid}")
+        logger.info(f"Enqueuing deletion of existing assignments for personalisation {pid}")
+        from nova_manager.queues.controller import QueueController
+        from nova_manager.tasks.user_experience_tasks import delete_personalisation_assignments
+
+        job_id = QueueController().add_task(
+            delete_personalisation_assignments,
+            pid,
+            str(personalisation.organisation_id),
+            personalisation.app_id,
+        )
+        logger.info(f"Enqueued background job '{job_id}' to delete existing assignments for personalisation {pid}")
 
     return updated
 
