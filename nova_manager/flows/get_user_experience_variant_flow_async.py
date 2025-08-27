@@ -358,8 +358,22 @@ class GetUserExperienceVariantFlowAsync:
 
         logger.info(f"[DEBUG] Found {len(existing_assignments)} existing assignments in DB for user {user.pid}")
         
+        # Define evaluation reasons that should be invalidated when personalisations are re-enabled
+        # These are the reasons assigned when no personalisation match was found
+        invalid_evaluation_reasons = [
+            "default_experience",
+            "no_personalisation_match_error", 
+            "no_experience_assignment_error"
+        ]
+        
         # Populate cache (single loop)
         for assignment in existing_assignments:
+            # Skip cache entries with invalidation reasons - these should be re-evaluated
+            # when personalisations are re-enabled
+            if assignment.evaluation_reason in invalid_evaluation_reasons:
+                logger.info(f"[DEBUG] Skipping invalid cached assignment with reason '{assignment.evaluation_reason}' for experience {assignment.experience_id}")
+                continue
+                
             cache_data = UserExperienceAssignment(
                 experience_id=assignment.experience_id,
                 personalisation_id=assignment.personalisation_id,
