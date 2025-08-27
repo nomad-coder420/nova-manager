@@ -44,6 +44,7 @@ class PersonalisationsCRUD(BaseCRUD):
             priority=priority,
             rule_config=rule_config,
             rollout_percentage=rollout_percentage,
+            is_active=True,  # new personalisations enabled by default
         )
 
         self.db.add(personalisation)

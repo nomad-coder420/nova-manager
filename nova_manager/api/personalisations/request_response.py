@@ -47,6 +47,7 @@ class PersonalisationListResponse(BaseModel):
     name: str
     description: str
     experience_id: UUIDType
+    is_active: bool
     experience: ExperienceResponse
 
 class ExperienceFeatureVariantResponse(BaseModel):
@@ -77,6 +78,7 @@ class PersonalisationDetailedResponse(BaseModel):
     priority: int
     rollout_percentage: int
     rule_config: dict
+    is_active: bool
     experience_variants: List[PersonalisationExperienceVariantResponse]
     metrics: List[PersonalisationMetric] = []
 
