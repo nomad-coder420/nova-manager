@@ -269,7 +269,7 @@ class PersonalisationsCRUD(BaseCRUD):
                 if name not in new_variant_names:
                     self.db.delete(association)
         
-        # Handle metrics if provided
+    # Handle metrics if provided
         if update_dto.selected_metrics is not None:
             metrics_crud = PersonalisationMetricsCRUD(self.db)
             
@@ -282,11 +282,15 @@ class PersonalisationsCRUD(BaseCRUD):
                     "personalisation_id": personalisation.pid,
                     "metric_id": metric_id
                 })
+        # If requested, mark existing assignments to be re-evaluated
+        if getattr(update_dto, 'apply_to_existing', False):
+            personalisation.reassign = True
 
+        # Persist updates
         self.db.add(personalisation)
         self.db.commit()
         self.db.refresh(personalisation)
-        
+
         return personalisation
 
     def get_detailed_personalisation(

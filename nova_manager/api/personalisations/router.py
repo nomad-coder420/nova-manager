@@ -28,7 +28,7 @@ from nova_manager.components.metrics.crud import (
 from uuid import UUID
 from nova_manager.core.log import logger
 from nova_manager.queues.controller import QueueController
-from nova_manager.tasks.user_experience_tasks import delete_personalisation_assignments
+# (deleted unused delete_personalisation_assignments import)
 
 
 router = APIRouter()
@@ -273,8 +273,7 @@ def update_personalisation(
 ):
     """
     Update a personalisation. By default only new evaluations see changes.
-    If apply_to_existing=True, existing user assignments for this personalisation will be deleted,
-    causing users to be re-evaluated on their next request.
+    If apply_to_existing=True, existing user assignments for this personalisation will be re-assigned on next request.
     """
     from nova_manager.components.user_experience.models import UserExperience
     
@@ -297,19 +296,13 @@ def update_personalisation(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     
-    # apply changes to existing user assignments if requested
+    # mark for re-assignment if requested
     if update_data.apply_to_existing:
-        logger.info(f"Enqueuing deletion of existing assignments for personalisation {pid}")
-        from nova_manager.queues.controller import QueueController
-        from nova_manager.tasks.user_experience_tasks import delete_personalisation_assignments
-
-        job_id = QueueController().add_task(
-            delete_personalisation_assignments,
-            pid,
-            str(personalisation.organisation_id),
-            personalisation.app_id,
-        )
-        logger.info(f"Enqueued background job '{job_id}' to delete existing assignments for personalisation {pid}")
+        logger.info(f"Marking personalisation {pid} for re-assignment")
+        updated.reassign = True
+        db.add(updated)
+        db.commit()
+        db.refresh(updated)
 
     return updated
 
@@ -364,14 +357,8 @@ async def disable_personalisation(
     db.commit()
     db.refresh(personalisation)
     logger.info(f"Personalisation {pid} disabled")
-    # enqueue deletion of existing assignments
-    job_id = QueueController().add_task(
-        delete_personalisation_assignments,
-        pid,
-        str(personalisation.organisation_id),
-        personalisation.app_id,
-    )
-    logger.info(f"Enqueued background job '{job_id}' to delete assignments for disabled personalisation {pid}")
+    # disable and leave existing assignments; they'll be re-evaluated on next request
+    logger.info(f"Personalisation {pid} disabled; existing assignments will be re-evaluated")
     return personalisation
 
 @router.patch("/{pid}/enable/", response_model=PersonalisationDetailedResponse)
