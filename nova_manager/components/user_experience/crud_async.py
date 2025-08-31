@@ -68,47 +68,6 @@ class UserExperienceAsyncCRUD:
 
         return assignments
 
-    async def delete_by_personalisation_id(
-        self,
-        personalisation_id: UUIDType,
-        organisation_id: str,
-        app_id: str,
-    ) -> int:
-        """
-        Delete all user experience assignments for a specific personalisation.
-        Used when applying personalisation changes to existing users.
-        
-        Args:
-            personalisation_id: The personalisation ID to delete assignments for
-            organisation_id: Organisation scope
-            app_id: App scope
-            
-        Returns:
-            Number of deleted records
-        """
-        from sqlalchemy import delete
-        
-        logger.info(f"[DEBUG-DB] Deleting assignments for personalisation {personalisation_id}")
-        
-        stmt = delete(UserExperience).where(
-            UserExperience.personalisation_id == personalisation_id,
-            UserExperience.organisation_id == organisation_id,
-            UserExperience.app_id == app_id
-        )
-        
-        try:
-            result = await self.db.execute(stmt)
-            await self.db.commit()
-            deleted_count = result.rowcount
-            logger.info(f"[DEBUG-DB] Successfully deleted {deleted_count} user assignments for personalisation {personalisation_id}")
-            return deleted_count
-        except Exception as e:
-            logger.error(f"[DEBUG-DB] Error deleting assignments for personalisation {personalisation_id}: {str(e)}")
-            import traceback
-            logger.error(f"[DEBUG-DB] Traceback: {traceback.format_exc()}")
-            await self.db.rollback()
-            raise
-    
     async def bulk_create_user_experience_personalisations(
         self,
         user_id: UUIDType,

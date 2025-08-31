@@ -28,11 +28,8 @@ from nova_manager.components.metrics.crud import (
 from uuid import UUID
 from nova_manager.core.log import logger
 from nova_manager.queues.controller import QueueController
-# (deleted unused delete_personalisation_assignments import)
-
 
 router = APIRouter()
-
 
 # Personalisation endpoints
 @router.post("/create-personalisation/", response_model=PersonalisationResponse)
