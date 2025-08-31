@@ -3,6 +3,7 @@ from uuid import UUID as UUIDType
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_, asc, desc
 from nova_manager.api.personalisations.request_response import PersonalisationUpdate
+from datetime import datetime, timezone
 
 from nova_manager.components.experiences.models import ExperienceVariants
 from nova_manager.core.base_crud import BaseCRUD
@@ -285,6 +286,9 @@ class PersonalisationsCRUD(BaseCRUD):
         # If requested, mark existing assignments to be re-evaluated
         if getattr(update_dto, 'apply_to_existing', False):
             personalisation.reassign = True
+
+        # bump last_updated_at when variants or metrics changed
+        personalisation.last_updated_at = datetime.now(timezone.utc)
 
         # Persist updates
         self.db.add(personalisation)
