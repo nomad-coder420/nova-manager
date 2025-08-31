@@ -351,15 +351,13 @@ async def disable_personalisation(
         raise HTTPException(status_code=403, detail="Not in your organization")
     if personalisation.app_id != auth.app_id:
         raise HTTPException(status_code=403, detail="Not in your app")
-    # disable
-    personalisation.is_active = False
-    db.add(personalisation)
-    db.commit()
-    db.refresh(personalisation)
+    # disable using CRUD
+    updated = crud.disable_personalisation(pid)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Personalisation not found")
     logger.info(f"Personalisation {pid} disabled")
-    # disable and leave existing assignments; they'll be re-evaluated on next request
     logger.info(f"Personalisation {pid} disabled; existing assignments will be re-evaluated")
-    return personalisation
+    return updated
 
 @router.patch("/{pid}/enable/", response_model=PersonalisationDetailedResponse)
 async def enable_personalisation(
@@ -379,10 +377,9 @@ async def enable_personalisation(
         raise HTTPException(status_code=403, detail="Not in your organization")
     if personalisation.app_id != auth.app_id:
         raise HTTPException(status_code=403, detail="Not in your app")
-    # enable
-    personalisation.is_active = True
-    db.add(personalisation)
-    db.commit()
-    db.refresh(personalisation)
+    # enable using CRUD
+    updated = crud.enable_personalisation(pid)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Personalisation not found")
     logger.info(f"Personalisation {pid} enabled")
-    return personalisation
+    return updated

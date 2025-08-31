@@ -313,7 +313,29 @@ class PersonalisationsCRUD(BaseCRUD):
             )
             .filter(Personalisations.pid == pid)
             .first()
-    )
+        )
+
+    def disable_personalisation(self, pid: UUIDType) -> Optional[Personalisations]:
+        """Disable a personalisation by pid"""
+        personalisation = self.get_by_pid(pid)
+        if not personalisation:
+            return None
+        personalisation.is_active = False
+        self.db.add(personalisation)
+        self.db.commit()
+        self.db.refresh(personalisation)
+        return personalisation
+
+    def enable_personalisation(self, pid: UUIDType) -> Optional[Personalisations]:
+        """Enable a personalisation by pid"""
+        personalisation = self.get_by_pid(pid)
+        if not personalisation:
+            return None
+        personalisation.is_active = True
+        self.db.add(personalisation)
+        self.db.commit()
+        self.db.refresh(personalisation)
+        return personalisation
 
 
 class PersonalisationExperienceVariantsCRUD(BaseCRUD):
