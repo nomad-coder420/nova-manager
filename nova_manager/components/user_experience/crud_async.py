@@ -2,7 +2,7 @@ from typing import List
 from uuid import UUID as UUIDType
 from nova_manager.components.user_experience.schemas import UserExperienceAssignment
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, insert
+from sqlalchemy import select, insert, func
 from sqlalchemy.orm import selectinload
 from nova_manager.core.log import logger
 
@@ -24,28 +24,48 @@ class UserExperienceAsyncCRUD:
     ) -> List[UserExperience]:
         logger.info(f"[DEBUG-DB] Querying for user experiences. User ID: {user_id} (type: {type(user_id)})")
         logger.info(f"[DEBUG-DB] Organisation ID: {organisation_id}, App ID: {app_id}")
-        
-        stmt = select(UserExperience).where(
+
+        # Build base query with filters
+        base_filters = [
             UserExperience.user_id == user_id,
             UserExperience.organisation_id == organisation_id,
             UserExperience.app_id == app_id,
-        )
-
+        ]
         if experience_ids:
             logger.info(f"[DEBUG-DB] Filtering by experience IDs: {experience_ids}")
-            stmt = stmt.where(
-                UserExperience.experience_id.in_(experience_ids),
-            )
+            base_filters.append(UserExperience.experience_id.in_(experience_ids))
 
-        stmt = stmt.options(selectinload(UserExperience.personalisation))
+        # Use window function to get the latest assignment per experience
+        rn = func.row_number().over(
+            partition_by=UserExperience.experience_id,
+            order_by=UserExperience.assigned_at.desc(),
+        ).label("rn")
+
+        # Subquery to get latest IDs
+        latest_per_experience_subq = (
+            select(UserExperience.pid, rn)
+            .where(*base_filters)
+            .subquery()
+        )
+
+        latest_ids_stmt = select(latest_per_experience_subq.c.pid).where(
+            latest_per_experience_subq.c.rn == 1
+        )
+
+        # Main query to get the assignments with relationships
+        stmt = (
+            select(UserExperience)
+            .where(UserExperience.pid.in_(latest_ids_stmt))
+            .options(selectinload(UserExperience.personalisation))
+        )
 
         result = await self.db.execute(stmt)
         assignments = list(result.scalars().all())
-        
-        logger.info(f"[DEBUG-DB] Found {len(assignments)} existing assignments for user {user_id}")
+
+        logger.info(f"[DEBUG-DB] Found {len(assignments)} latest assignments for user {user_id}")
         for assignment in assignments:
-            logger.info(f"[DEBUG-DB] Assignment: experience={assignment.experience_id}, personalisation={assignment.personalisation_id}, variant={assignment.experience_variant_id}")
-        
+            logger.info(f"[DEBUG-DB] Latest assignment: experience={assignment.experience_id}, personalisation={assignment.personalisation_id}, variant={assignment.experience_variant_id}, assigned_at={assignment.assigned_at}")
+
         return assignments
 
     async def delete_by_personalisation_id(

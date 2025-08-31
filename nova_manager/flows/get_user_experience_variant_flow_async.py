@@ -103,52 +103,83 @@ class GetUserExperienceVariantFlowAsync:
             experience_id = experience.pid
             experience_name = experience.name
 
-            if experience_id in self.experience_personalisation_map:
-                user_experience = self.experience_personalisation_map[experience_id]
-                logger.info(f"[DEBUG] Using CACHED assignment for experience {experience_name} (ID: {experience_id})")
-                logger.info(f"[DEBUG] Cache details - personalisation: {user_experience.personalisation_name}, variant: {user_experience.experience_variant_id}, reason: {user_experience.evaluation_reason}")
+            # Determine if we have a cached assignment
+            cache_hit = experience_id in self.experience_personalisation_map
+            user_experience = self.experience_personalisation_map.get(experience_id) if cache_hit else None
 
-                results[experience_name] = user_experience
-
-                continue
-            
-            logger.info(f"[DEBUG] No cache found for experience {experience_name} (ID: {experience_id}) - will evaluate personalisations")
+            if cache_hit:
+                logger.info(f"[DEBUG] Cache HIT for experience {experience_name} (ID: {experience_id}) - will evaluate personalisations anyway")
+                logger.info(f"[DEBUG] Cached user experience - personalisation: {user_experience.personalisation_name}, variant: {user_experience.experience_variant_id}, reason: {user_experience.evaluation_reason}")
+            else:
+                logger.info(f"[DEBUG] No cache found for experience {experience_name} (ID: {experience_id}) - will evaluate personalisations")
 
             experience_variant_assignment = None
 
             personalisations = experience.personalisations
 
             if not personalisations:
-                features = self._get_experience_default_features(experience)
+                logger.info(f"[DEBUG] No personalisations for experience {experience_name} (ID: {experience_id})")
+                if cache_hit:
+                    logger.info(f"[DEBUG] Using cached assignment for experience {experience_name} with no personalisations")
+                    experience_variant_assignment = user_experience
+                else:
+                    logger.info(f"[DEBUG] Using default features for experience {experience_name} with no personalisations")
+                    features = self._get_experience_default_features(experience)
 
-                experience_variant_assignment = UserExperienceAssignment(
-                    experience_id=experience_id,
-                    personalisation_id=None,
-                    personalisation_name=None,
-                    experience_variant_id=None,
-                    features=features,
-                    evaluation_reason="default_experience",
-                )
+                    experience_variant_assignment = UserExperienceAssignment(
+                        experience_id=experience_id,
+                        personalisation_id=None,
+                        personalisation_name=None,
+                        experience_variant_id=None,
+                        features=features,
+                        evaluation_reason="default_experience",
+                    )
 
                 results[experience_name] = experience_variant_assignment
-                new_assignments.append(experience_variant_assignment)
-                self.experience_personalisation_map[experience_id] = (
-                    experience_variant_assignment
-                )
 
+                # Only add to new_assignments if this is a new assignment (not from cache)
+                if not (cache_hit and experience_variant_assignment is user_experience):
+                    new_assignments.append(experience_variant_assignment)
+
+                # Always update the in-memory cache
+                self.experience_personalisation_map[experience_id] = experience_variant_assignment
                 continue
+
+            # Flag to track if we found an applicable personalisation
+            found_applicable = False
 
             for personalisation in personalisations:
                 # skip disabled personalisations
                 if not getattr(personalisation, 'is_active', True):
                     logger.info(f"Skipping disabled personalisation {personalisation.pid} for experience {experience_id}")
                     continue
+
+                # Early gating: if we have a cache hit and personalisation doesn't have reassign=True, skip evaluation
+                if cache_hit and not getattr(personalisation, 'reassign', False):
+                    logger.info(f"[DEBUG] Skipping personalisation {personalisation.name} (reassign=False) due to cache hit for experience {experience_id}")
+                    continue
+
+                if cache_hit:
+                    user_experience = self.experience_personalisation_map.get(experience_id)
+                    user_experience_assignment_time = user_experience.assigned_at if user_experience else None
+                    personalisation_modified_time = getattr(personalisation, 'modified_at', None)
+                    # If the cached assignment is newer than the personalisation's last modification,skip reassignment to avoid unnecessary updates.
+                    if user_experience_assignment_time and personalisation_modified_time and user_experience.personalisation_id == personalisation.pid:
+                        if user_experience_assignment_time > personalisation_modified_time:
+                            # The cached user experience is newer
+                            logger.info(f"[DEBUG] Skipping personalisation {personalisation.name} due to newer cached assignment for experience {experience_id}. {user_experience_assignment_time} > {personalisation_modified_time}")
+                            continue
+
+
+                logger.info(f"[DEBUG] Evaluating personalisation {personalisation.name} for experience {experience_id} (reassign={getattr(personalisation, 'reassign', False)})")
+
                 rollout_percentage = personalisation.rollout_percentage
 
                 context_id = f"{experience_id}:{personalisation.pid}"
                 if not self.rule_evaluator.evaluate_target_percentage(
                     str(user.pid), rollout_percentage, context_id
                 ):
+                    logger.info(f"[DEBUG] Personalisation {personalisation.name} failed rollout percentage check")
                     continue
 
                 rule_config = personalisation.rule_config
@@ -156,7 +187,10 @@ class GetUserExperienceVariantFlowAsync:
                 if not self.rule_evaluator.evaluate_rule(
                     rule_config, user.user_profile
                 ):
+                    logger.info(f"[DEBUG] Personalisation {personalisation.name} failed rule evaluation")
                     continue
+
+                logger.info(f"[DEBUG] Personalisation {personalisation.name} passed evaluation")
 
                 experience_variants = personalisation.experience_variants
 
@@ -172,18 +206,10 @@ class GetUserExperienceVariantFlowAsync:
 
                 # If no variant found, skip this personalisation
                 if not selected_experience_variant:
-                    features = self._get_experience_default_features(experience)
-
-                    experience_variant_assignment = UserExperienceAssignment(
-                        experience_id=experience_id,
-                        personalisation_id=None,
-                        personalisation_name=None,
-                        experience_variant_id=None,
-                        features=features,
-                        evaluation_reason="no_personalisation_match_error",
-                    )
-
+                    logger.info(f"[DEBUG] No variant found for personalisation {personalisation.name}")
                     continue
+
+                logger.info(f"[DEBUG] Selected variant {selected_experience_variant.pid} for personalisation {personalisation.name}")
 
                 selected_experience_variant_features_map = {
                     feature_variant.experience_feature_id: feature_variant
@@ -233,29 +259,47 @@ class GetUserExperienceVariantFlowAsync:
                     features=experience_feature_variants,
                     evaluation_reason="personalisation_match",
                 )
-                logger.info(f"[DEBUG] Found matching personalisation: {personalisation.name} (ID: {personalisation.pid})")
-                logger.info(f"[DEBUG] Selected variant ID: {selected_experience_variant.pid}")
-                break
 
-            if not experience_variant_assignment:
-                features = self._get_experience_default_features(experience)
+                # Apply the assignment based on reassign flag and cache status
+                if personalisation.reassign or not cache_hit:
+                    found_applicable = True
+                    logger.info(f"[DEBUG] Applying personalisation {personalisation.name} (reassign={personalisation.reassign}, cache_hit={cache_hit})")
+                    break
+                else:
+                    logger.info(f"[DEBUG] Personalisation {personalisation.name} passed but not applied due to cache hit and reassign=False")
+                    # Continue to next personalisation to look for one with reassign=True
 
-                experience_variant_assignment = UserExperienceAssignment(
-                    experience_id=experience_id,
-                    personalisation_id=None,
-                    personalisation_name=None,
-                    experience_variant_id=None,
-                    features=features,
-                    evaluation_reason="no_experience_assignment_error",
-                )
+            # After evaluating all personalisations
+            if not found_applicable:
+                if cache_hit:
+                    # Use the cached assignment
+                    logger.info(f"[DEBUG] No applicable personalisation found, using cached assignment for experience {experience_name}")
+                    experience_variant_assignment = user_experience
+                else:
+                    # Fall back to default
+                    logger.info(f"[DEBUG] No applicable personalisation found and no cache, using default for experience {experience_name}")
+                    features = self._get_experience_default_features(experience)
 
+                    experience_variant_assignment = UserExperienceAssignment(
+                        experience_id=experience_id,
+                        personalisation_id=None,
+                        personalisation_name=None,
+                        experience_variant_id=None,
+                        features=features,
+                        evaluation_reason="no_experience_assignment_error",
+                    )
+
+            # Add to results
             results[experience_name] = experience_variant_assignment
-            new_assignments.append(experience_variant_assignment)
-            self.experience_personalisation_map[experience_id] = (
-                experience_variant_assignment
-            )
-            logger.info(f"[DEBUG] Created NEW assignment for experience {experience_name} (ID: {experience_id})")
-            logger.info(f"[DEBUG] New assignment: personalisation={experience_variant_assignment.personalisation_name}, variant={experience_variant_assignment.experience_variant_id}")
+
+            # Only add to new_assignments if this is a new assignment (not from cache)
+            if not (cache_hit and experience_variant_assignment is user_experience):
+                new_assignments.append(experience_variant_assignment)
+                logger.info(f"[DEBUG] Added NEW assignment for experience {experience_name} (ID: {experience_id})")
+                logger.info(f"[DEBUG] New assignment: personalisation={experience_variant_assignment.personalisation_name}, variant={experience_variant_assignment.experience_variant_id}")
+
+            # Always update the in-memory cache
+            self.experience_personalisation_map[experience_id] = experience_variant_assignment
 
         # TODO: Add this in task in queue
         # Bulk upsert user experience personalisation assignments
@@ -381,6 +425,7 @@ class GetUserExperienceVariantFlowAsync:
                 experience_variant_id=assignment.experience_variant_id,
                 features=assignment.features,
                 evaluation_reason=assignment.evaluation_reason,
+                assigned_at=assignment.assigned_at,  # Include the assigned_at timestamp
             )
             self.experience_personalisation_map[assignment.experience_id] = cache_data
             logger.info(f"[DEBUG] Loaded cached assignment for experience {assignment.experience_id}, personalisation: {assignment.personalisation_name}, variant: {assignment.experience_variant_id}")
