@@ -4,8 +4,21 @@ from typing import List, Optional
 
 from nova_manager.core.security import verify_token, decode_token_ignore_expiry, create_auth_context, AuthContext
 from nova_manager.core.enums import UserRole
+
+from fastapi import Header
+from typing import TypedDict
+from nova_manager.database.session import get_db
+from sqlalchemy.orm import Session
+from nova_manager.components.apikeys.crud import APIKeysCRUD
 # OAuth2 scheme for extracting Bearer tokens
 security = HTTPBearer()
+
+
+
+class ClientAuthContext(TypedDict):
+    organisation_id: str
+    app_id: str
+    api_key_id: str
 
 
 async def get_current_auth(
@@ -121,3 +134,25 @@ async def require_technical_roles(auth: AuthContext = Depends(require_roles(User
 async def require_analyst_or_higher(auth: AuthContext = Depends(require_roles([UserRole.OWNER, UserRole.ADMIN, UserRole.ANALYST, UserRole.DEVELOPER]))) -> AuthContext:
     """Require analyst or higher roles"""
     return auth
+
+
+def get_api_key_from_header(x_api_key: str = Header(None)) -> str:
+    """Extract API key from X-API-Key header"""
+    if not x_api_key:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-API-Key header")
+    return x_api_key
+
+
+def require_api_key(x_api_key: str = Depends(get_api_key_from_header), db: Session = Depends(get_db)) -> ClientAuthContext:
+    """Validate API key and return organisation/app context for client SDK requests"""
+    apikeys_crud = APIKeysCRUD(db)
+    api_key = apikeys_crud.get_by_key(x_api_key)
+
+    if not api_key or not api_key.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
+    return ClientAuthContext(
+        organisation_id=str(api_key.organisation_id),
+        app_id=str(api_key.app_id),
+        api_key_id=str(api_key.pid),
+    )
