@@ -246,14 +246,17 @@ class QueryBuilder(EventsArtefacts):
             }
         )
 
-        with_expression = f"WITH\n num AS (\n{numerator_expression}\n),\n den AS (\n{denominator_expression}\n)"
+        # Build the WITH clause using the original count alias 'value'
+        with_expression = (
+            f"WITH\n num AS (\n{numerator_expression}\n),\n den AS (\n{denominator_expression}\n)"
+        )
 
         # Extract keys from group_by
         group_by_keys = [item["key"] for item in group_by]
         
         select_parts = [
             "num.period AS period",
-            f"SAFE_DIVIDE(num.num_val, den.den_val) AS value",
+            f"SAFE_DIVIDE(num.value, den.value) AS value",
         ] + [f"num.{c}" for c in group_by_keys]
         select_expression = "SELECT " + ",\n    ".join(select_parts)
 
