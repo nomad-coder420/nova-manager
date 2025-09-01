@@ -20,7 +20,7 @@ from nova_manager.database.session import get_db
 from nova_manager.core.log import logger
 from nova_manager.service.bigquery import BigQueryService
 from nova_manager.queues.controller import QueueController
-from nova_manager.components.auth.dependencies import require_app_context
+from nova_manager.components.auth.dependencies import require_app_context, require_api_key, ClientAuthContext
 from nova_manager.core.security import AuthContext
 from sqlalchemy.orm import Session
 
@@ -29,11 +29,11 @@ router = APIRouter()
 
 
 @router.post("/track-event/")
-async def track_event(event: TrackEventRequest):
-    logger.info(f"Received track_event request: {event.json()}")
-    # Enqueue background job
+async def track_event(event: TrackEventRequest, auth: ClientAuthContext = Depends(require_api_key)):
+    logger.info(f"Received track_event request: user_id={event.user_id}, via api_key={auth['api_key_id']}")
+    # Enqueue background job using organisation/app from API key
     job_id = QueueController().add_task(
-        EventsController(event.organisation_id, event.app_id).track_event,
+        EventsController(auth["organisation_id"], auth["app_id"]).track_event,
         event.user_id,
         event.event_name,
         event.event_data,
