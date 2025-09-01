@@ -194,8 +194,9 @@ class QueryBuilder(EventsArtefacts):
             event_name, group_by
         )
 
+        # Combine WHERE joins, group property joins, and the property join into one list
         join_expression = "\n".join(
-            where_joins + group_props_join_expression + property_join_expression
+            where_joins + group_props_join_expression + [property_join_expression]
         )
 
         group_by_keys = [item["key"] for item in group_by]
