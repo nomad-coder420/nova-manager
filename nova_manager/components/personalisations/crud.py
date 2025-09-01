@@ -17,6 +17,8 @@ from nova_manager.components.experiences.crud import (
     ExperienceVariantsCRUD,
     ExperienceFeatureVariantsCRUD,
 )
+from nova_manager.components.history.crud import HistoryCRUD
+
 
 
 class PersonalisationsCRUD(BaseCRUD):
@@ -158,10 +160,10 @@ class PersonalisationsCRUD(BaseCRUD):
         )
 
     def update_personalisation(
-    self,
-    pid: UUIDType,
-    update_dto: PersonalisationUpdate,
-) -> Personalisations:
+        self,
+        pid: UUIDType,
+        update_dto: PersonalisationUpdate,
+    ) -> Personalisations:
         """
         Update an existing personalisation.
         Handles updating, adding, or removing experience variants.
@@ -171,6 +173,23 @@ class PersonalisationsCRUD(BaseCRUD):
         if not personalisation:
             return None
             
+        # Log history
+        history_crud = HistoryCRUD(self.db)
+        history_crud.create_entry(
+            action="EDIT",
+            object_type="personalisation",
+            object_id=personalisation.pid,
+            data={
+                "name": personalisation.name,
+                "description": personalisation.description,
+                "rule_config": personalisation.rule_config,
+                "rollout_percentage": personalisation.rollout_percentage,
+                "is_active": personalisation.is_active,
+                "priority": personalisation.priority,
+                "reassign": personalisation.reassign,
+            },
+        )
+        
         # Update basic fields if provided
         if update_dto.name is not None:
             personalisation.name = update_dto.name
@@ -205,6 +224,17 @@ class PersonalisationsCRUD(BaseCRUD):
                 )
                 
                 if existing_variant:
+                    # Log existing variant state before edit
+                    history_crud.create_entry(
+                        action="EDIT",
+                        object_type="experience_variant",
+                        object_id=existing_variant.pid,
+                        data={
+                            "name": existing_variant.name,
+                            "description": existing_variant.description,
+                            "is_default": existing_variant.is_default,
+                        },
+                    )
                     # Update existing variant
                     existing_variant.description = variant_data.experience_variant.description
                     existing_variant.is_default = variant_data.experience_variant.is_default
@@ -217,6 +247,17 @@ class PersonalisationsCRUD(BaseCRUD):
                     )
                     
                     if existing_association:
+                        # Log existing association state before edit
+                        history_crud.create_entry(
+                            action="EDIT",
+                            object_type="personalisation_experience_variant",
+                            object_id=existing_association.pid,
+                            data={
+                                "personalisation_id": existing_association.personalisation_id,
+                                "experience_variant_id": existing_association.experience_variant_id,
+                                "target_percentage": existing_association.target_percentage,
+                            },
+                        )
                         existing_association.target_percentage = variant_data.target_percentage
                     else:
                         # Create new association for existing variant
@@ -228,6 +269,13 @@ class PersonalisationsCRUD(BaseCRUD):
                         
                     # Handle feature variants
                     if variant_data.experience_variant.feature_variants:
+                        # Log deletion of feature variants before bulk delete
+                        history_crud.create_entry(
+                            action="DELETE",
+                            object_type="experience_feature_variants",
+                            object_id=existing_variant.pid,
+                            data={"variant_id": existing_variant.pid},
+                        )
                         # Remove existing feature variants
                         experience_feature_variants_crud.delete_all_for_variant(existing_variant.pid)
                         
@@ -268,6 +316,18 @@ class PersonalisationsCRUD(BaseCRUD):
             new_variant_names = {v.experience_variant.name for v in update_dto.experience_variants}
             for name, association in existing_variants.items():
                 if name not in new_variant_names:
+                    # log association deletion
+                    history_crud.create_entry(
+                        action="DELETE",
+                        object_type="personalisation_experience_variant",
+                        object_id=association.pid,
+                        data={
+                            "personalisation_id": association.personalisation_id,
+                            "experience_variant_id": association.experience_variant_id,
+                            "target_percentage": association.target_percentage,
+                        },
+                    )
+                    # remove association
                     self.db.delete(association)
         
     # Handle metrics if provided
@@ -320,6 +380,14 @@ class PersonalisationsCRUD(BaseCRUD):
         personalisation = self.get_by_pid(pid)
         if not personalisation:
             return None
+        # Log personalisation disable action
+        history_crud = HistoryCRUD(self.db)
+        history_crud.create_entry(
+            action="EDIT",
+            object_type="personalisation",
+            object_id=personalisation.pid,
+            data={"is_active": personalisation.is_active},
+        )
         personalisation.is_active = False
         self.db.add(personalisation)
         self.db.commit()
@@ -331,6 +399,14 @@ class PersonalisationsCRUD(BaseCRUD):
         personalisation = self.get_by_pid(pid)
         if not personalisation:
             return None
+        # Log personalisation enable action
+        history_crud = HistoryCRUD(self.db)
+        history_crud.create_entry(
+            action="EDIT",
+            object_type="personalisation",
+            object_id=personalisation.pid,
+            data={"is_active": personalisation.is_active},
+        )
         personalisation.is_active = True
         self.db.add(personalisation)
         self.db.commit()
