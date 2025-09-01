@@ -148,6 +148,18 @@ class GetUserExperienceVariantFlowAsync:
             # Flag to track if we found an applicable personalisation
             found_applicable = False
 
+            # Check if the cached user experience is from an active personalisation
+            if cache_hit:
+                for personalisation in personalisations:
+                    if personalisation.pid == user_experience.personalisation_id:
+                        if getattr(personalisation, 'is_active', True):
+                            logger.info(f"[DEBUG] Cached user experience is from active personalisation {personalisation.name} for experience {experience_id}")
+                        else:
+                            logger.info(f"[DEBUG] Cached user experience is from inactive personalisation {personalisation.name} for experience {experience_id}")
+                            cache_hit = False  # Invalidate cache hit
+                            user_experience = None
+                        break
+
             for personalisation in personalisations:
                 # skip disabled personalisations
                 if not getattr(personalisation, 'is_active', True):
