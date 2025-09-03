@@ -19,7 +19,7 @@ from nova_manager.components.experiences.crud import (
     ExperienceFeaturesCRUD,
 )
 from nova_manager.database.session import get_db
-from nova_manager.components.auth.dependencies import require_app_context
+from nova_manager.components.auth.dependencies import require_app_context, require_sync_api_key
 from nova_manager.core.security import AuthContext
 
 
@@ -28,7 +28,9 @@ router = APIRouter()
 
 @router.post("/sync-nova-objects/")
 async def sync_nova_objects(
-    sync_request: NovaObjectSyncRequest, db: Session = Depends(get_db)
+    sync_request: NovaObjectSyncRequest,
+    auth: dict = Depends(require_sync_api_key),
+    db: Session = Depends(get_db),
 ):
     """
     Sync Nova objects from client application to create/update feature flags
@@ -60,6 +62,9 @@ async def sync_nova_objects(
     }
 
     # Process each object from the sync request
+    # Validate that the provided organisation/app match the API key context
+    if str(sync_request.organisation_id) != auth["organisation_id"] or str(sync_request.app_id) != auth["app_id"]:
+        raise HTTPException(status_code=403, detail="organisation_id/app_id mismatch with API key")
     for object_name, object_props in sync_request.objects.items():
         try:
             stats["objects_processed"] += 1

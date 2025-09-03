@@ -156,3 +156,21 @@ def require_api_key(x_api_key: str = Depends(get_api_key_from_header), db: Sessi
         app_id=str(api_key.app_id),
         api_key_id=str(api_key.pid),
     )
+
+def require_sync_api_key(x_api_key: str = Depends(get_api_key_from_header), db: Session = Depends(get_db)) -> ClientAuthContext:
+    """Validate API key intended for developer sync operations (key_type == 'sync').
+
+    Reuses existing API key lookup but enforces `key_type == 'sync'` and active flag.
+    Returns the same ClientAuthContext used by client endpoints.
+    """
+    apikeys_crud = APIKeysCRUD(db)
+    api_key = apikeys_crud.get_by_key(x_api_key)
+
+    if not api_key or not api_key.is_active or getattr(api_key, "key_type", "client") != "sync":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid sync API key")
+
+    return ClientAuthContext(
+        organisation_id=str(api_key.organisation_id),
+        app_id=str(api_key.app_id),
+        api_key_id=str(api_key.pid)
+    )

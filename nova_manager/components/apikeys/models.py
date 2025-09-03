@@ -22,6 +22,9 @@ class APIKey(BaseModel):
         UUID, ForeignKey("apps.pid"), nullable=False
     )
 
+    # Type of API key: 'client' (default), 'sync', 'server' — allows scoping keys to purposes
+    key_type: Mapped[str] = mapped_column(String(50), nullable=False, default="client")
+
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     created_by: Mapped[UUIDType] = mapped_column(

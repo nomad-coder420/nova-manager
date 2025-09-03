@@ -14,7 +14,7 @@ class APIKeysCRUD:
         # Generate a URL-safe token; in prod consider prefixing and storing only hash
         return secrets.token_urlsafe(32)
 
-    def create_api_key(self, name: str, organisation_id, app_id, created_by) -> APIKey:
+    def create_api_key(self, name: str, organisation_id, app_id, created_by, key_type: str = "client") -> APIKey:
         key_value = self.generate_key()
 
         api_key = APIKey(
@@ -22,6 +22,7 @@ class APIKeysCRUD:
             key=key_value,
             organisation_id=organisation_id,
             app_id=app_id,
+            key_type=key_type,
             is_active=True,
             created_by=created_by,
             created_at=datetime.utcnow(),
