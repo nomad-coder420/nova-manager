@@ -5,7 +5,7 @@ from typing import List, Optional
 from nova_manager.core.security import verify_token, decode_token_ignore_expiry, create_auth_context, AuthContext
 from nova_manager.core.enums import UserRole
 
-from fastapi import Header
+from fastapi import Header,Request
 from typing import TypedDict
 from nova_manager.database.session import get_db
 from sqlalchemy.orm import Session

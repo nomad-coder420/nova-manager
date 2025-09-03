@@ -24,8 +24,9 @@ class NovaExperienceDefinition(BaseModel):
 
 
 class NovaObjectSyncRequest(BaseModel):
-    organisation_id: str
-    app_id: str
+    # organisation_id and app_id are not supplied by clients — they are inferred from the API key
+    organisation_id: str | None = None
+    app_id: str | None = None
     objects: Dict[str, NovaObjectDefinition]
     experiences: Dict[str, NovaExperienceDefinition]
 
