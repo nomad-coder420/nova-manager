@@ -12,6 +12,7 @@ class PersonalisationResponse(BaseModel):
     rollout_percentage: int
     rule_config: dict
     last_updated_at: datetime
+    is_active: bool
 
     class Config:
         from_attributes = True

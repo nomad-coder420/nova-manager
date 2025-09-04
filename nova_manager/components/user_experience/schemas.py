@@ -1,4 +1,5 @@
 from typing import Any, Dict
+from datetime import datetime
 from typing_extensions import TypedDict
 from uuid import UUID
 from pydantic import BaseModel
@@ -19,6 +20,7 @@ class UserExperienceAssignment(BaseModel):
     experience_variant_id: UUID | None
     features: Dict[str, ExperienceFeatureAssignment]
     evaluation_reason: str
+    assigned_at: datetime | None = None  # Optional timestamp of assignment
 
     class Config:
         from_attributes = True

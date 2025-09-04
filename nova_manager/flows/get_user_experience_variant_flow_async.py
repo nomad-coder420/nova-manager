@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 from fastapi import HTTPException
 
@@ -11,7 +11,9 @@ from nova_manager.components.user_experience.schemas import (
 from nova_manager.components.users.models import Users
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from nova_manager.components.personalisations.models import Personalisations, PersonalisationExperienceVariants
+from nova_manager.components.personalisations.models import (
+    PersonalisationExperienceVariants,
+)
 
 from nova_manager.components.users.crud_async import UsersAsyncCRUD
 from nova_manager.components.experiences.crud_async import ExperiencesAsyncCRUD
@@ -98,17 +100,11 @@ class GetUserExperienceVariantFlowAsync:
             experience_id = experience.pid
             experience_name = experience.name
 
-            if experience_id in self.experience_personalisation_map:
-                user_experience = self.experience_personalisation_map[experience_id]
-
-                results[experience_name] = user_experience
-
-                continue
-
             experience_variant_assignment = None
 
             personalisations = experience.personalisations
 
+            # If no personalisations, use default features
             if not personalisations:
                 features = self._get_experience_default_features(experience)
 
@@ -129,10 +125,38 @@ class GetUserExperienceVariantFlowAsync:
 
                 continue
 
+            # Get existing personalisation id from cache (if exists)
+            existing_user_experience = self.experience_personalisation_map.get(
+                experience_id
+            )
+
+            # If personalisations, evaluate each personalisation
             for personalisation in personalisations:
+                # If a personalisation is already assigned in cache
+                if (
+                    existing_user_experience
+                    and personalisation.pid
+                    == existing_user_experience.personalisation_id
+                ):
+                    assigned_at = existing_user_experience.assigned_at
+                    last_updated_at = personalisation.last_updated_at
+
+                    # If personalisation was updated after the existing assignment and reassign is false, use it
+                    if (
+                        assigned_at < last_updated_at and not personalisation.reassign
+                    ) and not personalisation.reassign:
+                        results[experience_name] = existing_user_experience
+                        continue
+
+                # If personalisation is not active, skip it
+                if not personalisation.is_active:
+                    continue
+
                 rollout_percentage = personalisation.rollout_percentage
 
                 context_id = f"{experience_id}:{personalisation.pid}"
+
+                # Check if user falls within rollout percentage
                 if not self.rule_evaluator.evaluate_target_percentage(
                     str(user.pid), rollout_percentage, context_id
                 ):
@@ -140,6 +164,7 @@ class GetUserExperienceVariantFlowAsync:
 
                 rule_config = personalisation.rule_config
 
+                # Check if user matches rule
                 if not self.rule_evaluator.evaluate_rule(
                     rule_config, user.user_profile
                 ):
@@ -147,7 +172,7 @@ class GetUserExperienceVariantFlowAsync:
 
                 experience_variants = personalisation.experience_variants
 
-                # Select experience variant based on target percentage
+                # Select experience variant based on target percentage and rule
                 selected_experience_variant = (
                     self._select_experience_variant_by_target_percentage(
                         user=user,
@@ -157,7 +182,7 @@ class GetUserExperienceVariantFlowAsync:
                     )
                 )
 
-                # If no variant found, skip this personalisation
+                # If no variant found, skip this personalisation. Should never happen.
                 if not selected_experience_variant:
                     features = self._get_experience_default_features(experience)
 
@@ -172,6 +197,7 @@ class GetUserExperienceVariantFlowAsync:
 
                     continue
 
+                # If variant found, get features
                 selected_experience_variant_features_map = {
                     feature_variant.experience_feature_id: feature_variant
                     for feature_variant in selected_experience_variant.feature_variants
@@ -180,6 +206,7 @@ class GetUserExperienceVariantFlowAsync:
 
                 experience_feature_variants = {}
 
+                # Get features for selected experience variant
                 for feature in experience_features:
                     experience_feature_id = feature.pid
                     feature_flag = feature.feature_flag
@@ -191,6 +218,7 @@ class GetUserExperienceVariantFlowAsync:
                         experience_feature_id
                     )
 
+                    # If personalisation has feature variant, use it. Else use default variant.
                     if feature_variant:
                         experience_feature_variants[feature_name] = (
                             ExperienceFeatureAssignment(
@@ -212,16 +240,23 @@ class GetUserExperienceVariantFlowAsync:
                             )
                         )
 
+                # Determine evaluation reason
+                evaluation_reason = "personalisation_match"
+                if existing_user_experience:
+                    evaluation_reason = "personalisation_reassignment"
+
+                # Create user experience assignment
                 experience_variant_assignment = UserExperienceAssignment(
                     experience_id=experience_id,
                     personalisation_id=personalisation.pid,
                     personalisation_name=personalisation.name,
                     experience_variant_id=selected_experience_variant.pid,
                     features=experience_feature_variants,
-                    evaluation_reason="personalisation_match",
+                    evaluation_reason=evaluation_reason,
                 )
                 break
 
+            # If no experience variant assignment, use default features. Should never happen.
             if not experience_variant_assignment:
                 features = self._get_experience_default_features(experience)
 
@@ -272,9 +307,7 @@ class GetUserExperienceVariantFlowAsync:
             # user = await self.users_crud.create_user(
             #     user_id, organisation_id, app_id, payload
             # )
-            raise HTTPException(
-                status_code=404, detail=f"User '{user_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"User '{user_id}' not found")
 
         return user
 

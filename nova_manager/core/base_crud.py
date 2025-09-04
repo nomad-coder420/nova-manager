@@ -10,10 +10,7 @@ class BaseCRUD:
         self.model = model
         self.db = db
 
-    def get_by_id(self, id: int) -> Optional[Any]:
-        """Get record by integer ID"""
-        return self.db.query(self.model).filter(self.model.id == id).first()
-
+    # TODO: Add organisation_id and app_id filtering
     def get_by_pid(self, pid: UUIDType) -> Optional[Any]:
         """Get record by UUID PID"""
         return self.db.query(self.model).filter(self.model.pid == pid).first()
@@ -40,6 +37,7 @@ class BaseCRUD:
 
         return query.offset(skip).limit(limit).all()
 
+    # TODO: Add organisation_id and app_id
     def create(self, obj_in: Dict[str, Any]) -> Any:
         """Create new record"""
         db_obj = self.model(**obj_in)
@@ -48,6 +46,7 @@ class BaseCRUD:
         self.db.refresh(db_obj)
         return db_obj
 
+    # TODO: Add organisation_id and app_id checks
     def update(self, db_obj: Any, obj_in: Dict[str, Any]) -> Any:
         """Update existing record"""
         for field, value in obj_in.items():
@@ -57,6 +56,7 @@ class BaseCRUD:
         self.db.refresh(db_obj)
         return db_obj
 
+    # TODO: Add organisation_id and app_id filtering
     def delete(self, id: int) -> Any:
         """Delete record by integer ID"""
         obj = self.db.query(self.model).get(id)
@@ -65,6 +65,7 @@ class BaseCRUD:
             self.db.flush()
         return obj
 
+    # TODO: Add organisation_id and app_id filtering
     def delete_by_pid(self, pid: UUIDType) -> Any:
         """Delete record by UUID PID"""
         obj = self.get_by_pid(pid)

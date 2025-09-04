@@ -2,7 +2,7 @@ from typing import Optional, List
 from uuid import UUID as UUIDType
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_, asc, desc
-from nova_manager.api.personalisations.request_response import PersonalisationUpdate
+from datetime import datetime, timezone
 
 from nova_manager.components.experiences.models import ExperienceVariants
 from nova_manager.core.base_crud import BaseCRUD
@@ -10,6 +10,7 @@ from nova_manager.components.personalisations.models import (
     PersonalisationExperienceVariants,
     Personalisations,
 )
+from nova_manager.api.personalisations.request_response import PersonalisationUpdate
 from nova_manager.components.metrics.models import PersonalisationMetrics
 from nova_manager.components.metrics.crud import PersonalisationMetricsCRUD
 from nova_manager.components.experiences.crud import (
@@ -44,6 +45,7 @@ class PersonalisationsCRUD(BaseCRUD):
             priority=priority,
             rule_config=rule_config,
             rollout_percentage=rollout_percentage,
+            is_active=True,  # new personalisations enabled by default
         )
 
         self.db.add(personalisation)
@@ -296,6 +298,14 @@ class PersonalisationsCRUD(BaseCRUD):
                     personalisation_id=personalisation.pid, metric_id=metric_id
                 )
 
+        # If requested, mark existing assignments to be re-evaluated
+        if update_data.reassign:
+            personalisation.reassign = True
+
+        # bump last_updated_at when variants or metrics changed
+        personalisation.last_updated_at = datetime.now(timezone.utc)
+
+        # Persist updates
         self.db.add(personalisation)
         self.db.flush()
         self.db.refresh(personalisation)
@@ -318,6 +328,38 @@ class PersonalisationsCRUD(BaseCRUD):
             .filter(Personalisations.pid == pid)
             .first()
         )
+
+    def disable_personalisation(
+        self, personalisation: Personalisations
+    ) -> Optional[Personalisations]:
+        """Disable a personalisation by pid"""
+
+        personalisation.is_active = False
+
+        # Set reassign to true by default to re-evaluate existing user assignments
+        personalisation.reassign = True
+
+        self.db.add(personalisation)
+        self.db.flush()
+        self.db.refresh(personalisation)
+
+        return personalisation
+
+    def enable_personalisation(
+        self, personalisation: Personalisations
+    ) -> Optional[Personalisations]:
+        """Enable a personalisation by pid"""
+
+        personalisation.is_active = True
+
+        # Set reassign to true by default to re-evaluate existing user assignments
+        personalisation.reassign = True
+
+        self.db.add(personalisation)
+        self.db.flush()
+        self.db.refresh(personalisation)
+
+        return personalisation
 
 
 class PersonalisationExperienceVariantsCRUD(BaseCRUD):

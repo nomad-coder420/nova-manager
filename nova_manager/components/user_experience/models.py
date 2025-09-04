@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 from uuid import UUID as UUIDType
 from nova_manager.components.user_experience.schemas import (
     ExperienceFeatureAssignment,
@@ -11,7 +10,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     String,
-    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -53,23 +51,27 @@ class UserExperience(BaseOrganisationModel):
 
     # TODO: Review these table args
     __table_args__ = (
-        # BUSINESS RULE: One personalisation assignment per user-experience pair within org/app scope
-        # Fixed to include organisation_id and app_id for proper scoping
-        UniqueConstraint(
-            "user_id",
-            "experience_id",
-            "organisation_id",
-            "app_id",
-            name="uq_user_experience_user_exp_org_app",
-        ),
-        # PRIMARY QUERY OPTIMIZATION: Covers main query pattern from get_user_experiences_personalisations
-        # Query: user_id = ? AND organisation_id = ? AND app_id = ? AND experience_id IN (?)
+        # If personalisation is reassigned for an experience, we add a new row to this table.
+        # Active personalisation for experience is the last entry in the table.
+        # UniqueConstraint(
+        #     "user_id",
+        #     "experience_id",
+        #     "organisation_id",
+        #     "app_id",
+        #     name="uq_user_experience_user_exp_org_app",
+        # ),
+        # PRIMARY COMPOSITE INDEX: Covers ALL main query patterns efficiently
+        # Supports: 1) WHERE user_id = ? AND organisation_id = ? AND app_id = ? AND experience_id IN (?)
+        #           2) WHERE user_id = ? AND organisation_id = ? AND app_id = ?
+        #           3) ORDER BY experience_id, id DESC for DISTINCT ON (experience_id)
+        #           4) Any prefix combination of these columns
         Index(
-            "idx_user_experience_main_query",
+            "idx_user_experience_user_org_app_exp_id",
             "user_id",
             "organisation_id",
             "app_id",
             "experience_id",
+            "id",
         ),
         # EXPERIENCE-BASED QUERIES: For queries filtering by experience within org/app
         Index(
@@ -85,7 +87,7 @@ class UserExperience(BaseOrganisationModel):
             "organisation_id",
             "app_id",
         ),
-        # User experiences ordered by assignment time (very common pattern)
+        # USER-TIME QUERIES: User experiences ordered by assignment time (common analytics pattern)
         Index("idx_user_experience_user_assigned", "user_id", "assigned_at"),
     )
 
