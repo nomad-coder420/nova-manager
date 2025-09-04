@@ -282,9 +282,3 @@ class ExperienceVariantsCRUD(BaseCRUD):
 class ExperienceFeatureVariantsCRUD(BaseCRUD):
     def __init__(self, db: Session):
         super().__init__(ExperienceFeatureVariants, db)
-    def delete_all_for_variant(self, experience_variant_id: UUIDType) -> None:
-        """Delete all feature variants associated with an experience variant"""
-        self.db.query(ExperienceFeatureVariants).filter(
-            ExperienceFeatureVariants.experience_variant_id == experience_variant_id
-        ).delete()
-        self.db.flush()

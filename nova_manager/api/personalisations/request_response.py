@@ -24,6 +24,7 @@ class PersonalisationCreateExperienceVariant(BaseModel):
     experience_variant: ExperienceVariantCreate
     target_percentage: int
 
+
 # DTO for updating variants by ID
 class PersonalisationUpdateExperienceVariant(BaseModel):
     experience_variant_id: UUIDType
@@ -49,16 +50,12 @@ class PersonalisationListResponse(BaseModel):
     experience_id: UUIDType
     experience: ExperienceResponse
 
-class ExperienceFeatureVariantResponse(BaseModel):
-    experience_feature_id: UUIDType
-    name: str
-    config: dict
 
 class ExperienceVariantResponse(BaseModel):
     name: str
     description: str
     is_default: bool
-    feature_variants: List[ExperienceFeatureVariantResponse] = []
+
 
 class PersonalisationExperienceVariantResponse(BaseModel):
     target_percentage: int
@@ -79,6 +76,7 @@ class PersonalisationDetailedResponse(BaseModel):
     rule_config: dict
     experience_variants: List[PersonalisationExperienceVariantResponse]
     metrics: List[PersonalisationMetric] = []
+
 
 class PersonalisationUpdate(BaseModel):
     name: Optional[str] = None

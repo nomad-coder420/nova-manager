@@ -102,6 +102,7 @@ class SwitchAppRequest(BaseModel):
 
 class OrgUserResponse(BaseModel):
     """Organization user response schema"""
+
     id: UUID
     name: str
     email: str

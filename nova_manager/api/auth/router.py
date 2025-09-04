@@ -233,16 +233,6 @@ async def get_current_user(
         has_apps=has_apps,
         role=auth_user.role,
     )
-   
-@router.get("/context", response_model=AuthContextResponse)
-async def get_context(
-    auth: AuthContext = Depends(get_current_auth)
-):
-    """Get current auth context (organisation and project IDs)"""
-    return AuthContextResponse(
-        organisation_id=auth.organisation_id,
-        app_id=auth.app_id
-    )
 
 
 @router.get("/context", response_model=AuthContextResponse)
