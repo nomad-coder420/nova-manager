@@ -30,11 +30,21 @@ done
 FULL_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${IMAGE_NAME}:${TAG}"
 gcloud builds submit --tag "$FULL_IMAGE"
 
-# 5 Deploy
+# # 5 Deploy
 gcloud run deploy "$IMAGE_NAME" \
   --image="$FULL_IMAGE" \
   --region="$REGION" \
   --platform=managed \
-  --set-env-vars="DATABASE_URL=postgresql://xg-nova-backend:xg-nova-backend@34.70.184.78:5432/nova,\
-PYTHONPATH=/app" \
   --allow-unauthenticated
+
+#6 Deploy worker
+gcloud run deploy "nova-manager-worker" \
+  --image="$FULL_IMAGE" \
+  --region="$REGION" \
+  --platform=managed \
+  --command="python,scripts/run_worker.py" \
+  --no-allow-unauthenticated \
+  --cpu=1 \
+  --no-cpu-throttling \
+  --concurrency=1 \
+  --min-instances=1

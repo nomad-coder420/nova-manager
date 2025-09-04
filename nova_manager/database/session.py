@@ -1,9 +1,9 @@
+from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from nova_manager.core.config import DATABASE_URL
 from nova_manager.core.log import logger
-
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -21,3 +21,9 @@ def get_db():
         raise e
     finally:
         db.close()
+
+
+@contextmanager
+def db_session():
+    """Context manager for database sessions in background tasks"""
+    return get_db()

@@ -32,9 +32,9 @@ async def track_event(event: TrackEventRequest):
     QueueController().add_task(
         EventsController(event.organisation_id, event.app_id).track_event,
         event.user_id,
-        event.timestamp,
         event.event_name,
         event.event_data,
+        event.timestamp,
     )
 
     return {"success": True}
@@ -43,7 +43,7 @@ async def track_event(event: TrackEventRequest):
 @router.post("/compute/", response_model=List[Dict])
 async def compute_metric(
     compute_request: ComputeMetricRequest,
-    auth: AuthContext = Depends(require_app_context)
+    auth: AuthContext = Depends(require_app_context),
 ):
     organisation_id = auth.organisation_id
     app_id = auth.app_id
@@ -119,7 +119,7 @@ async def list_user_profile_keys(
 async def create_metric(
     metric_data: CreateMetricRequest,
     auth: AuthContext = Depends(require_app_context),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     metrics_crud = MetricsCRUD(db)
 
@@ -151,7 +151,9 @@ async def list_metric(
 ):
     metrics_crud = MetricsCRUD(db)
 
-    metrics = metrics_crud.get_multi(organisation_id=auth.organisation_id, app_id=auth.app_id)
+    metrics = metrics_crud.get_multi(
+        organisation_id=auth.organisation_id, app_id=auth.app_id
+    )
 
     return metrics
 
@@ -160,7 +162,7 @@ async def list_metric(
 async def get_metric(
     metric_id: UUID,
     auth: AuthContext = Depends(require_app_context),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     metrics_crud = MetricsCRUD(db)
 
@@ -177,7 +179,7 @@ async def update_metric(
     metric_id: UUID,
     metric_data: CreateMetricRequest,
     auth: AuthContext = Depends(require_app_context),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     metrics_crud = MetricsCRUD(db)
 

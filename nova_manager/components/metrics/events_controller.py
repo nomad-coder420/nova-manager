@@ -4,7 +4,8 @@ from typing import TypedDict
 from uuid import UUID
 import uuid
 
-from nova_manager.database.session import get_db
+from nova_manager.database.session import db_session
+from nova_manager.core.log import logger
 from nova_manager.service.bigquery import BigQueryService
 
 from nova_manager.components.metrics.artefacts import EventsArtefacts
@@ -13,7 +14,6 @@ from nova_manager.components.user_experience.models import UserExperience
 from nova_manager.components.metrics.models import EventsSchema
 from nova_manager.components.users.models import Users
 from nova_manager.core.config import GCP_PROJECT_ID
-from nova_manager.core.log import logger
 
 
 class TrackEvent(TypedDict):
@@ -23,7 +23,33 @@ class TrackEvent(TypedDict):
 
 
 class EventsController(EventsArtefacts):
-    def _create_event_table(self, event_name: str):
+    def create_dataset(self):
+        BigQueryService().create_dataset_if_not_exists(self.dataset_name)
+
+    def create_raw_events_table(self):
+        raw_events_table_name = f"{GCP_PROJECT_ID}.{self._raw_events_table_name()}"
+
+        try:
+            BigQueryService().create_table_if_not_exists(
+                raw_events_table_name,
+                schema=[
+                    {"name": "event_id", "type": "STRING"},
+                    {"name": "user_id", "type": "STRING"},
+                    {"name": "client_ts", "type": "TIMESTAMP"},
+                    {"name": "server_ts", "type": "TIMESTAMP"},
+                    {"name": "event_name", "type": "STRING"},
+                    {"name": "event_data", "type": "STRING"},
+                ],
+                partition_field="client_ts",
+                clustering_fields=["event_name", "user_id"],
+            )
+        except Exception as e:
+            logger.error(f"Failed to create raw events table: {str(e)}")
+            raise e
+
+        return raw_events_table_name
+
+    def create_event_table(self, event_name: str):
         event_table_name = f"{GCP_PROJECT_ID}.{self._event_table_name(event_name)}"
 
         # Create event table if not exists
@@ -44,7 +70,7 @@ class EventsController(EventsArtefacts):
 
         return event_table_name
 
-    def _create_event_props_table(self, event_name: str):
+    def create_event_props_table(self, event_name: str):
         event_props_table_name = (
             f"{GCP_PROJECT_ID}.{self._event_props_table_name(event_name)}"
         )
@@ -69,26 +95,64 @@ class EventsController(EventsArtefacts):
 
         return event_props_table_name
 
-    def _create_user_profile_table(self):
-        user_profile_table_name = f"{GCP_PROJECT_ID}.{self._user_profile_props_table_name()}"
+    def create_user_profile_table(self):
+        user_profile_table_name = (
+            f"{GCP_PROJECT_ID}.{self._user_profile_props_table_name()}"
+        )
 
-        # user_profile_table_schema = [
-        #     {"name": "user_id", "type": "STRING"},
-        #     {"name": "key", "type": "STRING"},
-        #     {"name": "value", "type": "STRING"},
-        #     {"name": "server_ts", "type": "TIMESTAMP"},
-        # ]
+        logger.info(f"Creating user profile table: {user_profile_table_name}")
 
-        # BigQueryService().create_table_if_not_exists(
-        #     user_profile_table_name,
-        #     user_profile_table_schema,
-        #     partition_field="server_ts",
-        #     clustering_fields=["user_id", "key"],
-        # )
+        user_profile_table_schema = [
+            {"name": "user_id", "type": "STRING"},
+            {"name": "key", "type": "STRING"},
+            {"name": "value", "type": "STRING"},
+            {"name": "server_ts", "type": "TIMESTAMP"},
+        ]
+
+        try:
+            BigQueryService().create_table_if_not_exists(
+                user_profile_table_name,
+                user_profile_table_schema,
+                partition_field="server_ts",
+                clustering_fields=["user_id", "key"],
+            )
+            logger.info(
+                f"User profile table created/confirmed: {user_profile_table_name}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to create user profile table: {str(e)}")
+            raise e
 
         return user_profile_table_name
 
-    def _push_to_bigquery(
+    def create_user_experience_table(self):
+        user_experience_table_name = (
+            f"{GCP_PROJECT_ID}.{self._user_experience_table_name()}"
+        )
+
+        try:
+            BigQueryService().create_table_if_not_exists(
+                user_experience_table_name,
+                schema=[
+                    {"name": "user_id", "type": "STRING"},
+                    {"name": "experience_id", "type": "STRING"},
+                    {"name": "personalisation_id", "type": "STRING"},
+                    {"name": "personalisation_name", "type": "STRING"},
+                    {"name": "experience_variant_id", "type": "STRING"},
+                    {"name": "features", "type": "STRING"},
+                    {"name": "evaluation_reason", "type": "STRING"},
+                    {"name": "assigned_at", "type": "TIMESTAMP"},
+                ],
+                partition_field="assigned_at",
+                clustering_fields=["user_id", "experience_id", "personalisation_id"],
+            )
+        except Exception as e:
+            logger.error(f"Failed to create user experience table: {str(e)}")
+            raise e
+
+        return user_experience_table_name
+
+    def push_to_bigquery(
         self,
         raw_events_rows: list[dict],
         event_table_rows: dict,
@@ -122,6 +186,9 @@ class EventsController(EventsArtefacts):
             raise e
 
     def track_events(self, user_id: UUID, events: list[TrackEvent]):
+        logger.info(
+            f"EventsController.track_events: user_id={user_id}, org={self.organisation_id}, app={self.app_id}, events={events}"
+        )
         time_now = datetime.now(timezone.utc)
 
         raw_events_rows = []
@@ -132,7 +199,7 @@ class EventsController(EventsArtefacts):
 
         events_schema_objs_map = {}
         events_schema_map = {}
-        with get_db() as db:
+        with db_session() as db:
             events_schema = EventsSchemaCRUD(db).get_events_schema(
                 unique_event_names, self.organisation_id, self.app_id
             )
@@ -144,13 +211,14 @@ class EventsController(EventsArtefacts):
                 schema.event_name: schema for schema in events_schema
             }
 
-        new_events = []
-        existing_events = []
+        new_events: list[str] = []
+        existing_events: list[str] = []
 
         for event_name in unique_event_names:
             if event_name not in events_schema_map:
-                self._create_event_table(event_name)
-                self._create_event_props_table(event_name)
+                logger.info(f"Creating BigQuery tables for new event: {event_name}")
+                self.create_event_table(event_name)
+                self.create_event_props_table(event_name)
                 events_schema_map[event_name] = {}
                 new_events.append(event_name)
             else:
@@ -209,11 +277,9 @@ class EventsController(EventsArtefacts):
             event_schema["properties"].update(event_properties)
             events_schema_map[event_name] = event_schema
 
-        self._push_to_bigquery(
-            raw_events_rows, event_table_rows, event_props_table_rows
-        )
+        self.push_to_bigquery(raw_events_rows, event_table_rows, event_props_table_rows)
 
-        with get_db() as db:
+        with db_session() as db:
             crud = EventsSchemaCRUD(db)
 
             to_insert = []
@@ -262,7 +328,7 @@ class EventsController(EventsArtefacts):
         )
 
     def track_user_experience(self, user_experience: UserExperience):
-        user_experience_table_name = self._user_experience_table_name()
+        user_experience_table_name = self.create_user_experience_table()
 
         user_experience_row = {
             "user_id": str(user_experience.user_id),
@@ -278,12 +344,12 @@ class EventsController(EventsArtefacts):
         BigQueryService().insert_rows(user_experience_table_name, [user_experience_row])
 
     def track_user_profile(self, user: Users):
-        user_profile_table_name = self._create_user_profile_table()
+        user_profile_table_name = self.create_user_profile_table()
 
         # Create user profile key entries for new keys
         if user.user_profile:
             try:
-                with get_db() as db:
+                with db_session() as db:
                     user_profile_keys_crud = UserProfileKeysCRUD(db)
 
                     user_profile_keys_crud.create_user_profile_keys_if_not_exists(
@@ -306,4 +372,6 @@ class EventsController(EventsArtefacts):
             for key in user.user_profile
         ]
 
-        errors = BigQueryService().insert_rows(user_profile_table_name, user_profile_rows)
+        errors = BigQueryService().insert_rows(
+            user_profile_table_name, user_profile_rows
+        )
