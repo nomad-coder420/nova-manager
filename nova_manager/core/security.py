@@ -70,10 +70,10 @@ def verify_token(token: str) -> dict:
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except jwt.JWTError:
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
+            detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -83,10 +83,10 @@ def decode_token_ignore_expiry(token: str) -> dict:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_exp": False})
         return payload
-    except jwt.JWTError:
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token format",
+            detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -94,9 +94,9 @@ def decode_token_ignore_expiry(token: str) -> dict:
 def create_auth_context(payload: dict) -> AuthContext:
     """Create AuthContext from JWT payload"""
     return AuthContext(
-        auth_user_id=payload.get("auth_user_id"),
-        organisation_id=payload.get("organisation_id"),
-        app_id=payload.get("app_id"),
-        email=payload.get("email"),
-        role=payload.get("role"),
+        auth_user_id=payload.get("auth_user_id", ""),
+        organisation_id=payload.get("organisation_id", ""),
+        app_id=payload.get("app_id", ""),
+        email=payload.get("email", ""),
+        role=UserRole(payload.get("role", "member")),
     )

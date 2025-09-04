@@ -7,6 +7,13 @@ from ..core.config import (
     PASSWORD_RESET_TEMPLATE_ID
 )
 
+from nova_manager.service.email_service import email_service
+from nova_manager.core.config import (
+    ORG_INVITE_TEMPLATE_ID,
+    WELCOME_TEMPLATE_ID,
+    PASSWORD_RESET_TEMPLATE_ID,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,9 +31,9 @@ async def send_invitation_email(
         bool: True if email sent successfully, False otherwise
     """
     invite_link = f"{get_frontend_url()}/signup?invite={invite_token}"
-    
+
     logger.info(f"Sending invitation email to: {email}")
-    
+
     success, error_message = email_service.send_email(
         to=email,
         template_id=ORG_INVITE_TEMPLATE_ID,
@@ -36,11 +43,11 @@ async def send_invitation_email(
             "invited_by_name": invited_by_name,
         },
     )
-    
+
     if not success:
         logger.error(f"Failed to send invitation email to {email}: {error_message}")
         return False
-    
+
     logger.info(f"Invitation email sent successfully to: {email}")
     return True
 
@@ -62,7 +69,6 @@ async def send_password_reset_email(email: str, reset_token: str) -> bool:
     if not success:
         logger.error(f"Failed to send password reset email to {email}: {error_message}")
         return False
-    
     logger.info(f"Password reset email sent successfully to: {email}")
     return True
 
