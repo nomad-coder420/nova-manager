@@ -8,7 +8,10 @@ class EventsArtefacts:
         self.dataset_name = self._dataset_name()
 
     def _dataset_name(self) -> str:
-        return f"org_{self.organisation_id}_app_{self.app_id}"
+        # Build a BigQuery-safe dataset name by replacing any non-alphanumeric/underscore chars
+        safe_org = self._sanitized_string(self.organisation_id)
+        safe_app = self._sanitized_string(self.app_id)
+        return f"org_{safe_org}_app_{safe_app}"
 
     def _sanitized_string(self, s: str):
         return re.sub(r"[^a-zA-Z0-9_]", "_", s)

@@ -1,8 +1,9 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from nova_manager.components.invitations.crud import InvitationsCRUD
 from sqlalchemy.orm import Session
 
+from nova_manager.components.invitations.crud import InvitationsCRUD
+from nova_manager.components.metrics.events_controller import EventsController
 from nova_manager.database.session import get_db
 from nova_manager.components.auth.crud import AuthCRUD
 from nova_manager.core.enums import UserRole
@@ -31,6 +32,8 @@ from nova_manager.core.security import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     AuthContext,
 )
+from nova_manager.core.config import GCP_PROJECT_ID, BIGQUERY_LOCATION
+from nova_manager.core.log import logger
 
 router = APIRouter()
 
@@ -256,6 +259,27 @@ async def create_app(
         organisation_id=auth.organisation_id,
         description=app_data.description,
     )
+
+    try:
+        events_controller = EventsController(auth.organisation_id, app.pid)
+
+        # Create dataset
+        events_controller.create_dataset()
+
+        # Create raw events table
+        events_controller.create_raw_events_table()
+
+        # Create user profile table
+        events_controller.create_user_profile_table()
+
+        # Create user experience table
+        events_controller.create_user_experience_table()
+    except Exception as e:
+        logger.error(f"Failed to provision core BigQuery tables for app {app.pid}: {e}")
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to provision BigQuery tables",
+        )
 
     # Create new tokens with the new app context
     token_data = {

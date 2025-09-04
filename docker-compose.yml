@@ -13,6 +13,18 @@ services:
     restart: unless-stopped
     networks:
       - nova-network
+      
+  worker:
+    build: .
+    environment:
+      - DATABASE_URL=postgresql://xg-nova-backend:xg-nova-backend@34.70.184.78:5432/nova
+      - PYTHONPATH=/app
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    command: python scripts/run_worker.py
+    networks:
+      - nova-network
 
 networks:
   nova-network:

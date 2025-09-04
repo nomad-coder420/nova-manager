@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Callable, Optional
 
 import redis
 from rq import Queue
@@ -24,9 +24,9 @@ class QueueController:
             self.default_queue = Queue(connection=self.redis_conn)
             self._initialized = True
 
-    def add_task(self, func_name: str, *args, **kwargs) -> str:
+    def add_task(self, func: Callable, *args, **kwargs) -> str:
         """Add a task and return task ID"""
-        job = self.default_queue.enqueue(func_name, *args, **kwargs)
+        job = self.default_queue.enqueue(func, *args, **kwargs)
         return job.id
 
     def get_task_status(self, job_id: str):
@@ -35,7 +35,7 @@ class QueueController:
         task = Job.fetch(job_id, connection=self.redis_conn)
         return {
             "id": task.id,
-            "status": task.status,
+            "status": task.get_status(),
             "result": task.result,
             "created_at": task.created_at,
             "started_at": task.started_at,
