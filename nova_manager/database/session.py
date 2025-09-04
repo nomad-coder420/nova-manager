@@ -1,9 +1,9 @@
+from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from nova_manager.core.config import DATABASE_URL
 from nova_manager.core.log import logger
-from contextlib import contextmanager
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
