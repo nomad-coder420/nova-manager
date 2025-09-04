@@ -288,11 +288,11 @@ class ExperienceVariantsCRUD(BaseCRUD):
     ):
         """
         Update feature variants using delta logic - only change what's different.
-        
+
         Args:
             experience_variant: The experience variant to update feature variants for
             new_feature_variants: List of feature variant updates from the request
-            
+
         This method:
         1. Updates existing feature variants by PID (most reliable)
         2. Creates new feature variants for items without PIDs
@@ -303,9 +303,7 @@ class ExperienceVariantsCRUD(BaseCRUD):
         existing_feature_variants = experience_variant.feature_variants
 
         # Create efficient lookup map by PID (only one loop needed)
-        existing_variants_by_pid = {
-            str(fv.pid): fv for fv in existing_feature_variants
-        }
+        existing_variants_by_pid = {str(fv.pid): fv for fv in existing_feature_variants}
 
         # Track which feature variant PIDs should remain after update
         updated_variant_ids = set()
@@ -316,37 +314,41 @@ class ExperienceVariantsCRUD(BaseCRUD):
             # Validate required fields
             if not fv_data.experience_feature_id:
                 continue  # Skip invalid entries
-                
+
             if fv_data.pid and str(fv_data.pid) in existing_variants_by_pid:
                 # Update existing feature variant by PID
                 existing_fv = existing_variants_by_pid[str(fv_data.pid)]
-                
+
                 # Only update if values have actually changed (performance optimization)
-                if (existing_fv.name != fv_data.name or 
-                    existing_fv.config != fv_data.config):
+                if (
+                    existing_fv.name != fv_data.name
+                    or existing_fv.config != fv_data.config
+                ):
                     existing_fv.name = fv_data.name
                     existing_fv.config = fv_data.config
-                
+
                 updated_variant_ids.add(str(fv_data.pid))
             else:
                 # Create new feature variant
                 try:
-                    new_fv = feature_variants_crud.create({
-                        "experience_variant_id": experience_variant.pid,
-                        "experience_feature_id": fv_data.experience_feature_id,
-                        "name": fv_data.name,
-                        "config": fv_data.config,
-                    })
-                    
+                    new_fv = feature_variants_crud.create(
+                        {
+                            "experience_variant_id": experience_variant.pid,
+                            "experience_feature_id": fv_data.experience_feature_id,
+                            "name": fv_data.name,
+                            "config": fv_data.config,
+                        }
+                    )
+
                     # Track newly created variant to prevent deletion
-                    if new_fv and hasattr(new_fv, 'pid'):
+                    if new_fv and hasattr(new_fv, "pid"):
                         updated_variant_ids.add(str(new_fv.pid))
                 except Exception as e:
                     # Log error but continue processing other variants
                     print(f"Failed to create feature variant: {e}")
                     continue
 
-        # Delete feature variants that are no longer in the update
+        # Delete feature variants that are no longer in the update (meaning user deselected those objects)
         variants_to_delete = [
             str(fv.pid)
             for fv in existing_feature_variants
