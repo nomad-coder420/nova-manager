@@ -1,4 +1,4 @@
-from datetime import datetime
+from nova_manager.api.experiences.request_response import ExperienceVariantResponse
 from nova_manager.components.experiences.schemas import ExperienceResponse
 from typing import List, Optional, Dict, Any
 from uuid import UUID as UUIDType
@@ -25,12 +25,6 @@ class PersonalisationCreateExperienceVariant(BaseModel):
     target_percentage: int
 
 
-# DTO for updating variants by ID
-class PersonalisationUpdateExperienceVariant(BaseModel):
-    experience_variant_id: UUIDType
-    target_percentage: int
-
-
 class PersonalisationCreate(BaseModel):
     name: str
     description: str
@@ -51,13 +45,8 @@ class PersonalisationListResponse(BaseModel):
     experience: ExperienceResponse
 
 
-class ExperienceVariantResponse(BaseModel):
-    name: str
-    description: str
-    is_default: bool
-
-
 class PersonalisationExperienceVariantResponse(BaseModel):
+    pid: UUIDType
     target_percentage: int
     experience_variant: ExperienceVariantResponse
 
@@ -78,12 +67,33 @@ class PersonalisationDetailedResponse(BaseModel):
     metrics: List[PersonalisationMetric] = []
 
 
+class ExperienceFeatureVariantUpdate(BaseModel):
+    experience_feature_id: UUIDType
+    name: str
+    config: dict
+    pid: Optional[UUIDType] = None  # Present for updates, None for creates
+
+
+class ExperienceVariantUpdate(BaseModel):
+    name: str
+    description: str
+    is_default: bool
+    pid: Optional[UUIDType] = None  # Present for updates, None for creates
+
+    feature_variants: List[ExperienceFeatureVariantUpdate] | None = None
+
+
+class PersonalisationUpdateExperienceVariant(BaseModel):
+    experience_variant: ExperienceVariantUpdate
+    target_percentage: int
+
+
 class PersonalisationUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     rule_config: Optional[Dict[str, Any]] = None
     rollout_percentage: Optional[int] = None
     selected_metrics: Optional[List[UUIDType]] = None
-    # Use the same variant structure as create for consistency
-    experience_variants: Optional[List[PersonalisationCreateExperienceVariant]] = None
+    experience_variants: Optional[List[PersonalisationUpdateExperienceVariant]] = None
+
     apply_to_existing: bool = False

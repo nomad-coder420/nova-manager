@@ -141,18 +141,26 @@ class PersonalisationMetricsCRUD(BaseCRUD):
             personalisation_id=personalisation_id, metric_id=metric_id
         )
         self.db.add(personalisation_metric)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(personalisation_metric)
         return personalisation_metric
 
-    def delete_personalisation_metrics(self, personalisation_id: UUID) -> int:
-        """Delete all metrics for a personalisation"""
+    def delete_personalisation_metrics(
+        self, personalisation_id: UUID, metric_ids: list[str]
+    ) -> int:
+        """Delete specific metric associations for a personalisation"""
+        if not metric_ids:
+            return 0
+
         deleted_count = (
             self.db.query(PersonalisationMetrics)
-            .filter(PersonalisationMetrics.personalisation_id == personalisation_id)
+            .filter(
+                PersonalisationMetrics.personalisation_id == personalisation_id,
+                PersonalisationMetrics.metric_id.in_(metric_ids),
+            )
             .delete()
         )
-        self.db.commit()
+
         return deleted_count
 
     def exists(self, personalisation_id: UUID, metric_id: UUID) -> bool:
@@ -213,7 +221,12 @@ class UserProfileKeysCRUD(BaseCRUD):
         return query.offset(skip).limit(limit).all()
 
     def search_user_profile_keys(
-        self, organisation_id: str, app_id: str, search_term: str, skip: int = 0, limit: int = 100
+        self,
+        organisation_id: str,
+        app_id: str,
+        search_term: str,
+        skip: int = 0,
+        limit: int = 100,
     ) -> list[UserProfileKeys]:
         """Search user profile keys by key name or description"""
         return (
@@ -222,9 +235,9 @@ class UserProfileKeysCRUD(BaseCRUD):
                 UserProfileKeys.organisation_id == organisation_id,
                 UserProfileKeys.app_id == app_id,
                 (
-                    UserProfileKeys.key.ilike(f"%{search_term}%") |
-                    UserProfileKeys.description.ilike(f"%{search_term}%")
-                )
+                    UserProfileKeys.key.ilike(f"%{search_term}%")
+                    | UserProfileKeys.description.ilike(f"%{search_term}%")
+                ),
             )
             .offset(skip)
             .limit(limit)
@@ -248,7 +261,7 @@ class UserProfileKeysCRUD(BaseCRUD):
             app_id=app_id,
         )
         self.db.add(user_profile_key)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(user_profile_key)
         return user_profile_key
 
@@ -313,8 +326,8 @@ class UserProfileKeysCRUD(BaseCRUD):
         key: str,
         organisation_id: str,
         app_id: str,
-        key_type: str = None,
-        description: str = None,
+        key_type: str | None = None,
+        description: str | None = None,
     ) -> UserProfileKeys | None:
         """Update an existing user profile key"""
         existing_key = self.get_user_profile_key(key, organisation_id, app_id)
@@ -325,7 +338,7 @@ class UserProfileKeysCRUD(BaseCRUD):
             if description is not None:
                 existing_key.description = description
 
-            self.db.commit()
+            self.db.flush()
             self.db.refresh(existing_key)
             return existing_key
 
@@ -339,7 +352,7 @@ class UserProfileKeysCRUD(BaseCRUD):
 
         if existing_key:
             self.db.delete(existing_key)
-            self.db.commit()
+            self.db.flush()
             return True
 
         return False
