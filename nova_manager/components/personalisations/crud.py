@@ -336,6 +336,9 @@ class PersonalisationsCRUD(BaseCRUD):
 
         personalisation.is_active = False
 
+        # Set reassign to true by default to re-evaluate existing user assignments
+        personalisation.reassign = True
+
         self.db.add(personalisation)
         self.db.flush()
         self.db.refresh(personalisation)
@@ -348,6 +351,9 @@ class PersonalisationsCRUD(BaseCRUD):
         """Enable a personalisation by pid"""
 
         personalisation.is_active = True
+
+        # Set reassign to true by default to re-evaluate existing user assignments
+        personalisation.reassign = True
 
         self.db.add(personalisation)
         self.db.flush()
