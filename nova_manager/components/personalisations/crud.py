@@ -2,7 +2,6 @@ from typing import Optional, List
 from uuid import UUID as UUIDType
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_, asc, desc
-from nova_manager.api.personalisations.request_response import PersonalisationUpdate
 from datetime import datetime, timezone
 
 from nova_manager.components.experiences.models import ExperienceVariants
@@ -11,6 +10,7 @@ from nova_manager.components.personalisations.models import (
     PersonalisationExperienceVariants,
     Personalisations,
 )
+from nova_manager.api.personalisations.request_response import PersonalisationUpdate
 from nova_manager.components.metrics.models import PersonalisationMetrics
 from nova_manager.components.metrics.crud import PersonalisationMetricsCRUD
 from nova_manager.components.experiences.crud import (
@@ -329,26 +329,30 @@ class PersonalisationsCRUD(BaseCRUD):
             .first()
         )
 
-    def disable_personalisation(self, pid: UUIDType) -> Optional[Personalisations]:
+    def disable_personalisation(
+        self, personalisation: Personalisations
+    ) -> Optional[Personalisations]:
         """Disable a personalisation by pid"""
-        personalisation = self.get_by_pid(pid)
-        if not personalisation:
-            return None
+
         personalisation.is_active = False
+
         self.db.add(personalisation)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(personalisation)
+
         return personalisation
 
-    def enable_personalisation(self, pid: UUIDType) -> Optional[Personalisations]:
+    def enable_personalisation(
+        self, personalisation: Personalisations
+    ) -> Optional[Personalisations]:
         """Enable a personalisation by pid"""
-        personalisation = self.get_by_pid(pid)
-        if not personalisation:
-            return None
+
         personalisation.is_active = True
+
         self.db.add(personalisation)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(personalisation)
+
         return personalisation
 
 

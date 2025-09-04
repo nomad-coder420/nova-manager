@@ -26,7 +26,6 @@ from nova_manager.components.metrics.crud import (
     MetricsCRUD,
     PersonalisationMetricsCRUD,
 )
-from nova_manager.core.log import logger
 
 router = APIRouter()
 
@@ -273,7 +272,7 @@ async def list_personalised_experiences(
 
 
 @router.patch("/{pid}/", response_model=PersonalisationDetailedResponse)
-def update_personalisation(
+async def update_personalisation(
     pid: UUID,
     update_data: PersonalisationUpdate,
     auth: AuthContext = Depends(require_app_context),
@@ -281,7 +280,7 @@ def update_personalisation(
 ):
     """
     Update a personalisation. By default only new evaluations see changes.
-    If apply_to_existing=True, existing user assignments for this personalisation will be re-assigned on next request.
+    If reassign=True, existing user assignments for this personalisation will be re-assigned on next request.
     """
     crud = PersonalisationsCRUD(db)
 
@@ -304,14 +303,6 @@ def update_personalisation(
         updated = crud.update_personalisation(personalisation, update_data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-    # mark for re-assignment if requested
-    if update_data.apply_to_existing:
-        logger.info(f"Marking personalisation {pid} for re-assignment")
-        updated.reassign = True
-        db.add(updated)
-        db.commit()
-        db.refresh(updated)
 
     return updated
 
@@ -353,22 +344,24 @@ async def disable_personalisation(
     Disable a personalisation and remove existing user assignments.
     """
     crud = PersonalisationsCRUD(db)
+
     # fetch and auth
     personalisation = crud.get_by_pid(pid)
+
     if not personalisation:
         raise HTTPException(status_code=404, detail="Personalisation not found")
+
     if str(personalisation.organisation_id) != str(auth.organisation_id):
         raise HTTPException(status_code=403, detail="Not in your organization")
+
     if personalisation.app_id != auth.app_id:
         raise HTTPException(status_code=403, detail="Not in your app")
-    # disable using CRUD
-    updated = crud.disable_personalisation(pid)
+
+    updated = crud.disable_personalisation(personalisation)
+
     if not updated:
         raise HTTPException(status_code=404, detail="Personalisation not found")
-    logger.info(f"Personalisation {pid} disabled")
-    logger.info(
-        f"Personalisation {pid} disabled; existing assignments will be re-evaluated"
-    )
+
     return updated
 
 
@@ -382,17 +375,22 @@ async def enable_personalisation(
     Enable a previously disabled personalisation.
     """
     crud = PersonalisationsCRUD(db)
+
     # fetch and auth
     personalisation = crud.get_by_pid(pid)
+
     if not personalisation:
         raise HTTPException(status_code=404, detail="Personalisation not found")
+
     if str(personalisation.organisation_id) != str(auth.organisation_id):
         raise HTTPException(status_code=403, detail="Not in your organization")
+
     if personalisation.app_id != auth.app_id:
         raise HTTPException(status_code=403, detail="Not in your app")
-    # enable using CRUD
-    updated = crud.enable_personalisation(pid)
+
+    updated = crud.enable_personalisation(personalisation)
+
     if not updated:
         raise HTTPException(status_code=404, detail="Personalisation not found")
-    logger.info(f"Personalisation {pid} enabled")
+
     return updated
