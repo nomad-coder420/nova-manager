@@ -22,16 +22,8 @@ def get_db():
     finally:
         db.close()
 
+
 @contextmanager
 def db_session():
     """Context manager for database sessions in background tasks"""
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception as e:
-        logger.error(f"Error committing database transaction: {e}")
-        db.rollback()
-        raise e
-    finally:
-        db.close()
+    return get_db()

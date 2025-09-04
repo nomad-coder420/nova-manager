@@ -1,8 +1,9 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from nova_manager.components.invitations.crud import InvitationsCRUD
 from sqlalchemy.orm import Session
 
+from nova_manager.components.invitations.crud import InvitationsCRUD
+from nova_manager.components.metrics.events_controller import EventsController
 from nova_manager.database.session import get_db
 from nova_manager.components.auth.crud import AuthCRUD
 from nova_manager.core.enums import UserRole
@@ -31,7 +32,6 @@ from nova_manager.core.security import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     AuthContext,
 )
-from nova_manager.service.bigquery import BigQueryService
 from nova_manager.core.config import GCP_PROJECT_ID, BIGQUERY_LOCATION
 from nova_manager.core.log import logger
 
@@ -259,46 +259,27 @@ async def create_app(
         organisation_id=auth.organisation_id,
         description=app_data.description,
     )
-    
-    # Provision BigQuery dataset and core tables for this app
-    dataset = f"{GCP_PROJECT_ID}.org_{auth.organisation_id}_app_{app.pid}"
-    bq = BigQueryService()
+
     try:
-        # create dataset
-        bq.create_dataset_if_not_exists(dataset, BIGQUERY_LOCATION)
-        # raw events table
-        raw_schema = [
-            {"name": "event_id", "type": "STRING"},
-            {"name": "user_id", "type": "STRING"},
-            {"name": "client_ts", "type": "TIMESTAMP"},
-            {"name": "server_ts", "type": "TIMESTAMP"},
-            {"name": "event_name", "type": "STRING"},
-            {"name": "event_data", "type": "STRING"},
-        ]
-        bq.create_table_if_not_exists(f"{dataset}.raw_events", raw_schema, partition_field="client_ts", clustering_fields=["event_name", "user_id"])
-        # user profile props table
-        profile_schema = [
-            {"name": "user_id", "type": "STRING"},
-            {"name": "key", "type": "STRING"},
-            {"name": "value", "type": "STRING"},
-            {"name": "server_ts", "type": "TIMESTAMP"},
-        ]
-        bq.create_table_if_not_exists(f"{dataset}.user_profile_props", profile_schema, partition_field="server_ts", clustering_fields=["user_id", "key"])
-        # user experience table
-        ue_schema = [
-            {"name": "user_id", "type": "STRING"},
-            {"name": "experience_id", "type": "STRING"},
-            {"name": "personalisation_id", "type": "STRING"},
-            {"name": "personalisation_name", "type": "STRING"},
-            {"name": "experience_variant_id", "type": "STRING"},
-            {"name": "features", "type": "STRING"},
-            {"name": "evaluation_reason", "type": "STRING"},
-            {"name": "assigned_at", "type": "TIMESTAMP"},
-        ]
-        bq.create_table_if_not_exists(f"{dataset}.user_experience", ue_schema)
+        events_controller = EventsController(auth.organisation_id, app.pid)
+
+        # Create dataset
+        events_controller.create_dataset()
+
+        # Create raw events table
+        events_controller.create_raw_events_table()
+
+        # Create user profile table
+        events_controller.create_user_profile_table()
+
+        # Create user experience table
+        events_controller.create_user_experience_table()
     except Exception as e:
         logger.error(f"Failed to provision core BigQuery tables for app {app.pid}: {e}")
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to provision BigQuery tables")
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to provision BigQuery tables",
+        )
 
     # Create new tokens with the new app context
     token_data = {
