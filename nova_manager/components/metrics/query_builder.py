@@ -194,8 +194,9 @@ class QueryBuilder(EventsArtefacts):
             event_name, group_by
         )
 
+        # Combine WHERE joins, group property joins, and the property join into one list
         join_expression = "\n".join(
-            where_joins + group_props_join_expression + property_join_expression
+            where_joins + group_props_join_expression + [property_join_expression]
         )
 
         group_by_keys = [item["key"] for item in group_by]
@@ -249,10 +250,10 @@ class QueryBuilder(EventsArtefacts):
 
         # Extract keys from group_by
         group_by_keys = [item["key"] for item in group_by]
-        
+
         select_parts = [
             "num.period AS period",
-            f"SAFE_DIVIDE(num.num_val, den.den_val) AS value",
+            "SAFE_DIVIDE(num.value, den.value) AS value",
         ] + [f"num.{c}" for c in group_by_keys]
         select_expression = "SELECT " + ",\n    ".join(select_parts)
 
@@ -401,12 +402,14 @@ class QueryBuilder(EventsArtefacts):
 
         return [period_expression] + group_selects
 
-    def _group_selects(self, group_by: list[GroupByType], event_table_alias: str) -> list[str]:
+    def _group_selects(
+        self, group_by: list[GroupByType], event_table_alias: str
+    ) -> list[str]:
         selects = []
 
         for item in group_by:
             key = item["key"]
-                
+
             if key in CORE_FIELDS:
                 selects.append(f"{event_table_alias}.{key} AS {key}")
             else:
@@ -437,7 +440,7 @@ class QueryBuilder(EventsArtefacts):
         for item in group_by:
             key = item["key"]
             source = item["source"]
-            
+
             if key not in CORE_FIELDS:
                 alias = f"val_{key}"
                 if source == KeySource.EVENT_PROPERTIES:
@@ -459,7 +462,7 @@ class QueryBuilder(EventsArtefacts):
             value = filter_data["value"]
             source = filter_data["source"]
             op = filter_data["op"]
-            
+
             if key in CORE_FIELDS:
                 wheres.append(f"e.{key} {op} '{value}'")
             elif source == KeySource.EVENT_PROPERTIES:
