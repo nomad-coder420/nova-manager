@@ -1,8 +1,9 @@
-from datetime import datetime
-from nova_manager.components.experiences.schemas import ExperienceResponse
 from typing import List, Optional, Dict, Any
 from uuid import UUID as UUIDType
 from pydantic import BaseModel
+
+from nova_manager.api.experiences.request_response import ExperienceVariantResponse
+from nova_manager.components.experiences.schemas import ExperienceResponse
 from nova_manager.components.metrics.schemas import MetricResponse
 
 
@@ -45,13 +46,8 @@ class PersonalisationListResponse(BaseModel):
     experience: ExperienceResponse
 
 
-class ExperienceVariantResponse(BaseModel):
-    name: str
-    description: str
-    is_default: bool
-
-
 class PersonalisationExperienceVariantResponse(BaseModel):
+    pid: UUIDType
     target_percentage: int
     experience_variant: ExperienceVariantResponse
 
@@ -70,3 +66,35 @@ class PersonalisationDetailedResponse(BaseModel):
     rule_config: dict
     experience_variants: List[PersonalisationExperienceVariantResponse]
     metrics: List[PersonalisationMetric] = []
+
+
+class ExperienceFeatureVariantUpdate(BaseModel):
+    experience_feature_id: UUIDType
+    name: str
+    config: dict
+    pid: Optional[UUIDType] = None  # Present for updates, None for creates
+
+
+class ExperienceVariantUpdate(BaseModel):
+    name: str
+    description: str
+    is_default: bool
+    pid: Optional[UUIDType] = None  # Present for updates, None for creates
+
+    feature_variants: List[ExperienceFeatureVariantUpdate] | None = None
+
+
+class PersonalisationUpdateExperienceVariant(BaseModel):
+    experience_variant: ExperienceVariantUpdate
+    target_percentage: int
+
+
+class PersonalisationUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    rule_config: Optional[Dict[str, Any]] = None
+    rollout_percentage: Optional[int] = None
+    selected_metrics: Optional[List[UUIDType]] = None
+    experience_variants: Optional[List[PersonalisationUpdateExperienceVariant]] = None
+
+    reassign: bool = False
