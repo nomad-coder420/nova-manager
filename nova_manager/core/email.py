@@ -22,6 +22,12 @@ async def send_invitation_email(
     """
     Send invitation email to user
 
+    Args:
+        email: Recipient email address
+        invite_token: Invitation token for signup link
+        organisation_name: Name of the organization
+        invited_by_name: Name of person who sent invite
+
     Returns:
         bool: True if email sent successfully, False otherwise
     """
