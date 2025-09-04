@@ -246,7 +246,6 @@ class QueryBuilder(EventsArtefacts):
             }
         )
 
-        # Build the WITH clause using the original count alias 'value'
         with_expression = f"WITH\n num AS (\n{numerator_expression}\n),\n den AS (\n{denominator_expression}\n)"
 
         # Extract keys from group_by
