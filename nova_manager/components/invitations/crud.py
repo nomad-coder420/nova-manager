@@ -50,7 +50,7 @@ class InvitationsCRUD:
         )
 
         self.db.add(invitation)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(invitation)
         return invitation
 
@@ -121,7 +121,7 @@ class InvitationsCRUD:
         invitation = self.get_by_token(token)
         if invitation and invitation.status == InvitationStatus.PENDING:
             invitation.status = InvitationStatus.ACCEPTED
-            self.db.commit()
+            self.db.flush()
             return True
         return False
 
@@ -141,7 +141,7 @@ class InvitationsCRUD:
 
         if invitation:
             invitation.status = InvitationStatus.CANCELLED
-            self.db.commit()
+            self.db.flush()
             return True
         return False
 
@@ -166,7 +166,7 @@ class InvitationsCRUD:
         for invitation in expired_invitations:
             invitation.status = InvitationStatus.EXPIRED
 
-        self.db.commit()
+        self.db.flush()
         return count
 
     def get_invitation_with_details(self, token: str) -> Optional[dict]:
