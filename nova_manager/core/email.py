@@ -70,6 +70,7 @@ async def send_password_reset_email(email: str, reset_token: str) -> bool:
     if not success:
         logger.error(f"Failed to send password reset email to {email}: {error_message}")
         return False
+
     logger.info(f"Password reset email sent successfully to: {email}")
     return True
 
