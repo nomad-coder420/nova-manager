@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import jwt
+from nova_manager.core.config import JWT_SECRET_KEY
 from passlib.context import CryptContext
 from fastapi import HTTPException, status
 from pydantic import BaseModel
@@ -11,9 +12,6 @@ from nova_manager.core.enums import UserRole
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 
 # JWT settings
-SECRET_KEY = (
-    "your-super-secure-secret-key-change-in-production"  # TODO: Use env variable
-)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 30
@@ -51,7 +49,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         )
 
     to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc)})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
@@ -62,14 +60,14 @@ def create_refresh_token(data: dict) -> str:
     to_encode.update(
         {"exp": expire, "iat": datetime.now(timezone.utc), "type": "refresh"}
     )
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
 def verify_token(token: str) -> dict:
     """Verify and decode a JWT token"""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(
@@ -89,7 +87,7 @@ def decode_token_ignore_expiry(token: str) -> dict:
     """Decode JWT token ignoring expiration (for refresh operations)"""
     try:
         payload = jwt.decode(
-            token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_exp": False}
+            token, JWT_SECRET_KEY, algorithms=[ALGORITHM], options={"verify_exp": False}
         )
         return payload
     except Exception as e:
