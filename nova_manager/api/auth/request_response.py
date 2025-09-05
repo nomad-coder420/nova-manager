@@ -109,8 +109,8 @@ class OrgUserResponse(BaseModel):
     role: str  # User role in the organization
 
 
-class AuthContextResponse(BaseModel):
-    """Response schema for current auth context"""
+class SDKCredentialsResponse(BaseModel):
+    """Response schema for SDK credentials"""
 
-    organisation_id: str
-    app_id: Optional[str] = None  # Current app (project) ID
+    sdk_api_key: str
+    backend_url: str
