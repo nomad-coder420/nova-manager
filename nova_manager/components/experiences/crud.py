@@ -4,8 +4,9 @@ from uuid import UUID as UUIDType
 from nova_manager.api.personalisations.request_response import (
     ExperienceFeatureVariantUpdate,
 )
-from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_, or_, desc, asc
+from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from nova_manager.components.experiences.models import (
     ExperienceFeatures,
@@ -326,6 +327,7 @@ class ExperienceVariantsCRUD(BaseCRUD):
                 ):
                     existing_fv.name = fv_data.name
                     existing_fv.config = fv_data.config
+                    flag_modified(existing_fv, "config")
 
                 updated_variant_ids.add(str(fv_data.pid))
             else:

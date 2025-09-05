@@ -1,6 +1,7 @@
 from nova_manager.components.personalisations.models import PersonalisationSegmentRules
-from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_, or_
+from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm.attributes import flag_modified
 from typing import List, Optional, Dict, Any
 from uuid import UUID as UUIDType
 
@@ -79,6 +80,8 @@ class SegmentsCRUD(BaseCRUD):
         segment = self.get_by_pid(pid)
         if segment:
             segment.rule_config = rule_config
+            flag_modified(segment, "rule_config")
+
             self.db.flush()
             self.db.refresh(segment)
         return segment

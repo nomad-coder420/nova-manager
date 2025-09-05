@@ -133,6 +133,7 @@ class GetUserExperienceVariantFlowAsync:
             # If personalisations, evaluate each personalisation
             for personalisation in personalisations:
                 # If a personalisation is already assigned in cache
+                # TODO: Solve for case where existing_user_experience.personalisation_id is None (No personalisation was assigned on evaluation)
                 if (
                     existing_user_experience
                     and personalisation.pid
@@ -375,7 +376,7 @@ class GetUserExperienceVariantFlowAsync:
                 personalisation_name=assignment.personalisation_name,
                 experience_variant_id=assignment.experience_variant_id,
                 features=assignment.features,
-                evaluation_reason=assignment.evaluation_reason,
+                evaluation_reason=f"assigned_from_cache: {assignment.evaluation_reason}",
             )
             self.experience_personalisation_map[assignment.experience_id] = cache_data
 

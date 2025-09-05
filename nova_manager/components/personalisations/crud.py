@@ -2,6 +2,7 @@ from typing import Optional, List
 from uuid import UUID as UUIDType
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_, asc, desc
+from sqlalchemy.orm.attributes import flag_modified
 from datetime import datetime, timezone
 
 from nova_manager.components.experiences.models import ExperienceVariants
@@ -148,7 +149,7 @@ class PersonalisationsCRUD(BaseCRUD):
 
     def get_experience_max_priority_personalisation(
         self, experience_id: UUIDType
-    ) -> List[Personalisations]:
+    ) -> Optional[Personalisations]:
         """Get the max priority personalisation for an experience"""
         return (
             self.db.query(Personalisations)
@@ -178,6 +179,7 @@ class PersonalisationsCRUD(BaseCRUD):
 
         if update_data.rule_config is not None:
             personalisation.rule_config = update_data.rule_config
+            flag_modified(personalisation, "rule_config")
 
         if update_data.rollout_percentage is not None:
             personalisation.rollout_percentage = update_data.rollout_percentage

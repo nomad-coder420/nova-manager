@@ -3,6 +3,7 @@ from typing import Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from nova_manager.components.users.models import Users
+from sqlalchemy.orm.attributes import flag_modified
 
 
 class UsersAsyncCRUD:
@@ -80,6 +81,8 @@ class UsersAsyncCRUD:
         existing_profile.update(user_profile)
 
         user.user_profile = existing_profile
+
+        flag_modified(user, "user_profile")
 
         self.db.add(user)
 

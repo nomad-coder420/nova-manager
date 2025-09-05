@@ -3,6 +3,7 @@ import json
 from typing import TypedDict
 from uuid import UUID
 import uuid
+from sqlalchemy.orm.attributes import flag_modified
 
 from nova_manager.database.session import db_session
 from nova_manager.core.log import logger
@@ -298,6 +299,8 @@ class EventsController(EventsArtefacts):
             for event_name in existing_events:
                 existing_event_schema_obj = events_schema_objs_map[event_name]
                 existing_event_schema_obj.event_schema = events_schema_map[event_name]
+
+                flag_modified(existing_event_schema_obj, "event_schema")
                 to_update.append(existing_event_schema_obj)
 
             crud.bulk_create(to_insert)
