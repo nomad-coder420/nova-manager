@@ -19,8 +19,11 @@ from nova_manager.components.experiences.crud import (
     ExperienceFeaturesCRUD,
 )
 from nova_manager.database.session import get_db
-from nova_manager.components.auth.dependencies import require_app_context
-from nova_manager.core.security import AuthContext
+from nova_manager.components.auth.dependencies import (
+    require_app_context,
+    require_sdk_app_context,
+)
+from nova_manager.core.security import AuthContext, SDKAuthContext
 
 
 router = APIRouter()
@@ -28,7 +31,9 @@ router = APIRouter()
 
 @router.post("/sync-nova-objects/")
 async def sync_nova_objects(
-    sync_request: NovaObjectSyncRequest, db: Session = Depends(get_db)
+    sync_request: NovaObjectSyncRequest,
+    auth: SDKAuthContext = Depends(require_sdk_app_context),
+    db: Session = Depends(get_db),
 ):
     """
     Sync Nova objects from client application to create/update feature flags
@@ -67,8 +72,8 @@ async def sync_nova_objects(
             # Check if feature flag already exists
             existing_flag = flags_crud.get_by_name(
                 name=object_name,
-                organisation_id=sync_request.organisation_id,
-                app_id=sync_request.app_id,
+                organisation_id=auth.organisation_id,
+                app_id=auth.app_id,
             )
 
             keys_config = object_props.keys
@@ -101,8 +106,8 @@ async def sync_nova_objects(
                     "description": f"Auto-generated from nova-objects.json for {object_name}",
                     "keys_config": keys_config,
                     "type": object_props.type,
-                    "organisation_id": sync_request.organisation_id,
-                    "app_id": sync_request.app_id,
+                    "organisation_id": auth.organisation_id,
+                    "app_id": auth.app_id,
                     "is_active": True,
                 }
 
@@ -139,8 +144,8 @@ async def sync_nova_objects(
             # Check if experience already exists
             existing_experience = experiences_crud.get_by_name(
                 name=experience_name,
-                organisation_id=sync_request.organisation_id,
-                app_id=sync_request.app_id,
+                organisation_id=auth.organisation_id,
+                app_id=auth.app_id,
             )
 
             # Update or create experience
@@ -161,8 +166,8 @@ async def sync_nova_objects(
                     "name": experience_name,
                     "description": experience_props.description,
                     "status": "active",  # Default status for synced experiences
-                    "organisation_id": sync_request.organisation_id,
-                    "app_id": sync_request.app_id,
+                    "organisation_id": auth.organisation_id,
+                    "app_id": auth.app_id,
                 }
 
                 new_experience = experiences_crud.create(obj_in=experience_data)
@@ -179,8 +184,8 @@ async def sync_nova_objects(
                 # Find the feature flag by name
                 feature_flag = flags_crud.get_by_name(
                     name=object_name,
-                    organisation_id=sync_request.organisation_id,
-                    app_id=sync_request.app_id,
+                    organisation_id=auth.organisation_id,
+                    app_id=auth.app_id,
                 )
 
                 if feature_flag:
