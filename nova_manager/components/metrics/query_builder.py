@@ -246,17 +246,14 @@ class QueryBuilder(EventsArtefacts):
             }
         )
 
-        # Build the WITH clause using the original count alias 'value'
-        with_expression = (
-            f"WITH\n num AS (\n{numerator_expression}\n),\n den AS (\n{denominator_expression}\n)"
-        )
+        with_expression = f"WITH\n num AS (\n{numerator_expression}\n),\n den AS (\n{denominator_expression}\n)"
 
         # Extract keys from group_by
         group_by_keys = [item["key"] for item in group_by]
-        
+
         select_parts = [
             "num.period AS period",
-            f"SAFE_DIVIDE(num.value, den.value) AS value",
+            "SAFE_DIVIDE(num.value, den.value) AS value",
         ] + [f"num.{c}" for c in group_by_keys]
         select_expression = "SELECT " + ",\n    ".join(select_parts)
 
@@ -405,12 +402,14 @@ class QueryBuilder(EventsArtefacts):
 
         return [period_expression] + group_selects
 
-    def _group_selects(self, group_by: list[GroupByType], event_table_alias: str) -> list[str]:
+    def _group_selects(
+        self, group_by: list[GroupByType], event_table_alias: str
+    ) -> list[str]:
         selects = []
 
         for item in group_by:
             key = item["key"]
-                
+
             if key in CORE_FIELDS:
                 selects.append(f"{event_table_alias}.{key} AS {key}")
             else:
@@ -441,7 +440,7 @@ class QueryBuilder(EventsArtefacts):
         for item in group_by:
             key = item["key"]
             source = item["source"]
-            
+
             if key not in CORE_FIELDS:
                 alias = f"val_{key}"
                 if source == KeySource.EVENT_PROPERTIES:
@@ -463,7 +462,7 @@ class QueryBuilder(EventsArtefacts):
             value = filter_data["value"]
             source = filter_data["source"]
             op = filter_data["op"]
-            
+
             if key in CORE_FIELDS:
                 wheres.append(f"e.{key} {op} '{value}'")
             elif source == KeySource.EVENT_PROPERTIES:

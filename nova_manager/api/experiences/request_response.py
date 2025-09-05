@@ -27,6 +27,7 @@ class ExperienceFeatureResponse(PidResponse):
 
 
 class ExperienceFeatureVariantResponse(BaseModel):
+    pid: UUIDType
     experience_feature_id: UUIDType
     name: str
     config: dict
