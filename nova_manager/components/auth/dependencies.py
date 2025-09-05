@@ -1,24 +1,21 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import List, Optional, TypedDict
+from typing import List, Optional
 
 from nova_manager.core.security import (
     verify_token,
     decode_token_ignore_expiry,
     create_auth_context,
+    validate_sdk_api_key,
+    create_sdk_auth_context,
     AuthContext,
+    SDKAuthContext,
 )
 from nova_manager.core.enums import UserRole
 from nova_manager.core.log import logger
 
 # OAuth2 scheme for extracting Bearer tokens
 security = HTTPBearer()
-
-
-class ClientAuthContext(TypedDict):
-    organisation_id: str
-    app_id: str
-    api_key_id: str
 
 
 async def get_current_auth(
@@ -146,4 +143,33 @@ async def require_developer_roles(
     auth: AuthContext = Depends(require_roles(UserRole.developer_roles())),
 ) -> AuthContext:
     """Require developer roles only"""
+    return auth
+
+
+async def get_sdk_auth(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> SDKAuthContext:
+    """Extract and validate auth context from JWT token"""
+    token = credentials.credentials
+    payload = validate_sdk_api_key(token)
+
+    return create_sdk_auth_context(payload)
+
+
+async def require_sdk_app_context(
+    auth: SDKAuthContext = Depends(get_sdk_auth),
+) -> SDKAuthContext:
+    """Require SDK app context"""
+    if not auth.organisation_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Organisation context required",
+        )
+
+    if not auth.app_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="App context required",
+        )
+
     return auth

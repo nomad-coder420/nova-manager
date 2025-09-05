@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from nova_manager.api.users.request_response import (
     UpdateUserProfile,
     UserCreate,
     UserResponse,
 )
 from nova_manager.components.users.crud_async import UsersAsyncCRUD
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from nova_manager.database.async_session import get_async_db
-from nova_manager.components.auth.dependencies import require_api_key, ClientAuthContext
+from nova_manager.components.auth.dependencies import require_sdk_app_context
+from nova_manager.core.security import SDKAuthContext
 
 router = APIRouter()
 
@@ -16,7 +17,7 @@ router = APIRouter()
 @router.post("/create-user/", response_model=UserResponse)
 async def create_user(
     user_data: UserCreate,
-    auth: ClientAuthContext = Depends(require_api_key),
+    auth: SDKAuthContext = Depends(require_sdk_app_context),
     db: AsyncSession = Depends(get_async_db),
 ):
     """Create a new user using API key to infer organisation/app"""
@@ -24,8 +25,8 @@ async def create_user(
     users_crud = UsersAsyncCRUD(db)
 
     user_id = user_data.user_id
-    organisation_id = auth["organisation_id"]
-    app_id = auth["app_id"]
+    organisation_id = auth.organisation_id
+    app_id = auth.app_id
     user_profile = user_data.user_profile or {}
 
     existing_user = await users_crud.get_by_user_id(
@@ -47,7 +48,7 @@ async def create_user(
 @router.post("/update-user-profile/", response_model=UserResponse)
 async def update_user_profile(
     user_profile_update: UpdateUserProfile,
-    auth: ClientAuthContext = Depends(require_api_key),
+    auth: SDKAuthContext = Depends(require_sdk_app_context),
     db: AsyncSession = Depends(get_async_db),
 ):
     """Update user profile using API key to infer organisation/app"""
@@ -55,8 +56,8 @@ async def update_user_profile(
     users_crud = UsersAsyncCRUD(db)
 
     user_id = user_profile_update.user_id
-    organisation_id = auth["organisation_id"]
-    app_id = auth["app_id"]
+    organisation_id = auth.organisation_id
+    app_id = auth.app_id
     user_profile = user_profile_update.user_profile or {}
 
     existing_user = await users_crud.get_by_user_id(
