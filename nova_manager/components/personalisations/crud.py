@@ -17,8 +17,6 @@ from nova_manager.components.experiences.crud import (
     ExperienceVariantsCRUD,
     ExperienceFeatureVariantsCRUD,
 )
-from nova_manager.components.history.crud import HistoryCRUD
-
 
 
 class PersonalisationsCRUD(BaseCRUD):
@@ -170,6 +168,7 @@ class PersonalisationsCRUD(BaseCRUD):
         """
         if not personalisation:
             return None
+
         # Update basic fields if provided
         if update_data.name is not None:
             personalisation.name = update_data.name
@@ -334,6 +333,7 @@ class PersonalisationsCRUD(BaseCRUD):
         self, personalisation: Personalisations
     ) -> Optional[Personalisations]:
         """Disable a personalisation by pid"""
+
         personalisation.is_active = False
 
         # Set reassign to true by default to re-evaluate existing user assignments
@@ -349,6 +349,7 @@ class PersonalisationsCRUD(BaseCRUD):
         self, personalisation: Personalisations
     ) -> Optional[Personalisations]:
         """Enable a personalisation by pid"""
+
         personalisation.is_active = True
 
         # Set reassign to true by default to re-evaluate existing user assignments
