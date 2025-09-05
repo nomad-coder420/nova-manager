@@ -1,13 +1,11 @@
 import secrets
-import string
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, or_
+from sqlalchemy import and_
 
 from nova_manager.components.invitations.models import Invitation
-from nova_manager.components.auth.models import AuthUser, Organisation
 from nova_manager.core.enums import UserRole, InvitationStatus
 
 

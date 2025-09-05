@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, Literal
 from uuid import UUID as UUIDType
 from datetime import datetime
 from pydantic import BaseModel

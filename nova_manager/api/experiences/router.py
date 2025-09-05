@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from uuid import UUID as UUIDType
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -63,7 +63,7 @@ async def list_experiences(
 async def get_experience(
     experience_pid: UUIDType,
     auth: AuthContext = Depends(require_app_context),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get experience by ID with full details"""
     experiences_crud = ExperiencesCRUD(db)
@@ -81,7 +81,7 @@ async def get_experience(
 async def get_experience_features(
     experience_pid: UUIDType,
     auth: AuthContext = Depends(require_app_context),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get features for a specific experience"""
     experience_features_crud = ExperienceFeaturesCRUD(db)

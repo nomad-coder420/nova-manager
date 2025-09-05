@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from uuid import UUID as UUIDType
 from nova_manager.components.experiences.models import ExperienceFeatures
 from sqlalchemy.orm import Session, selectinload
@@ -36,7 +36,7 @@ class FeatureFlagsCRUD(BaseCRUD):
             self.db.query(FeatureFlags)
             .filter(
                 and_(
-                    FeatureFlags.is_active == True,
+                    FeatureFlags.is_active,
                     FeatureFlags.organisation_id == organisation_id,
                     FeatureFlags.app_id == app_id,
                 )

@@ -209,7 +209,7 @@ class ExperienceVariantsCRUD(BaseCRUD):
             .filter(
                 and_(
                     ExperienceVariants.pid.in_(variant_ids),
-                    ExperienceVariants.is_default == True,
+                    ExperienceVariants.is_default,
                 )
             )
             .all()

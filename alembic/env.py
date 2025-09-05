@@ -9,16 +9,16 @@ from nova_manager.core.config import DATABASE_URL
 from nova_manager.core.models import Base
 
 # Import all models here
-from nova_manager.components.auth.models import *
-from nova_manager.components.invitations.models import *
-from nova_manager.components.users.models import *
-from nova_manager.components.feature_flags.models import *
-from nova_manager.components.segments.models import *
-from nova_manager.components.experiences.models import *
-from nova_manager.components.personalisations.models import *
-from nova_manager.components.user_experience.models import *
-from nova_manager.components.metrics.models import *
-from nova_manager.components.recommendations.models import *
+from nova_manager.components.auth.models import *  # noqa: F403
+from nova_manager.components.invitations.models import *  # noqa: F403
+from nova_manager.components.users.models import *  # noqa: F403
+from nova_manager.components.feature_flags.models import *  # noqa: F403
+from nova_manager.components.segments.models import *  # noqa: F403
+from nova_manager.components.experiences.models import *  # noqa: F403
+from nova_manager.components.personalisations.models import *  # noqa: F403
+from nova_manager.components.user_experience.models import *  # noqa: F403
+from nova_manager.components.metrics.models import *  # noqa: F403
+from nova_manager.components.recommendations.models import *  # noqa: F403
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

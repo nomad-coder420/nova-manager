@@ -1,6 +1,5 @@
 from typing import Optional, List
-from uuid import UUID as UUIDType
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 
 

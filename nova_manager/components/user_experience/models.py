@@ -17,6 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from nova_manager.core.models import BaseOrganisationModel
 from nova_manager.components.users.models import Users
 from nova_manager.components.experiences.models import Experiences
+from nova_manager.components.personalisations.models import Personalisations
 
 
 class UserExperience(BaseOrganisationModel):
@@ -92,17 +93,17 @@ class UserExperience(BaseOrganisationModel):
     )
 
     # Relationships
-    user = relationship(
+    user: Mapped[Users] = relationship(
         "Users",
         foreign_keys=[user_id],
         back_populates="user_experience_personalisations",
     )
-    experience = relationship(
+    experience: Mapped[Experiences] = relationship(
         "Experiences",
         foreign_keys=[experience_id],
         back_populates="user_experience_personalisations",
     )
-    personalisation = relationship(
+    personalisation: Mapped[Personalisations] = relationship(
         "Personalisations",
         foreign_keys=[personalisation_id],
         back_populates="user_experience_personalisations",

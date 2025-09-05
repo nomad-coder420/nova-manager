@@ -9,6 +9,7 @@ from nova_manager.core.security import (
     AuthContext,
 )
 from nova_manager.core.enums import UserRole
+from nova_manager.core.log import logger
 
 # OAuth2 scheme for extracting Bearer tokens
 security = HTTPBearer()
@@ -76,8 +77,9 @@ async def get_current_auth_ignore_expiry(
             return None
 
         return create_auth_context(payload)
-    except:
+    except Exception as e:
         # If token is invalid, return None instead of raising exception
+        logger.error(f"Error decoding token: {e}")
         return None
 
 

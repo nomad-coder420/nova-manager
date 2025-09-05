@@ -1,7 +1,6 @@
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Literal, TypedDict, Union
-from enum import Enum
+from typing import Literal, TypedDict
 
 from nova_manager.components.metrics.artefacts import EventsArtefacts
 
@@ -106,13 +105,12 @@ class QueryBuilder(EventsArtefacts):
         raise Exception(f"Unsupported metric_type: {metric_type}")
 
     def _build_count_query(self, metric_config: CountMetricConfig):
-        granularity = metric_config.get("granularity") or "none"
-        time_range = metric_config.get("time_range")
-        group_by = metric_config.get("group_by") or []
-        filters = metric_config.get("filters") or {}
+        time_range = metric_config["time_range"]
+        group_by = metric_config["group_by"]
+        filters = metric_config["filters"]
 
-        event_name = metric_config.get("event_name") or ""
-        distinct = metric_config.get("distinct") or False
+        event_name = metric_config["event_name"]
+        distinct = metric_config["distinct"]
 
         start, end = self._get_start_end(time_range)
 
@@ -156,14 +154,13 @@ class QueryBuilder(EventsArtefacts):
         )
 
     def _build_aggregation_query(self, metric_config: AggregationMetricConfig):
-        granularity = metric_config.get("granularity") or "none"
-        time_range = metric_config.get("time_range")
-        group_by = metric_config.get("group_by") or []
-        filters = metric_config.get("filters") or {}
+        time_range = metric_config["time_range"]
+        group_by = metric_config["group_by"]
+        filters = metric_config["filters"]
 
-        event_name = metric_config.get("event_name") or ""
-        aggregation = metric_config.get("aggregation")
-        property = metric_config.get("property")
+        event_name = metric_config["event_name"]
+        aggregation = metric_config["aggregation"]
+        property = metric_config["property"]
 
         start, end = self._get_start_end(time_range)
 
@@ -211,18 +208,18 @@ class QueryBuilder(EventsArtefacts):
         )
 
     def _build_ratio_query(self, metric_config: RatioMetricConfig):
-        granularity = metric_config.get("granularity") or "none"
-        time_range = metric_config.get("time_range")
-        group_by = metric_config.get("group_by") or []
-        filters = metric_config.get("filters") or {}
+        granularity = metric_config["granularity"]
+        time_range = metric_config["time_range"]
+        group_by = metric_config["group_by"]
+        filters = metric_config["filters"]
 
-        numerator_config = metric_config.get("numerator")
+        numerator_config = metric_config["numerator"]
         numerator_filters = numerator_config.get("filters") or {}
         numerator_filters.update(filters)
 
         numerator_expression = self._build_count_query(
             {
-                "event_name": numerator_config.get("event_name"),
+                "event_name": numerator_config["event_name"],
                 "distinct": False,
                 "time_range": time_range,
                 "granularity": granularity,
@@ -231,13 +228,13 @@ class QueryBuilder(EventsArtefacts):
             }
         )
 
-        denominator_config = metric_config.get("denominator")
+        denominator_config = metric_config["denominator"]
         denominator_filters = denominator_config.get("filters") or {}
         denominator_filters.update(filters)
 
         denominator_expression = self._build_count_query(
             {
-                "event_name": denominator_config.get("event_name"),
+                "event_name": denominator_config["event_name"],
                 "distinct": False,
                 "time_range": time_range,
                 "granularity": granularity,
@@ -277,14 +274,14 @@ class QueryBuilder(EventsArtefacts):
 
     # TODO: Review this query
     def _build_retention_query(self, metric_config: RetentionMetricConfig):
-        granularity = metric_config.get("granularity") or "none"
-        time_range = metric_config.get("time_range")
-        group_by = metric_config.get("group_by") or []
-        filters = metric_config.get("filters") or {}
+        granularity = metric_config["granularity"]
+        time_range = metric_config["time_range"]
+        group_by = metric_config["group_by"]
+        filters = metric_config["filters"]
 
-        initial_event = metric_config.get("initial_event")
-        return_event = metric_config.get("return_event")
-        retention_window = metric_config.get("retention_window")
+        initial_event = metric_config["initial_event"]
+        return_event = metric_config["return_event"]
+        retention_window = metric_config["retention_window"]
 
         start, end = self._get_start_end(time_range)
 
@@ -292,7 +289,7 @@ class QueryBuilder(EventsArtefacts):
         bucket_expr = self._time_bucket("e.client_ts", granularity)
 
         # Initial cohort CTE
-        initial_event_name = initial_event.get("event_name")
+        initial_event_name = initial_event["event_name"]
         initial_filters = initial_event.get("filters") or {}
         initial_filters.update(filters)
 
@@ -326,7 +323,7 @@ class QueryBuilder(EventsArtefacts):
         )
 
         # Return events CTE
-        return_event_name = return_event.get("event_name")
+        return_event_name = return_event["event_name"]
         return_filters = return_event.get("filters") or {}
         return_filters.update(filters)
 
@@ -392,8 +389,8 @@ class QueryBuilder(EventsArtefacts):
         return GRANULARITY_TRUNC_MAP[granularity].format(ts=column_name)
 
     def _get_select_parts(self, metric_config: BaseMetricConfig):
-        granularity = metric_config.get("granularity") or "none"
-        group_by = metric_config.get("group_by") or []
+        granularity = metric_config["granularity"]
+        group_by = metric_config["group_by"]
 
         time_bucket = self._time_bucket("e.client_ts", granularity)
         group_selects = self._group_selects(group_by, "e")
@@ -501,7 +498,10 @@ class QueryBuilder(EventsArtefacts):
 
             return start_time.isoformat(), end_time.isoformat()
         else:
-            return time_range.get("start"), time_range.get("end")
+            if "start" not in time_range or "end" not in time_range:
+                raise ValueError("Invalid time range")
+
+            return time_range["start"], time_range["end"]
 
     def _parse_interval_string(self, interval_str: str) -> tuple[int, str]:
         m = re.fullmatch(r"(\d+)([hdwmy])", interval_str.strip().lower())

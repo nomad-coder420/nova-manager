@@ -32,7 +32,6 @@ from nova_manager.core.security import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     AuthContext,
 )
-from nova_manager.core.config import GCP_PROJECT_ID, BIGQUERY_LOCATION
 from nova_manager.core.log import logger
 
 router = APIRouter()

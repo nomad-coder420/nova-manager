@@ -203,13 +203,13 @@ class PersonalisationSegmentRules(BaseModel):
     )
 
     # Relationships
-    personalisation = relationship(
+    personalisation: Mapped[Personalisations] = relationship(
         "Personalisations",
         foreign_keys=[personalisation_id],
         back_populates="segment_rules",
     )
 
-    segment = relationship(
+    segment: Mapped[Segments] = relationship(
         "Segments",
         foreign_keys=[segment_id],
         back_populates="personalisations",
