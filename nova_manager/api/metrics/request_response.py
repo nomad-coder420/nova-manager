@@ -5,9 +5,7 @@ from pydantic import BaseModel
 
 
 class TrackEventRequest(BaseModel):
-    user_id: UUIDType
-    organisation_id: str
-    app_id: str
+    user_id: str
     timestamp: datetime
     event_name: str
     event_data: dict | None

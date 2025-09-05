@@ -1,5 +1,5 @@
 from typing import Optional, List
-from uuid import uuid4
+from uuid import UUID, uuid4
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
@@ -35,7 +35,7 @@ class AuthCRUD:
         email: str,
         password: str,
         name: str,
-        organisation_id: str,
+        organisation_id: UUID,
         role: UserRole = UserRole.MEMBER,
     ) -> AuthUser:
         """Create a new auth user"""
@@ -59,7 +59,7 @@ class AuthCRUD:
         return verify_password(password, user.password)
 
     def create_app(
-        self, name: str, organisation_id: str, description: Optional[str] = None
+        self, name: str, organisation_id: UUID, description: Optional[str] = None
     ) -> App:
         """Create a new app"""
         app = App(pid=str(uuid4()), name=name, organisation_id=organisation_id)
@@ -69,11 +69,11 @@ class AuthCRUD:
         self.db.refresh(app)
         return app
 
-    def get_apps_by_organisation(self, organisation_id: str) -> List[App]:
+    def get_apps_by_organisation(self, organisation_id: UUID) -> List[App]:
         """Get all apps for an organisation"""
         return self.db.query(App).filter(App.organisation_id == organisation_id).all()
 
-    def get_app_by_id(self, app_id: str, organisation_id: str) -> Optional[App]:
+    def get_app_by_id(self, app_id: UUID, organisation_id: UUID) -> Optional[App]:
         """Get app by ID within organisation"""
         return (
             self.db.query(App)
@@ -91,7 +91,7 @@ class AuthCRUD:
         )
 
     def get_users_by_organisation(
-        self, organisation_id: str, skip: int = 0, limit: int = 100
+        self, organisation_id: UUID, skip: int = 0, limit: int = 100
     ) -> List[AuthUser]:
         """Get auth users for an organisation with pagination"""
         return (
