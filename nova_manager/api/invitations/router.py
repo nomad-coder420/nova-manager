@@ -7,10 +7,10 @@ from nova_manager.database.session import get_db
 from nova_manager.components.auth.dependencies import require_roles, AuthContext
 from nova_manager.core.enums import UserRole
 from nova_manager.api.invitations.request_response import (
-    InviteUserRequest, 
-    InvitationResponse, 
+    InviteUserRequest,
+    InvitationResponse,
     InvitationListResponse,
-    ValidateInviteResponse
+    ValidateInviteResponse,
 )
 from nova_manager.components.invitations.crud import InvitationsCRUD
 from nova_manager.components.auth.crud import AuthCRUD
@@ -24,50 +24,49 @@ router = APIRouter()
 async def send_invitation(
     invite_data: InviteUserRequest,
     auth: AuthContext = Depends(require_roles(UserRole.admin_roles())),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Send invitation to a new user (admin/owner only)"""
     invitations_crud = InvitationsCRUD(db)
     auth_crud = AuthCRUD(db)
-    
+
     # Check if user already exists with this email
     existing_user = auth_crud.get_auth_user_by_email(invite_data.email)
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User with this email already exists"
+            detail="User with this email already exists",
         )
-    
+
     # Check if there's already a pending invitation for this email
     existing_invite = invitations_crud.get_pending_by_email(
-        invite_data.email, 
-        auth.organisation_id
+        invite_data.email, auth.organisation_id
     )
     if existing_invite:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invitation already sent to this email address"
+            detail="Invitation already sent to this email address",
         )
-    
+
     # Create invitation
     invitation = invitations_crud.create_invitation(
         email=invite_data.email,
         organisation_id=auth.organisation_id,
         role=invite_data.role.value,
-        invited_by=auth.auth_user_id
+        invited_by=auth.auth_user_id,
     )
-    
+
     # Get organization and inviter details for email
     invitation_details = invitations_crud.get_invitation_with_details(invitation.token)
-    
+
     # Send invitation email
     email_sent = await send_invitation_email(
         email=invite_data.email,
         invite_token=invitation.token,
         organisation_name=invitation_details["organisation_name"],
-        invited_by_name=invitation_details["invited_by_name"]
+        invited_by_name=invitation_details["invited_by_name"],
     )
-    
+
     if not email_sent:
         logger.warning(f"Failed to send invitation email to {invite_data.email}")
 
@@ -79,7 +78,7 @@ async def send_invitation(
         expires_at=invitation.expires_at,
         invited_by_name=invitation_details["invited_by_name"],
         organisation_name=invitation_details["organisation_name"],
-        created_at=invitation.created_at
+        created_at=invitation.created_at,
     )
 
 
@@ -87,19 +86,18 @@ async def send_invitation(
 async def list_invitations(
     status: str = "pending",
     auth: AuthContext = Depends(require_roles(UserRole.admin_roles())),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """List invitations for the organization (admin/owner only)"""
     invitations_crud = InvitationsCRUD(db)
-    
+
     # Clean up expired invitations first
     invitations_crud.cleanup_expired_invitations(auth.organisation_id)
-    
+
     invitations = invitations_crud.list_by_organisation(
-        organisation_id=auth.organisation_id,
-        status=status if status != "all" else None
+        organisation_id=auth.organisation_id, status=status if status != "all" else None
     )
-    
+
     return [
         InvitationListResponse(
             id=invite.pid,
@@ -108,7 +106,7 @@ async def list_invitations(
             status=invite.status,
             expires_at=invite.expires_at,
             invited_by_name=invite.invited_by_user.name,
-            created_at=invite.created_at
+            created_at=invite.created_at,
         )
         for invite in invitations
     ]
@@ -118,18 +116,18 @@ async def list_invitations(
 async def cancel_invitation(
     invitation_id: UUID,
     auth: AuthContext = Depends(require_roles(UserRole.admin_roles())),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Cancel a pending invitation (admin/owner only)"""
     invitations_crud = InvitationsCRUD(db)
-    
+
     success = invitations_crud.cancel_invitation(invitation_id, auth.organisation_id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Invitation not found or cannot be cancelled"
+            detail="Invitation not found or cannot be cancelled",
         )
-    
+
     return {"message": "Invitation cancelled successfully"}
 
 
@@ -137,18 +135,18 @@ async def cancel_invitation(
 async def validate_invite_token(token: str, db: Session = Depends(get_db)):
     """Validate invitation token and return organization details (public endpoint)"""
     invitations_crud = InvitationsCRUD(db)
-    
+
     invitation = invitations_crud.get_valid_invitation(token)
     if not invitation:
         return ValidateInviteResponse(valid=False)
-    
+
     # Get organization and inviter details
     details = invitations_crud.get_invitation_with_details(token)
-    
+
     return ValidateInviteResponse(
         valid=True,
         organisation_name=details["organisation_name"],
         invited_by_name=details["invited_by_name"],
         role=invitation.role,
-        email=invitation.email
+        email=invitation.email,
     )

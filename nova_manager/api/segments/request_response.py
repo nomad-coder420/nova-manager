@@ -1,4 +1,3 @@
-from datetime import datetime
 from nova_manager.components.personalisations.schemas import PersonalisationResponse
 from typing import List, Optional, Dict, Any
 from uuid import UUID as UUIDType

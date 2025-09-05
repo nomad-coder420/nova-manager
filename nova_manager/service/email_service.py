@@ -1,14 +1,16 @@
 import requests
 import logging
-from typing import List, Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple
 from nova_manager.core.config import BREVO_API_KEY
 
 logger = logging.getLogger(__name__)
+
 
 class EmailService:
     """
     Abstract email service interface. Implementations should provide send_email method.
     """
+
     def send_email(
         self,
         to: str,
@@ -18,17 +20,18 @@ class EmailService:
     ) -> Tuple[bool, Optional[str]]:
         """
         Send email and return success status with optional error message.
-        
+
         Returns:
             Tuple[bool, Optional[str]]: (success, error_message)
         """
         raise NotImplementedError("send_email must be implemented by subclasses")
 
+
 class BrevoAPIEmailService(EmailService):
     """
     Email service implementation using Brevo (formerly Sendinblue) API.
     """
-    
+
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or BREVO_API_KEY
         if not self.api_key:
@@ -43,7 +46,7 @@ class BrevoAPIEmailService(EmailService):
     ) -> Tuple[bool, Optional[str]]:
         """
         Send a transactional email using a Brevo template.
-        
+
         Returns:
             Tuple[bool, Optional[str]]: (success, error_message)
             - (True, None) on success
@@ -55,26 +58,24 @@ class BrevoAPIEmailService(EmailService):
             return False, error_msg
 
         url = "https://api.brevo.com/v3/smtp/email"
-        
-        payload = {
-            "templateId": template_id,
-            "to": [{"email": to}],
-            "params": params
-        }
+
+        payload = {"templateId": template_id, "to": [{"email": to}], "params": params}
 
         headers = {
             "accept": "application/json",
             "content-type": "application/json",
             "api-key": self.api_key,
-            "User-Agent": "Mozilla/5.0 (compatible; TestClient/1.0)"
+            "User-Agent": "Mozilla/5.0 (compatible; TestClient/1.0)",
         }
 
         logger.info(f"Attempting to send email via Brevo API to: {to}")
         logger.debug(f"Brevo API payload: {payload}")
 
         try:
-            response = requests.post(url, json=payload, headers=headers, verify=False, timeout=30)
-            
+            response = requests.post(
+                url, json=payload, headers=headers, verify=False, timeout=30
+            )
+
             # Log response for debugging
             logger.debug(f"Brevo API response: {response.status_code} {response.text}")
 
@@ -93,20 +94,23 @@ class BrevoAPIEmailService(EmailService):
             error_msg = "Email service timeout - request took too long"
             logger.error(error_msg)
             return False, error_msg
-            
+
         except requests.exceptions.ConnectionError:
-            error_msg = "Email service connection error - unable to connect to Brevo API"
+            error_msg = (
+                "Email service connection error - unable to connect to Brevo API"
+            )
             logger.error(error_msg)
             return False, error_msg
-            
+
         except requests.exceptions.RequestException as e:
             error_msg = f"Email service request failed: {str(e)}"
             logger.error(error_msg)
             return False, error_msg
-            
+
         except Exception as e:
             error_msg = f"Unexpected error in email service: {str(e)}"
             logger.error(error_msg)
             return False, error_msg
+
 
 email_service: EmailService = BrevoAPIEmailService()

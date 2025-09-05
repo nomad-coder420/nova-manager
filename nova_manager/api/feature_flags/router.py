@@ -76,7 +76,7 @@ async def sync_nova_objects(
             # TODO: Add keys_config validation here
             # Update existing flag
             if existing_flag:
-                updated_flag = flags_crud.update(
+                flags_crud.update(
                     db_obj=existing_flag,
                     obj_in={
                         "keys_config": keys_config,
@@ -145,7 +145,7 @@ async def sync_nova_objects(
 
             # Update or create experience
             if existing_experience:
-                updated_experience = experiences_crud.update(
+                experiences_crud.update(
                     db_obj=existing_experience,
                     obj_in={
                         "description": experience_props.description,
@@ -225,7 +225,7 @@ async def sync_nova_objects(
             traceback.print_exc()
             continue
 
-    dashboard_url = f"https://dashboard.nova.com/objects"
+    dashboard_url = "https://dashboard.nova.com/objects"
 
     return NovaObjectSyncResponse(
         success=True,
@@ -287,9 +287,9 @@ async def list_available_feature_flags(
 
 @router.get("/{flag_pid}/", response_model=FeatureFlagDetailedResponse)
 async def get_feature_flag(
-    flag_pid: UUID, 
+    flag_pid: UUID,
     auth: AuthContext = Depends(require_app_context),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get feature flag by ID with all variants"""
     feature_flags_crud = FeatureFlagsCRUD(db)

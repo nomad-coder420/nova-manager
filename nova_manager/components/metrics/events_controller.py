@@ -372,6 +372,4 @@ class EventsController(EventsArtefacts):
             for key in user.user_profile
         ]
 
-        errors = BigQueryService().insert_rows(
-            user_profile_table_name, user_profile_rows
-        )
+        BigQueryService().insert_rows(user_profile_table_name, user_profile_rows)
