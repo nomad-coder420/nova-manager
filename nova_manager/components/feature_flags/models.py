@@ -1,19 +1,14 @@
-from uuid import UUID as UUIDType
 from sqlalchemy import (
     JSON,
-    UUID,
     Boolean,
-    Enum,
-    ForeignKey,
     Index,
-    Integer,
     String,
     UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from nova_manager.core.models import BaseModel, BaseOrganisationModel
+from nova_manager.core.models import BaseOrganisationModel
 
 
 class FeatureFlags(BaseOrganisationModel):

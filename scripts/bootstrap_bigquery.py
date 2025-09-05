@@ -4,6 +4,7 @@ Idempotent script to create BigQuery datasets and tables for all existing apps a
 Usage:
   poetry run python scripts/bootstrap_bigquery.py
 """
+
 import sys
 from typing import List, Tuple
 import logging
@@ -26,9 +27,7 @@ def main():
     try:
         # find all (organisation_id, app_id) combinations from Apps table
         apps: List[Tuple[str, str]] = (
-            db.query(AuthApp.organisation_id, AuthApp.pid)
-              .distinct()
-              .all()
+            db.query(AuthApp.organisation_id, AuthApp.pid).distinct().all()
         )
         if not apps:
             logger.info("No apps found. Exiting.")
@@ -48,86 +47,98 @@ def main():
             # raw_events
             # use full project.dataset.table name
             raw_table = f"{GCP_PROJECT_ID}.{artefacts._raw_events_table_name()}"
-            bq_service.create_table_if_not_exists(raw_table, schema=[
-                {'name': 'event_id', 'type': 'STRING'},
-                {'name': 'user_id', 'type': 'STRING'},
-                {'name': 'client_ts', 'type': 'TIMESTAMP'},
-                {'name': 'server_ts', 'type': 'TIMESTAMP'},
-                {'name': 'event_name', 'type': 'STRING'},
-                {'name': 'event_data', 'type': 'STRING'},
-            ])
+            bq_service.create_table_if_not_exists(
+                raw_table,
+                schema=[
+                    {"name": "event_id", "type": "STRING"},
+                    {"name": "user_id", "type": "STRING"},
+                    {"name": "client_ts", "type": "TIMESTAMP"},
+                    {"name": "server_ts", "type": "TIMESTAMP"},
+                    {"name": "event_name", "type": "STRING"},
+                    {"name": "event_data", "type": "STRING"},
+                ],
+            )
 
             # user_experience
             ue_table = f"{GCP_PROJECT_ID}.{artefacts._user_experience_table_name()}"
-            bq_service.create_table_if_not_exists(ue_table, schema=[
-                {'name': 'user_id', 'type': 'STRING'},
-                {'name': 'experience_id', 'type': 'STRING'},
-                {'name': 'personalisation_id', 'type': 'STRING'},
-                {'name': 'personalisation_name', 'type': 'STRING'},
-                {'name': 'experience_variant_id', 'type': 'STRING'},
-                {'name': 'features', 'type': 'STRING'},
-                {'name': 'evaluation_reason', 'type': 'STRING'},
-                {'name': 'assigned_at', 'type': 'TIMESTAMP'},
-            ])
+            bq_service.create_table_if_not_exists(
+                ue_table,
+                schema=[
+                    {"name": "user_id", "type": "STRING"},
+                    {"name": "experience_id", "type": "STRING"},
+                    {"name": "personalisation_id", "type": "STRING"},
+                    {"name": "personalisation_name", "type": "STRING"},
+                    {"name": "experience_variant_id", "type": "STRING"},
+                    {"name": "features", "type": "STRING"},
+                    {"name": "evaluation_reason", "type": "STRING"},
+                    {"name": "assigned_at", "type": "TIMESTAMP"},
+                ],
+            )
 
             # user_profile_props
             up_table = f"{GCP_PROJECT_ID}.{artefacts._user_profile_props_table_name()}"
             bq_service.create_table_if_not_exists(
                 up_table,
                 schema=[
-                    {'name': 'user_id', 'type': 'STRING'},
-                    {'name': 'key', 'type': 'STRING'},
-                    {'name': 'value', 'type': 'STRING'},
-                    {'name': 'server_ts', 'type': 'TIMESTAMP'},
+                    {"name": "user_id", "type": "STRING"},
+                    {"name": "key", "type": "STRING"},
+                    {"name": "value", "type": "STRING"},
+                    {"name": "server_ts", "type": "TIMESTAMP"},
                 ],
-                partition_field='server_ts',
-                clustering_fields=['user_id', 'key'],
+                partition_field="server_ts",
+                clustering_fields=["user_id", "key"],
             )
 
             # create tables for each event and props
             # filter using string IDs to match String columns in EventsSchema
-            event_schemas = db.query(EventsSchema).filter_by(
-                organisation_id=str_org,
-                app_id=str_app
-            ).all()
+            event_schemas = (
+                db.query(EventsSchema)
+                .filter_by(organisation_id=str_org, app_id=str_app)
+                .all()
+            )
 
             for es in event_schemas:
                 event_name = es.event_name
                 # event table
-                evt_table_id = f"{GCP_PROJECT_ID}.{artefacts._event_table_name(event_name)}"
+                evt_table_id = (
+                    f"{GCP_PROJECT_ID}.{artefacts._event_table_name(event_name)}"
+                )
                 bq_service.create_table_if_not_exists(
                     evt_table_id,
                     schema=[
-                        {'name': 'event_id', 'type': 'STRING'},
-                        {'name': 'user_id', 'type': 'STRING'},
-                        {'name': 'event_name', 'type': 'STRING'},
-                        {'name': 'client_ts', 'type': 'TIMESTAMP'},
-                        {'name': 'server_ts', 'type': 'TIMESTAMP'},
+                        {"name": "event_id", "type": "STRING"},
+                        {"name": "user_id", "type": "STRING"},
+                        {"name": "event_name", "type": "STRING"},
+                        {"name": "client_ts", "type": "TIMESTAMP"},
+                        {"name": "server_ts", "type": "TIMESTAMP"},
                     ],
-                    partition_field='client_ts',
-                    clustering_fields=['event_name', 'user_id'],
+                    partition_field="client_ts",
+                    clustering_fields=["event_name", "user_id"],
                 )
 
                 # props table
-                props_table_id = f"{GCP_PROJECT_ID}.{artefacts._event_props_table_name(event_name)}"
+                props_table_id = (
+                    f"{GCP_PROJECT_ID}.{artefacts._event_props_table_name(event_name)}"
+                )
                 bq_service.create_table_if_not_exists(
                     props_table_id,
                     schema=[
-                        {'name': 'event_id', 'type': 'STRING'},
-                        {'name': 'user_id', 'type': 'STRING'},
-                        {'name': 'event_name', 'type': 'STRING'},
-                        {'name': 'key', 'type': 'STRING'},
-                        {'name': 'value', 'type': 'STRING'},
-                        {'name': 'client_ts', 'type': 'TIMESTAMP'},
-                        {'name': 'server_ts', 'type': 'TIMESTAMP'},
+                        {"name": "event_id", "type": "STRING"},
+                        {"name": "user_id", "type": "STRING"},
+                        {"name": "event_name", "type": "STRING"},
+                        {"name": "key", "type": "STRING"},
+                        {"name": "value", "type": "STRING"},
+                        {"name": "client_ts", "type": "TIMESTAMP"},
+                        {"name": "server_ts", "type": "TIMESTAMP"},
                     ],
-                    partition_field='client_ts',
-                    clustering_fields=['event_name', 'user_id'],
+                    partition_field="client_ts",
+                    clustering_fields=["event_name", "user_id"],
                 )
     finally:
         db.close()
         db.close()
     logger.info("BigQuery bootstrap complete.")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     sys.exit(main())

@@ -1,13 +1,11 @@
 import secrets
-import string
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, or_
+from sqlalchemy import and_
 
 from nova_manager.components.invitations.models import Invitation
-from nova_manager.components.auth.models import AuthUser, Organisation
 from nova_manager.core.enums import UserRole, InvitationStatus
 
 
@@ -50,7 +48,7 @@ class InvitationsCRUD:
         )
 
         self.db.add(invitation)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(invitation)
         return invitation
 
@@ -121,7 +119,7 @@ class InvitationsCRUD:
         invitation = self.get_by_token(token)
         if invitation and invitation.status == InvitationStatus.PENDING:
             invitation.status = InvitationStatus.ACCEPTED
-            self.db.commit()
+            self.db.flush()
             return True
         return False
 
@@ -141,7 +139,7 @@ class InvitationsCRUD:
 
         if invitation:
             invitation.status = InvitationStatus.CANCELLED
-            self.db.commit()
+            self.db.flush()
             return True
         return False
 
@@ -166,7 +164,7 @@ class InvitationsCRUD:
         for invitation in expired_invitations:
             invitation.status = InvitationStatus.EXPIRED
 
-        self.db.commit()
+        self.db.flush()
         return count
 
     def get_invitation_with_details(self, token: str) -> Optional[dict]:

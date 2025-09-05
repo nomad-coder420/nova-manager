@@ -2,6 +2,7 @@ from typing import Optional, List
 from uuid import uuid4
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
+
 from nova_manager.components.auth.models import Organisation, App, AuthUser
 from nova_manager.core.security import hash_password, verify_password
 from nova_manager.core.enums import UserRole
@@ -23,33 +24,30 @@ class AuthCRUD:
 
     def create_organisation(self, name: str) -> Organisation:
         """Create a new organisation"""
-        organisation = Organisation(
-            pid=str(uuid4()),
-            name=name
-        )
+        organisation = Organisation(pid=str(uuid4()), name=name)
         self.db.add(organisation)
         self.db.flush()
         self.db.refresh(organisation)
         return organisation
 
     def create_auth_user(
-        self, 
-        email: str, 
-        password: str, 
-        name: str, 
+        self,
+        email: str,
+        password: str,
+        name: str,
         organisation_id: str,
-        role: UserRole = UserRole.MEMBER
+        role: UserRole = UserRole.MEMBER,
     ) -> AuthUser:
         """Create a new auth user"""
         hashed_password = hash_password(password)
-        
+
         auth_user = AuthUser(
             pid=str(uuid4()),
             email=email.lower(),  # Normalize email at storage
             password=hashed_password,
             name=name,
             organisation_id=organisation_id,
-            role=role
+            role=role,
         )
         self.db.add(auth_user)
         self.db.flush()
@@ -61,17 +59,10 @@ class AuthCRUD:
         return verify_password(password, user.password)
 
     def create_app(
-        self, 
-        name: str, 
-        organisation_id: str, 
-        description: Optional[str] = None
+        self, name: str, organisation_id: str, description: Optional[str] = None
     ) -> App:
         """Create a new app"""
-        app = App(
-            pid=str(uuid4()),
-            name=name,
-            organisation_id=organisation_id
-        )
+        app = App(pid=str(uuid4()), name=name, organisation_id=organisation_id)
         # Note: description field might need to be added to App model
         self.db.add(app)
         self.db.flush()
@@ -84,23 +75,29 @@ class AuthCRUD:
 
     def get_app_by_id(self, app_id: str, organisation_id: str) -> Optional[App]:
         """Get app by ID within organisation"""
-        return self.db.query(App).filter(
-            and_(
-                App.pid == app_id,
-                App.organisation_id == organisation_id
-            )
-        ).first()
+        return (
+            self.db.query(App)
+            .filter(and_(App.pid == app_id, App.organisation_id == organisation_id))
+            .first()
+        )
 
     def user_has_apps(self, auth_user: AuthUser) -> bool:
         """Check if user's organisation has any apps"""
-        return self.db.query(App).filter(
-            App.organisation_id == auth_user.organisation_id
-        ).count() > 0
-    
-    def get_users_by_organisation(self, organisation_id: str) -> List[AuthUser]:
-        """Get all auth users for an organisation"""
+        return (
+            self.db.query(App)
+            .filter(App.organisation_id == auth_user.organisation_id)
+            .count()
+            > 0
+        )
+
+    def get_users_by_organisation(
+        self, organisation_id: str, skip: int = 0, limit: int = 100
+    ) -> List[AuthUser]:
+        """Get auth users for an organisation with pagination"""
         return (
             self.db.query(AuthUser)
             .filter(AuthUser.organisation_id == organisation_id)
+            .offset(skip)
+            .limit(limit)
             .all()
         )

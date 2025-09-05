@@ -1,6 +1,6 @@
 from datetime import datetime
 from nova_manager.core.schemas import PidResponse
-from typing import List, Optional, Dict, Any
+from typing import List
 from uuid import UUID as UUIDType
 from pydantic import BaseModel
 
@@ -27,6 +27,7 @@ class ExperienceFeatureResponse(PidResponse):
 
 
 class ExperienceFeatureVariantResponse(BaseModel):
+    pid: UUIDType
     experience_feature_id: UUIDType
     name: str
     config: dict

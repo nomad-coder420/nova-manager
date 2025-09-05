@@ -7,7 +7,6 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
-    Integer,
     String,
     UniqueConstraint,
     func,
@@ -15,8 +14,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from nova_manager.core.models import BaseModel, BaseOrganisationModel
-from nova_manager.components.personalisations.models import Personalisations
 from nova_manager.components.feature_flags.models import FeatureFlags
+from nova_manager.components.personalisations.models import Personalisations
 
 
 class Experiences(BaseOrganisationModel):

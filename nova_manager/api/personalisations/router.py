@@ -1,10 +1,10 @@
-from nova_manager.components.personalisations.schemas import PersonalisationResponse
+from uuid import UUID
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from nova_manager.database.session import get_db
-from nova_manager.components.auth.dependencies import require_app_context, require_analyst_or_higher
+from nova_manager.components.auth.dependencies import require_app_context
 from nova_manager.core.security import AuthContext
 from nova_manager.api.personalisations.request_response import (
     PersonalisationCreate,
@@ -21,21 +21,20 @@ from nova_manager.components.personalisations.crud import (
     PersonalisationExperienceVariantsCRUD,
     PersonalisationsCRUD,
 )
+from nova_manager.components.personalisations.schemas import PersonalisationResponse
 from nova_manager.components.metrics.crud import (
     MetricsCRUD,
     PersonalisationMetricsCRUD,
 )
-from uuid import UUID
-from nova_manager.core.log import logger
-from nova_manager.queues.controller import QueueController
 
 router = APIRouter()
+
 
 # Personalisation endpoints
 @router.post("/create-personalisation/", response_model=PersonalisationResponse)
 async def create_personalisation(
     personalisation_data: PersonalisationCreate,
-    auth: AuthContext = Depends(require_analyst_or_higher),
+    auth: AuthContext = Depends(require_app_context),
     db: Session = Depends(get_db),
 ):
     """Create a new personalisation for an experience"""
@@ -55,27 +54,39 @@ async def create_personalisation(
     experience = experiences_crud.get_with_features(experience_id)
     if not experience:
         raise HTTPException(status_code=404, detail="Experience not found")
-    
+
     # Validate experience belongs to the same org and app as in token
     if str(experience.organisation_id) != str(auth.organisation_id):
-        raise HTTPException(status_code=403, detail="Experience does not belong to your organization")
-    
+        raise HTTPException(
+            status_code=403, detail="Experience does not belong to your organization"
+        )
+
     if experience.app_id != auth.app_id:
-        raise HTTPException(status_code=403, detail="Experience does not belong to your app")
+        raise HTTPException(
+            status_code=403, detail="Experience does not belong to your app"
+        )
 
     # Validate metrics exist and belong to same org/app
     if selected_metrics:
         for metric_id in selected_metrics:
             metric = metrics_crud.get_by_pid(metric_id)
             if not metric:
-                raise HTTPException(status_code=404, detail=f"Metric not found: {metric_id}")
-            
+                raise HTTPException(
+                    status_code=404, detail=f"Metric not found: {metric_id}"
+                )
+
             # Validate metric belongs to the same org and app as in token
             if str(metric.organisation_id) != str(auth.organisation_id):
-                raise HTTPException(status_code=403, detail=f"Metric {metric_id} does not belong to your organization")
-            
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Metric {metric_id} does not belong to your organization",
+                )
+
             if metric.app_id != auth.app_id:
-                raise HTTPException(status_code=403, detail=f"Metric {metric_id} does not belong to your app")
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Metric {metric_id} does not belong to your app",
+                )
 
     # Check if personalisation name already exists in this experience
     existing = personalisations_crud.get_by_name(
@@ -199,8 +210,7 @@ async def create_personalisation(
     if selected_metrics:
         for metric_id in selected_metrics:
             personalisation_metrics_crud.create_personalisation_metric(
-                personalisation_id=personalisation.pid,
-                metric_id=metric_id
+                personalisation_id=personalisation.pid, metric_id=metric_id
             )
 
     return personalisation
@@ -262,26 +272,27 @@ async def list_personalised_experiences(
 
 
 @router.patch("/{pid}/", response_model=PersonalisationDetailedResponse)
-def update_personalisation(
+async def update_personalisation(
     pid: UUID,
     update_data: PersonalisationUpdate,
-    auth: AuthContext = Depends(require_analyst_or_higher),
+    auth: AuthContext = Depends(require_app_context),
     db: Session = Depends(get_db),
 ):
     """
     Update a personalisation. By default only new evaluations see changes.
-    If apply_to_existing=True, existing user assignments for this personalisation will be re-assigned on next request.
+    If reassign=True, existing user assignments for this personalisation will be re-assigned on next request.
     """
-    from nova_manager.components.user_experience.models import UserExperience
-    
     crud = PersonalisationsCRUD(db)
 
     # fetch and auth
-    personalisation = crud.get_by_pid(pid)
+    personalisation = crud.get_detailed_personalisation(pid)
+
     if not personalisation:
         raise HTTPException(status_code=404, detail="Personalisation not found")
+
     if str(personalisation.organisation_id) != str(auth.organisation_id):
         raise HTTPException(status_code=403, detail="Not in your organization")
+
     if personalisation.app_id != auth.app_id:
         raise HTTPException(status_code=403, detail="Not in your app")
 
@@ -289,19 +300,12 @@ def update_personalisation(
 
     try:
         # pass the Pydantic DTO so nested fields remain as objects
-        updated = crud.update_personalisation(pid, update_data)
+        updated = crud.update_personalisation(personalisation, update_data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
-    # mark for re-assignment if requested
-    if update_data.apply_to_existing:
-        logger.info(f"Marking personalisation {pid} for re-assignment")
-        updated.reassign = True
-        db.add(updated)
-        db.commit()
-        db.refresh(updated)
 
     return updated
+
 
 @router.get("/{pid}/", response_model=PersonalisationDetailedResponse)
 async def get_personalisation(
@@ -313,70 +317,80 @@ async def get_personalisation(
     Get a personalisation by ID with all its details including variants and metrics.
     """
     personalisations_crud = PersonalisationsCRUD(db)
-    
+
     # Get the personalisation with all related data
     personalisation = personalisations_crud.get_detailed_personalisation(pid)
-    
+
     if not personalisation:
         raise HTTPException(status_code=404, detail="Personalisation not found")
-    
+
     # Validate organisation and app access
     if str(personalisation.organisation_id) != str(auth.organisation_id):
         raise HTTPException(status_code=403, detail="Not in your organization")
-    
+
     if personalisation.app_id != auth.app_id:
         raise HTTPException(status_code=403, detail="Not in your app")
-    
+
     return personalisation
 
 
 @router.patch("/{pid}/disable/", response_model=PersonalisationDetailedResponse)
 async def disable_personalisation(
     pid: UUID,
-    auth: AuthContext = Depends(require_analyst_or_higher),
+    auth: AuthContext = Depends(require_app_context),
     db: Session = Depends(get_db),
 ):
     """
     Disable a personalisation and remove existing user assignments.
     """
     crud = PersonalisationsCRUD(db)
+
     # fetch and auth
     personalisation = crud.get_by_pid(pid)
+
     if not personalisation:
         raise HTTPException(status_code=404, detail="Personalisation not found")
+
     if str(personalisation.organisation_id) != str(auth.organisation_id):
         raise HTTPException(status_code=403, detail="Not in your organization")
+
     if personalisation.app_id != auth.app_id:
         raise HTTPException(status_code=403, detail="Not in your app")
-    # disable using CRUD
-    updated = crud.disable_personalisation(pid)
+
+    updated = crud.disable_personalisation(personalisation)
+
     if not updated:
         raise HTTPException(status_code=404, detail="Personalisation not found")
-    logger.info(f"Personalisation {pid} disabled")
-    logger.info(f"Personalisation {pid} disabled; existing assignments will be re-evaluated")
+
     return updated
+
 
 @router.patch("/{pid}/enable/", response_model=PersonalisationDetailedResponse)
 async def enable_personalisation(
     pid: UUID,
-    auth: AuthContext = Depends(require_analyst_or_higher),
+    auth: AuthContext = Depends(require_app_context),
     db: Session = Depends(get_db),
 ):
     """
     Enable a previously disabled personalisation.
     """
     crud = PersonalisationsCRUD(db)
+
     # fetch and auth
     personalisation = crud.get_by_pid(pid)
+
     if not personalisation:
         raise HTTPException(status_code=404, detail="Personalisation not found")
+
     if str(personalisation.organisation_id) != str(auth.organisation_id):
         raise HTTPException(status_code=403, detail="Not in your organization")
+
     if personalisation.app_id != auth.app_id:
         raise HTTPException(status_code=403, detail="Not in your app")
-    # enable using CRUD
-    updated = crud.enable_personalisation(pid)
+
+    updated = crud.enable_personalisation(personalisation)
+
     if not updated:
         raise HTTPException(status_code=404, detail="Personalisation not found")
-    logger.info(f"Personalisation {pid} enabled")
+
     return updated

@@ -13,8 +13,8 @@ from nova_manager.core.log import configure_logging
 from nova_manager.middlewares.exceptions import ExceptionMiddleware
 
 # Import event listeners to register them with SQLAlchemy
-import nova_manager.components.users.event_listeners
-import nova_manager.components.user_experience.event_listeners
+import nova_manager.components.users.event_listeners  # noqa: F401
+import nova_manager.components.user_experience.event_listeners  # noqa: F401
 
 from nova_manager.api.frontend.router import router as frontend_router
 from nova_manager.api.auth.router import router as auth_router
@@ -27,7 +27,7 @@ from nova_manager.api.metrics.router import router as metrics_router
 from nova_manager.api.personalisations.router import router as personalisations_router
 from nova_manager.api.recommendations.router import router as recommendations_router
 from nova_manager.api.invitations.router import router as invitations_router
-from nova_manager.api.apikeys.router import router as apikeys_router
+
 
 configure_logging()
 app = FastAPI()
@@ -49,7 +49,6 @@ app.include_router(metrics_router, prefix="/api/v1/metrics")
 app.include_router(personalisations_router, prefix="/api/v1/personalisations")
 app.include_router(recommendations_router, prefix="/api/v1/recommendations")
 app.include_router(invitations_router, prefix="/api/v1/invitations")
-app.include_router(apikeys_router, prefix="/api/v1/apikeys")
 
 
 @app.exception_handler(RequestValidationError)

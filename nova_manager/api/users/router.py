@@ -8,7 +8,6 @@ from nova_manager.components.users.crud_async import UsersAsyncCRUD
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from nova_manager.database.async_session import get_async_db
-from nova_manager.core.log import logger
 from nova_manager.components.auth.dependencies import require_api_key, ClientAuthContext
 
 router = APIRouter()
@@ -21,7 +20,6 @@ async def create_user(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Create a new user using API key to infer organisation/app"""
-    logger.info(f"Received create_user request: user_id={user_data.user_id}, via api_key={auth['api_key_id']}")
 
     users_crud = UsersAsyncCRUD(db)
 
@@ -35,16 +33,15 @@ async def create_user(
     )
 
     if existing_user:
-        logger.info(f"User exists, updating profile: {user_id}")
+        # User exists, update user profile with new user_profile
         user = await users_crud.update_user_profile(existing_user, user_profile)
     else:
-        logger.info(f"User doesn't exist, creating new user: {user_id}")
+        # User doesn't exist, create new user with user profile
         user = await users_crud.create_user(
             user_id, organisation_id, app_id, user_profile
         )
 
-    logger.info(f"User operation successful: nova_user_id={user.pid}")
-    return {"nova_user_id": str(user.pid)}
+    return {"nova_user_id": user.pid}
 
 
 @router.post("/update-user-profile/", response_model=UserResponse)

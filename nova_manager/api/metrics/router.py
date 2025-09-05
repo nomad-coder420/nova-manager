@@ -17,7 +17,6 @@ from nova_manager.components.metrics.crud import (
 from nova_manager.components.metrics.events_controller import EventsController
 from nova_manager.components.metrics.query_builder import QueryBuilder
 from nova_manager.database.session import get_db
-from nova_manager.core.log import logger
 from nova_manager.service.bigquery import BigQueryService
 from nova_manager.queues.controller import QueueController
 from nova_manager.components.auth.dependencies import require_app_context, require_api_key, ClientAuthContext
@@ -30,16 +29,14 @@ router = APIRouter()
 
 @router.post("/track-event/")
 async def track_event(event: TrackEventRequest, auth: ClientAuthContext = Depends(require_api_key)):
-    logger.info(f"Received track_event request: user_id={event.user_id}, via api_key={auth['api_key_id']}")
     # Enqueue background job using organisation/app from API key
-    job_id = QueueController().add_task(
+    QueueController().add_task(
         EventsController(auth["organisation_id"], auth["app_id"]).track_event,
         event.user_id,
         event.event_name,
         event.event_data,
         event.timestamp,
     )
-    logger.info(f"Enqueued track_event job: {job_id}")
 
     return {"success": True}
 
@@ -47,7 +44,7 @@ async def track_event(event: TrackEventRequest, auth: ClientAuthContext = Depend
 @router.post("/compute/", response_model=List[Dict])
 async def compute_metric(
     compute_request: ComputeMetricRequest,
-    auth: AuthContext = Depends(require_app_context)
+    auth: AuthContext = Depends(require_app_context),
 ):
     organisation_id = auth.organisation_id
     app_id = auth.app_id
@@ -123,7 +120,7 @@ async def list_user_profile_keys(
 async def create_metric(
     metric_data: CreateMetricRequest,
     auth: AuthContext = Depends(require_app_context),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     metrics_crud = MetricsCRUD(db)
 
@@ -155,7 +152,9 @@ async def list_metric(
 ):
     metrics_crud = MetricsCRUD(db)
 
-    metrics = metrics_crud.get_multi(organisation_id=auth.organisation_id, app_id=auth.app_id)
+    metrics = metrics_crud.get_multi(
+        organisation_id=auth.organisation_id, app_id=auth.app_id
+    )
 
     return metrics
 
@@ -164,7 +163,7 @@ async def list_metric(
 async def get_metric(
     metric_id: UUID,
     auth: AuthContext = Depends(require_app_context),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     metrics_crud = MetricsCRUD(db)
 
@@ -181,7 +180,7 @@ async def update_metric(
     metric_id: UUID,
     metric_data: CreateMetricRequest,
     auth: AuthContext = Depends(require_app_context),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     metrics_crud = MetricsCRUD(db)
 

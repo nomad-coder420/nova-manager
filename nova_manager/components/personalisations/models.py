@@ -46,7 +46,10 @@ class Personalisations(BaseOrganisationModel):
         Boolean, nullable=False, default=True, server_default="true"
     )
     last_updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        onupdate=func.now(),  # Auto-update on every modification
+        server_default=func.now(),
     )
 
     __table_args__ = (
@@ -54,8 +57,27 @@ class Personalisations(BaseOrganisationModel):
         UniqueConstraint(
             "experience_id", "priority", name="uq_personalisations_exp_prio"
         ),
-        Index("idx_personalisations_experience_id", "experience_id"),
-        Index("idx_personalisations_priority", "priority"),
+        # COMPREHENSIVE INDEX: Covers experience queries + active filtering + priority ordering
+        # Supports: 1) WHERE experience_id = ? (replaces old idx_personalisations_experience_id)
+        #           2) WHERE experience_id = ? AND is_active = ?
+        #           3) WHERE experience_id = ? AND is_active = True ORDER BY priority DESC
+        #           4) All prefix combinations of these columns
+        Index(
+            "idx_personalisations_exp_active_priority",
+            "experience_id",
+            "is_active",
+            "priority",
+        ),
+        # ORG/APP SEARCH OPTIMIZATION: For search queries and listings
+        # Supports: WHERE organisation_id = ? AND app_id = ? [AND name/description ILIKE ?]
+        #           ORDER BY created_at/name/priority
+        Index(
+            "idx_personalisations_org_app_search",
+            "organisation_id",
+            "app_id",
+            "name",  # For name-based ordering and search optimization
+            "created_at",  # For time-based ordering (most common)
+        ),
     )
 
     # Relationships
@@ -65,11 +87,13 @@ class Personalisations(BaseOrganisationModel):
         back_populates="personalisations",
     )
 
-    experience_variants: Mapped[list["PersonalisationExperienceVariants"]] = relationship(
-        "PersonalisationExperienceVariants",
-        foreign_keys="PersonalisationExperienceVariants.personalisation_id",
-        back_populates="personalisation",
-        cascade="all, delete-orphan",
+    experience_variants: Mapped[list["PersonalisationExperienceVariants"]] = (
+        relationship(
+            "PersonalisationExperienceVariants",
+            foreign_keys="PersonalisationExperienceVariants.personalisation_id",
+            back_populates="personalisation",
+            cascade="all, delete-orphan",
+        )
     )
 
     segment_rules = relationship(
@@ -179,13 +203,13 @@ class PersonalisationSegmentRules(BaseModel):
     )
 
     # Relationships
-    personalisation = relationship(
+    personalisation: Mapped[Personalisations] = relationship(
         "Personalisations",
         foreign_keys=[personalisation_id],
         back_populates="segment_rules",
     )
 
-    segment = relationship(
+    segment: Mapped[Segments] = relationship(
         "Segments",
         foreign_keys=[segment_id],
         back_populates="personalisations",

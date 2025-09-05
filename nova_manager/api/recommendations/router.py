@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from nova_manager.api.recommendations.request_response import (
     GetAiRecommendationsRequest,
     RecommendationResponse,
@@ -9,7 +9,7 @@ from nova_manager.components.recommendations.controller import RecommendationsCo
 from nova_manager.components.recommendations.crud import RecommendationsCRUD
 from nova_manager.components.recommendations.schemas import AiRecommendationResponse
 from nova_manager.database.session import get_db
-from nova_manager.components.auth.dependencies import require_app_context,require_analyst_or_higher
+from nova_manager.components.auth.dependencies import require_app_context
 from nova_manager.core.security import AuthContext
 from sqlalchemy.orm import Session
 
@@ -18,9 +18,9 @@ router = APIRouter()
 
 @router.post("/get-ai-recommendations/", response_model=AiRecommendationResponse)
 async def get_ai_recommendations(
-    validated_data: GetAiRecommendationsRequest, 
-    auth: AuthContext = Depends(require_analyst_or_higher),
-    db: Session = Depends(get_db)
+    validated_data: GetAiRecommendationsRequest,
+    auth: AuthContext = Depends(require_app_context),
+    db: Session = Depends(get_db),
 ):
     user_prompt = validated_data.user_prompt
     organisation_id = str(auth.organisation_id)
@@ -65,7 +65,6 @@ async def get_ai_recommendations(
 
     recommendations_crud.create(
         {
-            
             "organisation_id": organisation_id,
             "app_id": app_id,
             "experience_id": experience.pid,
@@ -82,6 +81,8 @@ async def get_recommendations(
     db: Session = Depends(get_db),
 ):
     recommendations_crud = RecommendationsCRUD(db)
-    recommendations = recommendations_crud.get_multi_by_org(auth.organisation_id, auth.app_id)
+    recommendations = recommendations_crud.get_multi_by_org(
+        auth.organisation_id, auth.app_id
+    )
 
     return recommendations

@@ -28,7 +28,9 @@ class UsersAsyncCRUD:
 
         return result.scalar_one_or_none()
 
-    async def get_by_pid(self, pid: UUID, organisation_id: str, app_id: str) -> Optional[Users]:
+    async def get_by_pid(
+        self, pid: UUID, organisation_id: str, app_id: str
+    ) -> Optional[Users]:
         """Get user by pid"""
 
         stmt = select(Users).where(

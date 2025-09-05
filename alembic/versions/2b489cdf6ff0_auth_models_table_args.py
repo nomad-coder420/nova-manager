@@ -1,8 +1,8 @@
-"""added roles
+"""auth models table args
 
 Revision ID: 2b489cdf6ff0
 Revises: e43cccdcac6e
-Create Date: 2025-08-15 08:11:52.191561
+Create Date: 2025-09-05 00:04:54.856656
 
 """
 from typing import Sequence, Union
