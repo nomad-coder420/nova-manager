@@ -19,7 +19,6 @@ from nova_manager.components.personalisations.models import *
 from nova_manager.components.user_experience.models import *
 from nova_manager.components.metrics.models import *
 from nova_manager.components.recommendations.models import *
-from nova_manager.components.history.models import *
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
