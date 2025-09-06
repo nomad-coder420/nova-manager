@@ -159,7 +159,7 @@ async def update_segment(
             )
 
     # Update segment
-    update_data = segment_update.dict(exclude_unset=True)
+    update_data = segment_update.model_dump(exclude_unset=True)
     updated_segment = segments_crud.update(db_obj=segment, obj_in=update_data)
 
     return updated_segment

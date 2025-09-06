@@ -1,6 +1,7 @@
 from typing import Optional, List, Dict, Any
 from uuid import UUID as UUIDType
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 
 class BaseCRUD:
@@ -51,6 +52,10 @@ class BaseCRUD:
         """Update existing record"""
         for field, value in obj_in.items():
             setattr(db_obj, field, value)
+
+            if isinstance(value, dict):
+                flag_modified(db_obj, field)
+
         self.db.add(db_obj)
         self.db.flush()
         self.db.refresh(db_obj)
