@@ -1,4 +1,4 @@
-from typing import Any, Dict, Literal
+from typing import Any, Dict, Literal, Optional
 from uuid import UUID as UUIDType
 from datetime import datetime
 from pydantic import BaseModel
@@ -39,6 +39,7 @@ class TimeRange(BaseModel):
 class ComputeMetricRequest(BaseModel):
     type: Literal["count", "aggregation", "ratio", "retention"]
     config: Dict[str, Any]
+    segment_id: Optional[UUIDType] = None
 
 
 class EventsSchemaResponse(BaseModel):

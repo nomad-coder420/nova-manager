@@ -16,6 +16,8 @@ from nova_manager.components.metrics.crud import (
 )
 from nova_manager.components.metrics.events_controller import EventsController
 from nova_manager.components.metrics.query_builder import QueryBuilder
+from nova_manager.components.segments.crud import SegmentsCRUD
+from nova_manager.components.metrics.query_builder import KeySource
 from nova_manager.database.session import get_db
 from nova_manager.service.bigquery import BigQueryService
 from nova_manager.queues.controller import QueueController
@@ -44,11 +46,28 @@ async def track_event(event: TrackEventRequest):
 async def compute_metric(
     compute_request: ComputeMetricRequest,
     auth: AuthContext = Depends(require_app_context),
+    db: Session = Depends(get_db),
 ):
     organisation_id = auth.organisation_id
     app_id = auth.app_id
     type = compute_request.type
-    config = compute_request.config
+    config = compute_request.config.copy()
+
+    # if segment filter is provided, load segment and merge its rules into filters
+    if compute_request.segment_id:
+        # load segment rule_config.conditions
+        segment = SegmentsCRUD(db).get_by_pid(compute_request.segment_id)
+        if not segment:
+            raise HTTPException(status_code=404, detail="Segment not found")
+        conditions = segment.rule_config.get("conditions", [])
+        filters = config.get("filters", {})
+        # map each condition to EnhancedFilterType
+        op_map = {"equals": "=", "not_equals": "!=", "gt": ">", "lt": "<", "gte": ">=", "lte": "<="}
+        for cond in conditions:
+            key = cond["field"]
+            op = op_map.get(cond["operator"], "=")
+            filters[key] = {"value": cond["value"], "op": op, "source": KeySource.USER_PROFILE}
+        config["filters"] = filters
 
     query_builder = QueryBuilder(organisation_id, app_id)
     query = query_builder.build_query(type, config)
