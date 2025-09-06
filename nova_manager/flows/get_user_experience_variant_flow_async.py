@@ -377,6 +377,7 @@ class GetUserExperienceVariantFlowAsync:
                 experience_variant_id=assignment.experience_variant_id,
                 features=assignment.features,
                 evaluation_reason=f"assigned_from_cache: {assignment.evaluation_reason}",
+                assigned_at=assignment.assigned_at,
             )
             self.experience_personalisation_map[assignment.experience_id] = cache_data
 
