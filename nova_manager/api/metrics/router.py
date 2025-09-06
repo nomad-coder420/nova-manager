@@ -51,22 +51,30 @@ async def compute_metric(
     organisation_id = auth.organisation_id
     app_id = auth.app_id
     type = compute_request.type
+    # copy config and extract any segment filters
     config = compute_request.config.copy()
-
-    # if segment filter is provided, load segment and merge its rules into filters
-    if compute_request.segment_id:
-        # load segment rule_config.conditions
-        segment = SegmentsCRUD(db).get_by_pid(compute_request.segment_id)
-        if not segment:
-            raise HTTPException(status_code=404, detail="Segment not found")
-        conditions = segment.rule_config.get("conditions", [])
+    # allow passing segment_ids list or single segment_id inside config
+    segment_ids = None
+    if "segment_ids" in config:
+        segment_ids = config.pop("segment_ids") or []
+    elif "segment_id" in config:
+        segment_ids = [config.pop("segment_id")]
+    # merge each segment's conditions into filters
+    if segment_ids:
         filters = config.get("filters", {})
-        # map each condition to EnhancedFilterType
         op_map = {"equals": "=", "not_equals": "!=", "gt": ">", "lt": "<", "gte": ">=", "lte": "<="}
-        for cond in conditions:
-            key = cond["field"]
-            op = op_map.get(cond["operator"], "=")
-            filters[key] = {"value": cond["value"], "op": op, "source": KeySource.USER_PROFILE}
+        for sid in segment_ids:
+            segment = SegmentsCRUD(db).get_by_pid(sid)
+            if not segment:
+                raise HTTPException(status_code=404, detail=f"Segment {sid} not found")
+            for cond in segment.rule_config.get("conditions", []):
+                key = cond["field"]
+                op = op_map.get(cond["operator"], "=")
+                filters[key] = {
+                    "value": cond.get("value"),
+                    "op": op,
+                    "source": KeySource.USER_PROFILE,
+                }
         config["filters"] = filters
 
     query_builder = QueryBuilder(organisation_id, app_id)

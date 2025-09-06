@@ -39,7 +39,6 @@ class TimeRange(BaseModel):
 class ComputeMetricRequest(BaseModel):
     type: Literal["count", "aggregation", "ratio", "retention"]
     config: Dict[str, Any]
-    segment_id: Optional[UUIDType] = None
 
 
 class EventsSchemaResponse(BaseModel):
