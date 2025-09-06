@@ -13,7 +13,7 @@ from nova_manager.core.log import configure_logging
 from nova_manager.middlewares.exceptions import ExceptionMiddleware
 
 # Import event listeners to register them with SQLAlchemy
-import nova_manager.components.users.event_listeners  # noqa: F401
+# import nova_manager.components.users.event_listeners  # noqa: F401
 import nova_manager.components.user_experience.event_listeners  # noqa: F401
 
 from nova_manager.api.auth.router import router as auth_router
