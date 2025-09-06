@@ -16,6 +16,8 @@ from nova_manager.components.metrics.crud import (
 )
 from nova_manager.components.metrics.events_controller import EventsController
 from nova_manager.components.metrics.query_builder import QueryBuilder
+from nova_manager.components.segments.crud import SegmentsCRUD
+from nova_manager.components.metrics.query_builder import KeySource
 from nova_manager.database.session import get_db
 from nova_manager.service.bigquery import BigQueryService
 from nova_manager.queues.controller import QueueController
@@ -50,11 +52,36 @@ async def track_event(
 async def compute_metric(
     compute_request: ComputeMetricRequest,
     auth: AuthContext = Depends(require_app_context),
+    db: Session = Depends(get_db),
 ):
     organisation_id = auth.organisation_id
     app_id = auth.app_id
     type = compute_request.type
-    config = compute_request.config
+    # copy config and extract any segment filters
+    config = compute_request.config.copy()
+    # allow passing segment_ids list or single segment_id inside config
+    segment_ids = None
+    if "segment_ids" in config:
+        segment_ids = config.pop("segment_ids") or []
+    elif "segment_id" in config:
+        segment_ids = [config.pop("segment_id")]
+    # merge each segment's conditions into filters
+    if segment_ids:
+        filters = config.get("filters", {})
+        op_map = {"equals": "=", "not_equals": "!=", "gt": ">", "lt": "<", "gte": ">=", "lte": "<="}
+        for sid in segment_ids:
+            segment = SegmentsCRUD(db).get_by_pid(sid)
+            if not segment:
+                raise HTTPException(status_code=404, detail=f"Segment {sid} not found")
+            for cond in segment.rule_config.get("conditions", []):
+                key = cond["field"]
+                op = op_map.get(cond["operator"], "=")
+                filters[key] = {
+                    "value": cond.get("value"),
+                    "op": op,
+                    "source": KeySource.USER_PROFILE,
+                }
+        config["filters"] = filters
 
     query_builder = QueryBuilder(organisation_id, app_id)
     query = query_builder.build_query(type, config)
