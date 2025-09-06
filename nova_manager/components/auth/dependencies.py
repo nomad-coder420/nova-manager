@@ -6,7 +6,10 @@ from nova_manager.core.security import (
     verify_token,
     decode_token_ignore_expiry,
     create_auth_context,
+    validate_sdk_api_key,
+    create_sdk_auth_context,
     AuthContext,
+    SDKAuthContext,
 )
 from nova_manager.core.enums import UserRole
 from nova_manager.core.log import logger
@@ -19,6 +22,7 @@ async def get_current_auth(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> AuthContext:
     """Extract and validate auth context from JWT token"""
+
     token = credentials.credentials
     payload = verify_token(token)
 
@@ -37,6 +41,7 @@ async def require_org_context(
     auth: AuthContext = Depends(get_current_auth),
 ) -> AuthContext:
     """Require user to have organisation context (for org-level operations)"""
+
     if not auth.organisation_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -49,6 +54,7 @@ async def require_app_context(
     auth: AuthContext = Depends(get_current_auth),
 ) -> AuthContext:
     """Require user to have app context (for app-level operations)"""
+
     if not auth.organisation_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -68,6 +74,7 @@ async def get_current_auth_ignore_expiry(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> Optional[AuthContext]:
     """Extract auth context from JWT token ignoring expiration (for refresh operations)"""
+
     try:
         token = credentials.credentials
         payload = decode_token_ignore_expiry(token)
@@ -119,6 +126,7 @@ async def require_admin_or_owner(
     auth: AuthContext = Depends(require_roles(UserRole.admin_roles())),
 ) -> AuthContext:
     """Require admin or owner role"""
+
     return auth
 
 
@@ -126,6 +134,7 @@ async def require_owner_only(
     auth: AuthContext = Depends(require_roles([UserRole.OWNER])),
 ) -> AuthContext:
     """Require owner role only"""
+
     return auth
 
 
@@ -133,6 +142,7 @@ async def require_analyst_roles(
     auth: AuthContext = Depends(require_roles(UserRole.analyst_roles())),
 ) -> AuthContext:
     """Require analyst roles only"""
+
     return auth
 
 
@@ -140,4 +150,36 @@ async def require_developer_roles(
     auth: AuthContext = Depends(require_roles(UserRole.developer_roles())),
 ) -> AuthContext:
     """Require developer roles only"""
+
+    return auth
+
+
+async def get_sdk_auth(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> SDKAuthContext:
+    """Extract and validate auth context from JWT token"""
+
+    token = credentials.credentials
+    payload = validate_sdk_api_key(token)
+
+    return create_sdk_auth_context(payload)
+
+
+async def require_sdk_app_context(
+    auth: SDKAuthContext = Depends(get_sdk_auth),
+) -> SDKAuthContext:
+    """Require SDK app context"""
+
+    if not auth.organisation_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Organisation context required",
+        )
+
+    if not auth.app_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="App context required",
+        )
+
     return auth

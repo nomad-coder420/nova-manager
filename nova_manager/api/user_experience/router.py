@@ -12,6 +12,8 @@ from nova_manager.components.user_experience.schemas import UserExperienceAssign
 from nova_manager.flows.get_user_experience_variant_flow_async import (
     GetUserExperienceVariantFlowAsync,
 )
+from nova_manager.components.auth.dependencies import require_sdk_app_context
+from nova_manager.core.security import SDKAuthContext
 
 router = APIRouter()
 
@@ -19,6 +21,7 @@ router = APIRouter()
 @router.post("/get-experience/", response_model=UserExperienceAssignment)
 async def get_user_experience_variant(
     request: GetExperienceRequest,
+    auth: SDKAuthContext = Depends(require_sdk_app_context),
     db: AsyncSession = Depends(get_async_db),
 ):
     """
@@ -30,8 +33,8 @@ async def get_user_experience_variant(
         result = await flow.get_user_experience_variant(
             user_id=request.user_id,
             experience_name=request.experience_name,
-            organisation_id=request.organisation_id,
-            app_id=request.app_id,
+            organisation_id=auth.organisation_id,
+            app_id=auth.app_id,
             payload=request.payload,
         )
 
@@ -44,6 +47,7 @@ async def get_user_experience_variant(
 @router.post("/get-experiences/", response_model=Dict[str, UserExperienceAssignment])
 async def get_user_experiences(
     request: GetExperiencesRequest,
+    auth: SDKAuthContext = Depends(require_sdk_app_context),
     db: AsyncSession = Depends(get_async_db),
 ):
     """
@@ -54,8 +58,8 @@ async def get_user_experiences(
 
         results = await flow.get_user_experience_variants(
             user_id=request.user_id,
-            organisation_id=request.organisation_id,
-            app_id=request.app_id,
+            organisation_id=auth.organisation_id,
+            app_id=auth.app_id,
             payload=request.payload,
             experience_names=request.experience_names,
         )
@@ -71,6 +75,7 @@ async def get_user_experiences(
 )
 async def get_all_user_experiences(
     request: GetExperiencesRequest,
+    auth: SDKAuthContext = Depends(require_sdk_app_context),
     db: AsyncSession = Depends(get_async_db),
 ):
     """
@@ -82,8 +87,8 @@ async def get_all_user_experiences(
         # Call without feature_names to get all variants
         results = await flow.get_user_experience_variants(
             user_id=request.user_id,
-            organisation_id=request.organisation_id,
-            app_id=request.app_id,
+            organisation_id=auth.organisation_id,
+            app_id=auth.app_id,
             payload=request.payload,
             experience_names=None,  # None means get all
         )

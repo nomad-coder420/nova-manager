@@ -18,10 +18,11 @@ from nova_manager.api.auth.request_response import (
     AppCreateResponse,
     SwitchAppRequest,
     OrgUserResponse,
-    AuthContextResponse,
+    SDKCredentialsResponse,
 )
 from nova_manager.components.auth.dependencies import (
     get_current_auth,
+    require_app_context,
     require_org_context,
     get_current_auth_ignore_expiry,
 )
@@ -31,7 +32,9 @@ from nova_manager.core.security import (
     verify_token,
     ACCESS_TOKEN_EXPIRE_MINUTES,
     AuthContext,
+    create_sdk_api_key,
 )
+from nova_manager.core.config import SDK_BACKEND_URL
 from nova_manager.core.log import logger
 
 router = APIRouter()
@@ -237,10 +240,17 @@ async def get_current_user(
     )
 
 
-@router.get("/context", response_model=AuthContextResponse)
-async def get_context(auth: AuthContext = Depends(get_current_auth)):
-    """Get current auth context (organisation and project IDs)"""
-    return AuthContextResponse(organisation_id=auth.organisation_id, app_id=auth.app_id)
+@router.get("/sdk-credentials", response_model=SDKCredentialsResponse)
+async def get_sdk_credentials(auth: AuthContext = Depends(require_app_context)):
+    """Get SDK credentials for the current app"""
+
+    # Generate ultra-compact SDK API key for this org/app combination
+    sdk_api_key = create_sdk_api_key(auth.organisation_id, auth.app_id)
+
+    # Get backend URL from config
+    backend_url = SDK_BACKEND_URL
+
+    return SDKCredentialsResponse(sdk_api_key=sdk_api_key, backend_url=backend_url)
 
 
 @router.post("/apps", response_model=AppCreateResponse)

@@ -23,8 +23,6 @@ class NovaExperienceDefinition(BaseModel):
 
 
 class NovaObjectSyncRequest(BaseModel):
-    organisation_id: str
-    app_id: str
     objects: Dict[str, NovaObjectDefinition]
     experiences: Dict[str, NovaExperienceDefinition]
 
