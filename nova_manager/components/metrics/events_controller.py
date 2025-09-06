@@ -331,6 +331,7 @@ class EventsController(EventsArtefacts):
         )
 
     def track_user_experience(self, user_experience: UserExperience):
+        # TODO: Remove creation of table here
         user_experience_table_name = self.create_user_experience_table()
 
         user_experience_row = {
@@ -347,6 +348,7 @@ class EventsController(EventsArtefacts):
         BigQueryService().insert_rows(user_experience_table_name, [user_experience_row])
 
     def track_user_profile(self, user: Users):
+        # TODO: Remove creation of table here
         user_profile_table_name = self.create_user_profile_table()
 
         # Create user profile key entries for new keys

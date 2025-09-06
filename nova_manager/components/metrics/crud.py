@@ -193,6 +193,20 @@ class UserProfileKeysCRUD(BaseCRUD):
             .first()
         )
 
+    def get_user_profile_keys(
+        self, keys: list[str], organisation_id: str, app_id: str
+    ) -> list[UserProfileKeys]:
+        """Get multiple user profile keys by key names for org/app in a single query"""
+        return (
+            self.db.query(UserProfileKeys)
+            .filter(
+                UserProfileKeys.key.in_(keys),
+                UserProfileKeys.organisation_id == organisation_id,
+                UserProfileKeys.app_id == app_id,
+            )
+            .all()
+        )
+
     def get_multi_by_org(
         self,
         organisation_id: str,
@@ -269,53 +283,50 @@ class UserProfileKeysCRUD(BaseCRUD):
         self, user_profile_data: dict, organisation_id: str, app_id: str
     ) -> list[UserProfileKeys]:
         """Create user profile keys for new keys that don't exist yet"""
-        created_keys = []
+        # Get all keys from user_profile_data
+        keys_to_check = list(user_profile_data.keys())
 
+        # Fetch all existing keys in a single query
+        existing_keys = self.get_user_profile_keys(
+            keys_to_check, organisation_id, app_id
+        )
+
+        # Create a set of existing key names for fast lookup
+        existing_key_names = {key.key for key in existing_keys}
+
+        # Collect new keys to create in bulk
+        keys_to_create = []
         for key, value in user_profile_data.items():
-            # Check if key already exists
-            existing_key = self.get_user_profile_key(key, organisation_id, app_id)
-
-            if not existing_key:
+            # Check if key already exists using the pre-fetched data
+            if key not in existing_key_names:
                 # Determine type based on value
                 key_type = self._infer_type_from_value(value)
 
-                # Create new user profile key
-                new_key = self.create_user_profile_key(
-                    key=key,
-                    key_type=key_type,
-                    organisation_id=organisation_id,
-                    app_id=app_id,
-                    description=f"Auto-generated key for {key}",
+                keys_to_create.append(
+                    UserProfileKeys(
+                        key=key,
+                        type=key_type,
+                        description=f"Auto-generated key for {key}",
+                        organisation_id=organisation_id,
+                        app_id=app_id,
+                    )
                 )
-                created_keys.append(new_key)
 
-        return created_keys
+        # Bulk create all new keys in a single operation
+        if keys_to_create:
+            return self.bulk_create_user_profile_keys(keys_to_create)
+
+        return []
 
     def bulk_create_user_profile_keys(
-        self, keys_data: list[dict], organisation_id: str, app_id: str
-    ):
-        """Bulk create user profile keys"""
-        user_profile_keys = []
+        self, user_profile_keys: list[UserProfileKeys]
+    ) -> list[UserProfileKeys]:
+        """Bulk create multiple user profile keys"""
 
-        for key_data in keys_data:
-            # Check if key already exists
-            existing_key = self.get_user_profile_key(
-                key_data["key"], organisation_id, app_id
-            )
+        self.db.bulk_save_objects(user_profile_keys, return_defaults=True)
+        self.db.commit()
 
-            if not existing_key:
-                user_profile_key = UserProfileKeys(
-                    key=key_data["key"],
-                    type=key_data.get("type", "string"),
-                    description=key_data.get("description", ""),
-                    organisation_id=organisation_id,
-                    app_id=app_id,
-                )
-                user_profile_keys.append(user_profile_key)
-
-        if user_profile_keys:
-            self.db.bulk_save_objects(user_profile_keys)
-            self.db.commit()
+        return user_profile_keys
 
     def exists(self, key: str, organisation_id: str, app_id: str) -> bool:
         """Check if user profile key exists"""
