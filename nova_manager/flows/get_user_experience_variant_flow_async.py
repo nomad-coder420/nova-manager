@@ -38,7 +38,7 @@ class GetUserExperienceVariantFlowAsync:
 
     async def get_user_experience_variant(
         self,
-        user_id: str,
+        user_id: UUID,
         experience_name: str,
         organisation_id: str,
         app_id: str,
@@ -61,15 +61,15 @@ class GetUserExperienceVariantFlowAsync:
 
     async def get_user_experience_variants(
         self,
-        user_id: str,
+        user_id: UUID,
         organisation_id: str,
         app_id: str,
         payload: Dict[str, Any],
         experience_names: Optional[List[str]] = None,
     ) -> Dict[str, UserExperienceAssignment]:
-        # Step 1: Check if user exists, if yes update user payload, if no create user
-        user = await self._update_or_create_user(
-            user_id, organisation_id, app_id, payload
+        # Step 1: Get user by pid
+        user = await self.users_crud.get_by_pid(
+            pid=user_id, organisation_id=organisation_id, app_id=app_id
         )
 
         if not user:
@@ -292,25 +292,6 @@ class GetUserExperienceVariantFlowAsync:
                 )
 
         return results
-
-    async def _update_or_create_user(
-        self, user_id: str, organisation_id: str, app_id: str, payload: Dict[str, Any]
-    ):
-        existing_user = await self.users_crud.get_by_pid(
-            pid=user_id, organisation_id=organisation_id, app_id=app_id
-        )
-
-        if existing_user:
-            # User exists, update user profile with new payload
-            user = await self.users_crud.update_user_profile(existing_user, payload)
-        else:
-            # User doesn't exist, create new user with user profile
-            # user = await self.users_crud.create_user(
-            #     user_id, organisation_id, app_id, payload
-            # )
-            raise HTTPException(status_code=404, detail=f"User '{user_id}' not found")
-
-        return user
 
     def _select_experience_variant_by_target_percentage(
         self,
