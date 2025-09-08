@@ -423,10 +423,16 @@ class QueryBuilder(EventsArtefacts):
         )
 
     def _user_profile_join_expression(self, alias: str, key: str) -> str:
-        """Return LEFT JOIN clause for user profile properties."""
+        """Return LEFT JOIN clause for user profile properties using only the latest value."""
+        # Use a subquery to get only the most recent user profile value for each user
         return (
-            f"LEFT JOIN `{self._user_profile_props_table_name()}` AS {alias} "
-            f"ON e.user_id = {alias}.user_id AND {alias}.key = '{key}'"
+            f"LEFT JOIN ("
+            f"  SELECT user_id, key, value, "
+            f"  ROW_NUMBER() OVER (PARTITION BY user_id, key ORDER BY server_ts DESC) as rn "
+            f"  FROM `{self._user_profile_props_table_name()}` "
+            f"  WHERE key = '{key}'"
+            f") AS {alias} "
+            f"ON e.user_id = {alias}.user_id AND {alias}.key = '{key}' AND {alias}.rn = 1"
         )
 
     def _group_props_join_expression(
