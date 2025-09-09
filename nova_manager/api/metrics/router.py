@@ -202,6 +202,6 @@ async def update_metric(
         "config": metric_data.config,
     }
 
-    updated_metric = metrics_crud.update(existing_metric.id, update_data)
+    updated_metric = metrics_crud.update(existing_metric, update_data)
 
     return updated_metric
