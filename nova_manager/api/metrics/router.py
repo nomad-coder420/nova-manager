@@ -51,17 +51,16 @@ async def compute_metric(
     organisation_id = auth.organisation_id
     app_id = auth.app_id
     type = compute_request.type
-    # copy config and extract any segment filters
+    # copy config and extract any segment filters embedded in filters
     config = compute_request.config.copy()
-    # allow passing segment_ids list or single segment_id inside config
-    segment_ids = None
-    if "segment_ids" in config:
-        segment_ids = config.pop("segment_ids") or []
-    elif "segment_id" in config:
-        segment_ids = [config.pop("segment_id")]
+    filters = config.get("filters", {}) or {}
+    # identify segment filters by source flag
+    segment_ids = [sid for sid, f in filters.items() if isinstance(f, dict) and f.get("source") == "segment"]
+    # remove segment entries from filters
+    for sid in segment_ids:
+        filters.pop(sid, None)
     # merge each segment's conditions into filters
     if segment_ids:
-        filters = config.get("filters", {})
         op_map = {"equals": "=", "not_equals": "!=", "gt": ">", "lt": "<", "gte": ">=", "lte": "<="}
         for sid in segment_ids:
             segment = SegmentsCRUD(db).get_by_pid(sid)
@@ -75,7 +74,8 @@ async def compute_metric(
                     "op": op,
                     "source": KeySource.USER_PROFILE,
                 }
-        config["filters"] = filters
+    # update config filters without segment placeholders
+    config["filters"] = filters
 
     query_builder = QueryBuilder(organisation_id, app_id)
     query = query_builder.build_query(type, config)
