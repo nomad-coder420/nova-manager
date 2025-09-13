@@ -16,6 +16,8 @@ from nova_manager.components.metrics.crud import (
 )
 from nova_manager.components.metrics.events_controller import EventsController
 from nova_manager.components.metrics.query_builder import QueryBuilder
+from nova_manager.components.segments.crud import SegmentsCRUD
+from nova_manager.components.metrics.query_builder import KeySource
 from nova_manager.database.session import get_db
 from nova_manager.service.bigquery import BigQueryService
 from nova_manager.queues.controller import QueueController
@@ -50,11 +52,36 @@ async def track_event(
 async def compute_metric(
     compute_request: ComputeMetricRequest,
     auth: AuthContext = Depends(require_app_context),
+    db: Session = Depends(get_db),
 ):
     organisation_id = auth.organisation_id
     app_id = auth.app_id
     type = compute_request.type
-    config = compute_request.config
+    # copy config and extract any segment filters embedded in filters
+    config = compute_request.config.copy()
+    filters = config.get("filters", {}) or {}
+    # identify segment filters by source flag
+    segment_ids = [sid for sid, f in filters.items() if isinstance(f, dict) and f.get("source") == "segment"]
+    # remove segment entries from filters
+    for sid in segment_ids:
+        filters.pop(sid, None)
+    # merge each segment's conditions into filters
+    if segment_ids:
+        op_map = {"equals": "=", "not_equals": "!=", "gt": ">", "lt": "<", "gte": ">=", "lte": "<="}
+        for sid in segment_ids:
+            segment = SegmentsCRUD(db).get_by_pid(sid)
+            if not segment:
+                raise HTTPException(status_code=404, detail=f"Segment {sid} not found")
+            for cond in segment.rule_config.get("conditions", []):
+                key = cond["field"]
+                op = op_map.get(cond["operator"], "=")
+                filters[key] = {
+                    "value": cond.get("value"),
+                    "op": op,
+                    "source": KeySource.USER_PROFILE,
+                }
+    # update config filters without segment placeholders
+    config["filters"] = filters
 
     query_builder = QueryBuilder(organisation_id, app_id)
     query = query_builder.build_query(type, config)
